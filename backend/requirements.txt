@@ -1,0 +1,14 @@
+django==4.2.13
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.3.1
+django-cors-headers==4.3.1
+django-filter==24.1
+psycopg2-binary==2.9.9
+python-decouple==3.8
+Pillow==10.3.0
+celery==5.3.6
+django-import-export==3.3.8
+reportlab==4.2.0
+openpyxl==3.1.2
+python-docx==1.1.2
+dj-database-url==2.1.0
