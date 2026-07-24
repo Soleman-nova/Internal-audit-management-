@@ -226,6 +226,47 @@ class AuditTrailViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
 
+class ChangePasswordView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        current_password = request.data.get('current_password')
+        new_password = request.data.get('new_password')
+        user = request.user
+
+        if not current_password or not new_password:
+            return Response(
+                {'detail': 'Both current_password and new_password are required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(new_password) < 8:
+            return Response(
+                {'detail': 'New password must be at least 8 characters long.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not user.check_password(current_password):
+            return Response(
+                {'detail': 'Current password is incorrect.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user.set_password(new_password)
+        user.save()
+
+        AuditTrail.objects.create(
+            user=user,
+            action='UPDATE',
+            model_name='User',
+            object_id=str(user.id),
+            object_repr='Password changed',
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+
+        return Response({'detail': 'Password changed successfully.'})
+
+
 class DashboardStatsView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 

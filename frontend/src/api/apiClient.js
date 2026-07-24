@@ -69,7 +69,24 @@ export const authApi = {
   getCurrentUser: () => {
     const userStr = localStorage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
-  }
+  },
+  changePassword: async (currentPassword, newPassword) => {
+    const response = await apiClient.post('/auth/change-password/', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+    return response.data;
+  },
+  updateProfile: async (profileData) => {
+    const response = await apiClient.patch('/auth/profile/', profileData);
+    // Update local stored user data
+    const current = localStorage.getItem('user');
+    if (current) {
+      const updated = { ...JSON.parse(current), ...response.data };
+      localStorage.setItem('user', JSON.stringify(updated));
+    }
+    return response.data;
+  },
 };
 
 export default apiClient;
