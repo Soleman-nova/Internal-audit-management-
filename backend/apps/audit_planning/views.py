@@ -7,13 +7,15 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from .models import AuditUniverse, AuditPlan, AuditEngagement, AuditTeamMember
 from .serializers import (AuditUniverseSerializer, AuditPlanSerializer,
                           AuditEngagementSerializer, AuditTeamMemberSerializer)
-from apps.accounts.models import AuditTrail
+from apps.common.permissions import CanWriteAudit, RequiresCapability, APPROVE_PLANS
+from apps.common.audit_utils import log_audit
+from apps.notifications.services import notify, notify_roles
 
 
 class AuditUniverseViewSet(viewsets.ModelViewSet):
     queryset = AuditUniverse.objects.select_related('department').all()
     serializer_class = AuditUniverseSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['category', 'status', 'department']
     search_fields = ['name', 'code', 'owner']
@@ -22,42 +24,21 @@ class AuditUniverseViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         obj = serializer.save()
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='CREATE',
-            model_name='AuditUniverse',
-            object_id=str(obj.id),
-            object_repr=f"{obj.code} - {obj.name}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'CREATE', obj)
 
     def perform_update(self, serializer):
         obj = serializer.save()
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='UPDATE',
-            model_name='AuditUniverse',
-            object_id=str(obj.id),
-            object_repr=f"{obj.code} - {obj.name}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'UPDATE', obj)
 
     def perform_destroy(self, instance):
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='DELETE',
-            model_name='AuditUniverse',
-            object_id=str(instance.id),
-            object_repr=f"{instance.code} - {instance.name}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'DELETE', instance)
         instance.delete()
 
 
 class AuditPlanViewSet(viewsets.ModelViewSet):
     queryset = AuditPlan.objects.select_related('created_by', 'approved_by').prefetch_related('engagements').all()
     serializer_class = AuditPlanSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'year']
     search_fields = ['title', 'description']
@@ -65,67 +46,54 @@ class AuditPlanViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         plan = serializer.save(created_by=self.request.user)
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='CREATE',
-            model_name='AuditPlan',
-            object_id=str(plan.id),
-            object_repr=f"Audit Plan {plan.year} - {plan.title}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'CREATE', plan)
 
     def perform_update(self, serializer):
         plan = serializer.save()
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='UPDATE',
-            model_name='AuditPlan',
-            object_id=str(plan.id),
-            object_repr=f"Audit Plan {plan.year} - {plan.title}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'UPDATE', plan)
 
     def perform_destroy(self, instance):
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='DELETE',
-            model_name='AuditPlan',
-            object_id=str(instance.id),
-            object_repr=f"Audit Plan {instance.year} - {instance.title}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'DELETE', instance)
         instance.delete()
 
-    @action(detail=True, methods=['post'], url_path='approve')
+    @action(detail=True, methods=['post'], url_path='approve',
+            permission_classes=[RequiresCapability.for_(APPROVE_PLANS)])
     def approve(self, request, pk=None):
         plan = self.get_object()
+        prev_status = plan.status
         plan.status = 'approved'
         plan.approved_by = request.user
         from django.utils import timezone
         plan.approved_at = timezone.now()
         plan.save()
-        AuditTrail.objects.create(
-            user=request.user,
-            action='APPROVE',
-            model_name='AuditPlan',
-            object_id=str(plan.id),
-            object_repr=f"Approved Audit Plan {plan.year} - {plan.title}",
-            ip_address=request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(request, 'APPROVE', plan, changes={'status': [prev_status, 'approved']})
+        # Notify the plan's author that it was approved.
+        if plan.created_by and plan.created_by != request.user:
+            notify(
+                plan.created_by,
+                'approved',
+                f'Audit plan approved: {plan.year}',
+                f'Your audit plan "{plan.title}" has been approved.',
+                f'/audit-planning?plan={plan.id}',
+            )
         return Response({'detail': 'Plan approved successfully.'})
 
     @action(detail=True, methods=['post'], url_path='submit')
     def submit(self, request, pk=None):
         plan = self.get_object()
+        prev_status = plan.status
         plan.status = 'submitted'
         plan.save()
-        AuditTrail.objects.create(
-            user=request.user,
-            action='UPDATE',
-            model_name='AuditPlan',
-            object_id=str(plan.id),
-            object_repr=f"Submitted Audit Plan {plan.year} - {plan.title}",
-            ip_address=request.META.get('REMOTE_ADDR'),
+        log_audit(request, 'UPDATE', plan, changes={'status': [prev_status, 'submitted']})
+        # Notify the approvers that a plan is awaiting their approval.
+        notify_roles(
+            ['admin', 'audit_manager'],
+            'approval_needed',
+            f'Audit plan awaiting approval: {plan.year}',
+            f'Audit plan "{plan.title}" has been submitted for approval by '
+            f'{request.user.get_full_name() or request.user.username}.',
+            f'/audit-planning?plan={plan.id}',
+            exclude=request.user,
         )
         return Response({'detail': 'Plan submitted for approval.'})
 
@@ -135,7 +103,7 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
         'plan', 'department', 'lead_auditor', 'supervisor', 'audit_universe'
     ).prefetch_related('team_members', 'findings').all()
     serializer_class = AuditEngagementSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'engagement_type', 'plan', 'department', 'risk_level']
     search_fields = ['title', 'engagement_number', 'objectives']
@@ -145,35 +113,27 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
         import random, string
         num = ''.join(random.choices(string.digits, k=5))
         engagement = serializer.save(engagement_number=f'ENG-{num}')
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='CREATE',
-            model_name='AuditEngagement',
-            object_id=str(engagement.id),
-            object_repr=f"{engagement.engagement_number} - {engagement.title}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'CREATE', engagement)
+        # Notify the lead auditor and supervisor of their assignment.
+        link = f'/engagements?id={engagement.id}'
+        recipients = {engagement.lead_auditor, engagement.supervisor}
+        recipients.discard(None)
+        recipients.discard(self.request.user)
+        for recipient in recipients:
+            notify(
+                recipient,
+                'assigned',
+                f'New engagement: {engagement.engagement_number}',
+                f'You have been assigned to audit engagement "{engagement.title}".',
+                link,
+            )
 
     def perform_update(self, serializer):
         engagement = serializer.save()
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='UPDATE',
-            model_name='AuditEngagement',
-            object_id=str(engagement.id),
-            object_repr=f"{engagement.engagement_number} - {engagement.title}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'UPDATE', engagement)
 
     def perform_destroy(self, instance):
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='DELETE',
-            model_name='AuditEngagement',
-            object_id=str(instance.id),
-            object_repr=f"{instance.engagement_number} - {instance.title}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'DELETE', instance)
         instance.delete()
 
     @action(detail=True, methods=['post'], url_path='add-member')
@@ -183,15 +143,18 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
         data['engagement'] = engagement.id
         serializer = AuditTeamMemberSerializer(data=data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        AuditTrail.objects.create(
-            user=request.user,
-            action='UPDATE',
-            model_name='AuditEngagement',
-            object_id=str(engagement.id),
-            object_repr=f"Member added to {engagement.engagement_number}",
-            ip_address=request.META.get('REMOTE_ADDR'),
-        )
+        member = serializer.save()
+        log_audit(request, 'UPDATE', engagement)
+        # Notify the newly added team member.
+        if member.user and member.user != request.user:
+            notify(
+                member.user,
+                'assigned',
+                f'Added to engagement: {engagement.engagement_number}',
+                f'You have been added to audit engagement "{engagement.title}" '
+                f'as {member.get_role_display()}.',
+                f'/engagements?id={engagement.id}',
+            )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], url_path='update-status')
@@ -208,12 +171,24 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
         elif new_status == 'completed' and not engagement.actual_end:
             engagement.actual_end = timezone.now().date()
         engagement.save()
-        AuditTrail.objects.create(
-            user=request.user,
-            action='UPDATE',
-            model_name='AuditEngagement',
-            object_id=str(engagement.id),
-            object_repr=f"Status changed: {old_status} -> {new_status} for {engagement.engagement_number}",
-            ip_address=request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(request, 'UPDATE', engagement, changes={'status': [old_status, new_status]})
+        # Notify the relevant parties of the status transition.
+        link = f'/engagements?id={engagement.id}'
+        if new_status == 'in_progress' and engagement.lead_auditor and engagement.lead_auditor != request.user:
+            notify(
+                engagement.lead_auditor,
+                'assigned',
+                f'Engagement started: {engagement.engagement_number}',
+                f'Audit engagement "{engagement.title}" has been moved to In Progress.',
+                link,
+            )
+        elif new_status in ('reporting', 'completed'):
+            notify_roles(
+                ['supervisor', 'audit_manager'],
+                'system',
+                f'Engagement {engagement.get_status_display().lower()}: {engagement.engagement_number}',
+                f'Audit engagement "{engagement.title}" is now {engagement.get_status_display()}.',
+                link,
+                exclude=request.user,
+            )
         return Response({'detail': f'Status updated to {new_status}.'})

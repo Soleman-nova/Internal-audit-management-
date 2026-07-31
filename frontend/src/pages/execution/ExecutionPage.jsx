@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../../api/apiClient';
+import { usePermissions } from '../../hooks/usePermissions';
 import {
   ListTodo, Plus, Paperclip, Upload, Eye, CheckCircle2,
   ClipboardList, ShieldCheck, Edit3, Trash2, ChevronDown
 } from 'lucide-react';
 
 function ExecutionPage() {
+  const { canWriteAudit, canApprovePlans } = usePermissions();
   const [engagements, setEngagements] = useState([]);
   const [selectedEngId, setSelectedEngId] = useState('');
   const [program, setProgram] = useState(null);
@@ -275,7 +277,7 @@ function ExecutionPage() {
             <ListTodo size={48} className="mx-auto text-muted mb-4" />
             <h3>No Audit Program Defined</h3>
             <p className="text-muted mb-4">An audit program has not been created for this engagement yet.</p>
-            {isAuditor && (
+            {canWriteAudit && (
               <button className="btn btn-primary flex items-center gap-2 mx-auto" onClick={openCreateProgram}>
                 <Plus size={16} /> Create Audit Program
               </button>
@@ -296,13 +298,13 @@ function ExecutionPage() {
                 </span>
                 <div className="flex gap-2">
                   {/* Auditor: Submit for review */}
-                  {isAuditor && program.status === 'draft' && (
+                  {canWriteAudit && program.status === 'draft' && (
                     <button className="btn btn-sm btn-outline flex items-center gap-1" onClick={handleSubmitProgram}>
                       <ClipboardList size={14} /> Submit for Review
                     </button>
                   )}
                   {/* Supervisor: Approve */}
-                  {isSupervisor && program.status === 'submitted' && (
+                  {canApprovePlans && program.status === 'submitted' && (
                     <button className="btn btn-sm btn-primary flex items-center gap-1" onClick={() => setShowReviewModal(true)}>
                       <ShieldCheck size={14} /> Review &amp; Approve
                     </button>
@@ -321,7 +323,7 @@ function ExecutionPage() {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="section-title">Fieldwork Procedures ({procedures.length})</h3>
                 {/* Auditor: Add procedure if program is draft */}
-                {isAuditor && (program.status === 'draft' || program.status === 'active') && (
+                {canWriteAudit && (program.status === 'draft' || program.status === 'active') && (
                   <button className="btn btn-sm btn-primary flex items-center gap-1" onClick={openNewProc}>
                     <Plus size={14} /> Add Procedure
                   </button>
@@ -331,7 +333,7 @@ function ExecutionPage() {
               {procedures.length === 0 ? (
                 <div className="text-center py-6 text-muted">
                   <p>No fieldwork procedures defined yet.</p>
-                  {isAuditor && (
+                  {canWriteAudit && (
                     <button className="btn btn-sm btn-outline mt-2" onClick={openNewProc}>
                       Add First Procedure
                     </button>
@@ -375,7 +377,7 @@ function ExecutionPage() {
                           <option value="completed">Completed</option>
                           <option value="not_applicable">N/A</option>
                         </select>
-                        {isAuditor && program.status === 'draft' && (
+                        {canWriteAudit && program.status === 'draft' && (
                           <div className="flex gap-1 mt-1">
                             <button className="btn-icon" title="Edit" onClick={() => openEditProc(proc)}>
                               <Edit3 size={14} />
@@ -396,6 +398,7 @@ function ExecutionPage() {
           {/* ── Side Panel ── */}
           <div className="side-panel-grid">
             {/* Upload Working Paper */}
+            {canWriteAudit && (
             <div className="card">
               <h3>Upload Working Paper</h3>
               <p className="card-subtitle mb-4">Attach evidence, worksheets, or review matrices</p>
@@ -419,6 +422,7 @@ function ExecutionPage() {
                 </button>
               </form>
             </div>
+            )}
 
             {/* Working Papers Registry */}
             <div className="card">

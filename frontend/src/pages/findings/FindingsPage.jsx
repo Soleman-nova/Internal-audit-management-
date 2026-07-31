@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../../api/apiClient';
+import { usePermissions } from '../../hooks/usePermissions';
 import { ShieldAlert, Plus, Layers, List, MessageCircle, FileText, ChevronRight } from 'lucide-react';
 
 function FindingsPage() {
+  const { canWriteAudit, canCloseFindings } = usePermissions();
   const [engagements, setEngagements] = useState([]);
   const [selectedEngId, setSelectedEngId] = useState('');
   const [findings, setFindings] = useState([]);
@@ -117,9 +119,11 @@ function FindingsPage() {
           >
             <Layers size={16} className="inline mr-1" /> Kanban Board
           </button>
-          <button className="btn btn-accent" onClick={() => setShowAddModal(true)}>
-            <Plus size={16} className="inline mr-1" /> Log Finding
-          </button>
+          {canWriteAudit && (
+            <button className="btn btn-accent" onClick={() => setShowAddModal(true)}>
+              <Plus size={16} className="inline mr-1" /> Log Finding
+            </button>
+          )}
         </div>
       </div>
 

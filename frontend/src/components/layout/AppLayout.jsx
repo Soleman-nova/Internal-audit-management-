@@ -64,7 +64,8 @@ const TRANSLATIONS = {
   },
 };
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { authApi } from '../../api/apiClient';
+import { authApi, notificationApi } from '../../api/apiClient';
+import { hasCapability, CAPABILITIES } from '../../hooks/usePermissions';
 import {
   LayoutDashboard,
   Calendar,
@@ -103,10 +104,8 @@ import {
 function AppLayout() {
   const [user, setUser] = useState({ email: '', role: 'auditor', first_name: 'Auditor' });
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: 'New Audit Assigned', text: 'You have been assigned to ENG-2026-003', read: false },
-    { id: 2, title: 'CAPA Overdue', text: 'Corrective action CAPA-001 is overdue', read: false }
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -242,6 +241,52 @@ function AppLayout() {
     }
   }, []);
 
+  // Load notifications + unread count from the backend.
+  const loadNotifications = useCallback(async () => {
+    try {
+      const [items, unread] = await Promise.all([
+        notificationApi.list(),
+        notificationApi.unreadCount(),
+      ]);
+      setNotifications(Array.isArray(items) ? items : []);
+      setUnreadCount(unread);
+    } catch (err) {
+      // Non-fatal: leave the current state in place if the fetch fails.
+      console.error('Failed to load notifications', err);
+    }
+  }, []);
+
+  // Fetch on mount and poll periodically so new events surface without a reload.
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [loadNotifications]);
+
+  const handleMarkAllRead = useCallback(async () => {
+    try {
+      await notificationApi.markAllRead();
+    } catch (err) {
+      console.error('Failed to mark all notifications read', err);
+    }
+    loadNotifications();
+  }, [loadNotifications]);
+
+  const handleNotificationClick = useCallback(async (n) => {
+    if (!n.is_read) {
+      try {
+        await notificationApi.markRead(n.id);
+      } catch (err) {
+        console.error('Failed to mark notification read', err);
+      }
+    }
+    if (n.link) {
+      setShowNotifications(false);
+      navigate(n.link);
+    }
+    loadNotifications();
+  }, [loadNotifications, navigate]);
+
   const handleLogout = () => {
     authApi.logout();
   };
@@ -256,9 +301,13 @@ function AppLayout() {
     { path: '/reports', label: t('reportsAnalytics'), icon: <BarChart3 size={20} /> },
   ];
 
-  // Admins and audit managers can see User Management & Audit Trail
-  if (user.role === 'admin' || user.role === 'audit_manager') {
+  // Nav visibility follows the capability matrix (see hooks/usePermissions.js).
+  // User Management requires manage_users (admin); Audit Trail requires
+  // view_audit_trail (admin, audit_manager, supervisor).
+  if (hasCapability(user, CAPABILITIES.MANAGE_USERS)) {
     navItems.push({ path: '/users', label: t('userManagement'), icon: <Users size={20} /> });
+  }
+  if (hasCapability(user, CAPABILITIES.VIEW_AUDIT_TRAIL)) {
     navItems.push({ path: '/audit-trail', label: t('auditTrail'), icon: <Activity size={20} /> });
   }
 
@@ -352,8 +401,8 @@ function AppLayout() {
                 onClick={() => setShowNotifications(!showNotifications)}
               >
                 <Bell size={20} />
-                {notifications.some(n => !n.read) && (
-                  <span className="notification-badge"></span>
+                {unreadCount > 0 && (
+                  <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
                 )}
               </button>
 
@@ -361,7 +410,7 @@ function AppLayout() {
                 <div className="notifications-dropdown">
                   <div className="dropdown-header">
                     <h3>{t('notifications')}</h3>
-                    <button className="text-btn" onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true })))}>
+                    <button className="text-btn" onClick={handleMarkAllRead}>
                       {t('markAllRead')}
                     </button>
                   </div>
@@ -370,9 +419,14 @@ function AppLayout() {
                       <p className="no-notifications">{t('noNotifications')}</p>
                     ) : (
                       notifications.map(n => (
-                        <div key={n.id} className={`notification-item ${n.read ? 'read' : 'unread'}`}>
+                        <div
+                          key={n.id}
+                          className={`notification-item ${n.is_read ? 'read' : 'unread'}`}
+                          onClick={() => handleNotificationClick(n)}
+                          style={{ cursor: n.link ? 'pointer' : 'default' }}
+                        >
                           <h4>{n.title}</h4>
-                          <p>{n.text}</p>
+                          <p>{n.message}</p>
                         </div>
                       ))
                     )}

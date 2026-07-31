@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../../api/apiClient';
-import { Calendar, Plus, Users, Shield, Clock } from 'lucide-react';
+import { Calendar, Plus, Users, Shield, Clock, Pencil } from 'lucide-react';
+import { usePermissions } from '../../hooks/usePermissions';
 
 function PlanningPage() {
+  const { canWriteAudit, canApprovePlans } = usePermissions();
   const [activeTab, setActiveTab] = useState('universe');
   const [universe, setUniverse] = useState([]);
   const [plans, setPlans] = useState([]);
@@ -12,19 +14,26 @@ function PlanningPage() {
   const [allUsers, setAllUsers] = useState([]);
 
   // Form State
-  const [showUniverseModal, setShowUniverseModal] = useState(false);
-  const [newUniverse, setNewUniverse] = useState({ name: '', code: '', category: 'system', risk_score: 3.5, audit_frequency: 'Annually', owner: '', department: '' });
-
-  const [showPlanModal, setShowPlanModal] = useState(false);
-  const [newPlan, setNewPlan] = useState({ title: '', year: new Date().getFullYear(), total_budget_days: 0, start_date: '', end_date: '', description: '', objectives: '', scope: '' });
-
-  const [showEngagementModal, setShowEngagementModal] = useState(false);
-  const [newEngagement, setNewEngagement] = useState({
+  const emptyUniverse = { name: '', code: '', category: 'system', risk_score: 3.5, audit_frequency: 'Annually', owner: '', department: '', status: 'active' };
+  const emptyPlan = { title: '', year: new Date().getFullYear(), total_budget_days: 0, start_date: '', end_date: '', description: '', objectives: '', scope: '' };
+  const emptyEngagement = {
     title: '', plan: '', audit_universe: '', department: '',
     engagement_type: 'operational', risk_level: 'medium',
     planned_start: '', planned_end: '', planned_days: 0,
     lead_auditor: '', supervisor: ''
-  });
+  };
+
+  const [showUniverseModal, setShowUniverseModal] = useState(false);
+  const [editingUniverseId, setEditingUniverseId] = useState(null);
+  const [newUniverse, setNewUniverse] = useState(emptyUniverse);
+
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState(null);
+  const [newPlan, setNewPlan] = useState(emptyPlan);
+
+  const [showEngagementModal, setShowEngagementModal] = useState(false);
+  const [editingEngagementId, setEditingEngagementId] = useState(null);
+  const [newEngagement, setNewEngagement] = useState(emptyEngagement);
 
   // Team Member Assignment State
   const [showTeamModal, setShowTeamModal] = useState(false);
@@ -61,33 +70,110 @@ function PlanningPage() {
   const auditors = allUsers.filter(u => u.role === 'auditor' || u.role === 'audit_manager');
   const supervisors = allUsers.filter(u => u.role === 'supervisor' || u.role === 'audit_manager');
 
-  const handleAddUniverse = async (e) => {
+  const openAddUniverse = () => {
+    setEditingUniverseId(null);
+    setNewUniverse(emptyUniverse);
+    setShowUniverseModal(true);
+  };
+
+  const openEditUniverse = (item) => {
+    setEditingUniverseId(item.id);
+    setNewUniverse({
+      name: item.name || '', code: item.code || '', category: item.category || 'system',
+      risk_score: item.risk_score ?? 3.5, audit_frequency: item.audit_frequency || 'Annually',
+      owner: item.owner || '', department: item.department || '', status: item.status || 'active',
+    });
+    setShowUniverseModal(true);
+  };
+
+  const closeUniverseModal = () => {
+    setShowUniverseModal(false);
+    setEditingUniverseId(null);
+    setNewUniverse(emptyUniverse);
+  };
+
+  const handleSaveUniverse = async (e) => {
     e.preventDefault();
     try {
       const payload = { ...newUniverse };
       if (!payload.department) delete payload.department;
-      const response = await apiClient.post('/planning/universe/', payload);
-      setUniverse([response.data, ...universe]);
-      setShowUniverseModal(false);
-      setNewUniverse({ name: '', code: '', category: 'system', risk_score: 3.5, audit_frequency: 'Annually', owner: '', department: '' });
+      if (editingUniverseId) {
+        const response = await apiClient.patch(`/planning/universe/${editingUniverseId}/`, payload);
+        setUniverse(universe.map(u => (u.id === editingUniverseId ? response.data : u)));
+      } else {
+        const response = await apiClient.post('/planning/universe/', payload);
+        setUniverse([response.data, ...universe]);
+      }
+      closeUniverseModal();
     } catch (err) {
-      alert(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to add universe item');
+      alert(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to save universe item');
     }
   };
 
-  const handleAddPlan = async (e) => {
+  const openAddPlan = () => {
+    setEditingPlanId(null);
+    setNewPlan(emptyPlan);
+    setShowPlanModal(true);
+  };
+
+  const openEditPlan = (plan) => {
+    setEditingPlanId(plan.id);
+    setNewPlan({
+      title: plan.title || '', year: plan.year || new Date().getFullYear(),
+      total_budget_days: plan.total_budget_days ?? 0, start_date: plan.start_date || '',
+      end_date: plan.end_date || '', description: plan.description || '',
+      objectives: plan.objectives || '', scope: plan.scope || '',
+    });
+    setShowPlanModal(true);
+  };
+
+  const closePlanModal = () => {
+    setShowPlanModal(false);
+    setEditingPlanId(null);
+    setNewPlan(emptyPlan);
+  };
+
+  const handleSavePlan = async (e) => {
     e.preventDefault();
     try {
-      const response = await apiClient.post('/planning/plans/', newPlan);
-      setPlans([response.data, ...plans]);
-      setShowPlanModal(false);
-      setNewPlan({ title: '', year: new Date().getFullYear(), total_budget_days: 0, start_date: '', end_date: '', description: '', objectives: '', scope: '' });
+      if (editingPlanId) {
+        const response = await apiClient.patch(`/planning/plans/${editingPlanId}/`, newPlan);
+        setPlans(plans.map(p => (p.id === editingPlanId ? response.data : p)));
+      } else {
+        const response = await apiClient.post('/planning/plans/', newPlan);
+        setPlans([response.data, ...plans]);
+      }
+      closePlanModal();
     } catch (err) {
-      alert(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to create plan');
+      alert(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to save plan');
     }
   };
 
-  const handleAddEngagement = async (e) => {
+  const openAddEngagement = () => {
+    setEditingEngagementId(null);
+    setNewEngagement(emptyEngagement);
+    setShowEngagementModal(true);
+  };
+
+  const openEditEngagement = (eng) => {
+    setEditingEngagementId(eng.id);
+    setNewEngagement({
+      title: eng.title || '', plan: eng.plan || '', audit_universe: eng.audit_universe || '',
+      department: eng.department || '', engagement_type: eng.engagement_type || 'operational',
+      risk_level: eng.risk_level || 'medium', planned_start: eng.planned_start || '',
+      planned_end: eng.planned_end || '', planned_days: eng.planned_days ?? 0,
+      lead_auditor: eng.lead_auditor || '', supervisor: eng.supervisor || '',
+    });
+    setShowEngagementModal(true);
+  };
+
+  const closeEngagementModal = () => {
+    setShowEngagementModal(false);
+    setEditingEngagementId(null);
+    setNewEngagement(emptyEngagement);
+  };
+
+  const handleSaveEngagement = async (e) => {
     e.preventDefault();
     try {
       const payload = { ...newEngagement };
@@ -95,12 +181,16 @@ function PlanningPage() {
       if (!payload.audit_universe) delete payload.audit_universe;
       if (!payload.lead_auditor) delete payload.lead_auditor;
       if (!payload.supervisor) delete payload.supervisor;
-      const response = await apiClient.post('/planning/engagements/', payload);
-      setEngagements([response.data, ...engagements]);
-      setShowEngagementModal(false);
-      setNewEngagement({ title: '', plan: '', audit_universe: '', department: '', engagement_type: 'operational', risk_level: 'medium', planned_start: '', planned_end: '', planned_days: 0, lead_auditor: '', supervisor: '' });
+      if (editingEngagementId) {
+        const response = await apiClient.patch(`/planning/engagements/${editingEngagementId}/`, payload);
+        setEngagements(engagements.map(en => (en.id === editingEngagementId ? response.data : en)));
+      } else {
+        const response = await apiClient.post('/planning/engagements/', payload);
+        setEngagements([response.data, ...engagements]);
+      }
+      closeEngagementModal();
     } catch (err) {
-      alert(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to create engagement');
+      alert(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to save engagement');
     }
   };
 
@@ -178,9 +268,11 @@ function PlanningPage() {
                   <h3>EEU Risk-Weighted Audit Universe</h3>
                   <p className="card-subtitle">Complete directory of all auditable operational nodes and systems</p>
                 </div>
-                <button className="btn btn-primary flex items-center gap-2" onClick={() => setShowUniverseModal(true)}>
-                  <Plus size={16} /> Add Entity
-                </button>
+                {canWriteAudit && (
+                  <button className="btn btn-primary flex items-center gap-2" onClick={openAddUniverse}>
+                    <Plus size={16} /> Add Entity
+                  </button>
+                )}
               </div>
               <div className="table-responsive">
                 <table className="table">
@@ -193,6 +285,7 @@ function PlanningPage() {
                       <th>Risk Score</th>
                       <th>Frequency</th>
                       <th>Status</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -213,6 +306,13 @@ function PlanningPage() {
                             {item.status}
                           </span>
                         </td>
+                        <td>
+                          {canWriteAudit && (
+                            <button className="btn btn-sm btn-outline flex items-center gap-1" onClick={() => openEditUniverse(item)}>
+                              <Pencil size={13} /> Edit
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -229,9 +329,11 @@ function PlanningPage() {
                   <h3>Annual Audit Plans</h3>
                   <p className="card-subtitle">Active and historical approved annual audit schedules</p>
                 </div>
-                <button className="btn btn-primary flex items-center gap-2" onClick={() => setShowPlanModal(true)}>
-                  <Plus size={16} /> Create Plan
-                </button>
+                {canWriteAudit && (
+                  <button className="btn btn-primary flex items-center gap-2" onClick={openAddPlan}>
+                    <Plus size={16} /> Create Plan
+                  </button>
+                )}
               </div>
               <div className="plans-grid mt-4">
                 {plans.map(plan => (
@@ -253,12 +355,17 @@ function PlanningPage() {
                         <strong>{plan.start_date} to {plan.end_date}</strong>
                       </div>
                       <div className="mt-4 flex gap-2 border-t pt-3 border-border-color">
-                        {plan.status === 'draft' && (
+                        {canWriteAudit && (
+                          <button className="btn btn-sm btn-outline flex items-center gap-1" onClick={() => openEditPlan(plan)}>
+                            <Pencil size={13} /> Edit
+                          </button>
+                        )}
+                        {plan.status === 'draft' && canWriteAudit && (
                           <button className="btn btn-sm btn-outline flex-1" onClick={() => handleSubmitPlan(plan.id)}>
                             Submit for Approval
                           </button>
                         )}
-                        {plan.status === 'submitted' && (
+                        {plan.status === 'submitted' && canApprovePlans && (
                           <button className="btn btn-sm btn-primary flex-1" onClick={() => handleApprovePlan(plan.id)}>
                             Approve Plan
                           </button>
@@ -279,9 +386,11 @@ function PlanningPage() {
                   <h3>Audit Engagements</h3>
                   <p className="card-subtitle">Individual operational audits configured under current plans</p>
                 </div>
-                <button className="btn btn-primary flex items-center gap-2" onClick={() => setShowEngagementModal(true)}>
-                  <Plus size={16} /> Schedule Engagement
-                </button>
+                {canWriteAudit && (
+                  <button className="btn btn-primary flex items-center gap-2" onClick={openAddEngagement}>
+                    <Plus size={16} /> Schedule Engagement
+                  </button>
+                )}
               </div>
               <div className="table-responsive">
                 <table className="table">
@@ -339,9 +448,14 @@ function PlanningPage() {
                           </span>
                         </td>
                         <td>
-                          <button className="btn btn-sm btn-outline" onClick={() => openTeamModal(eng)}>
-                            Assign
-                          </button>
+                          <div className="flex gap-1">
+                            <button className="btn btn-sm btn-outline flex items-center gap-1" onClick={() => openEditEngagement(eng)}>
+                              <Pencil size={13} /> Edit
+                            </button>
+                            <button className="btn btn-sm btn-outline" onClick={() => openTeamModal(eng)}>
+                              Assign
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -361,10 +475,10 @@ function PlanningPage() {
         <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-header">
-              <h3>Add Auditable Entity</h3>
-              <button className="close-btn" onClick={() => setShowUniverseModal(false)}>×</button>
+              <h3>{editingUniverseId ? 'Edit Auditable Entity' : 'Add Auditable Entity'}</h3>
+              <button className="close-btn" onClick={closeUniverseModal}>×</button>
             </div>
-            <form onSubmit={handleAddUniverse}>
+            <form onSubmit={handleSaveUniverse}>
               <div className="modal-body">
                 <div className="form-group">
                   <label className="form-label">Entity Name</label>
@@ -411,8 +525,8 @@ function PlanningPage() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowUniverseModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Save Entity</button>
+                <button type="button" className="btn btn-outline" onClick={closeUniverseModal}>Cancel</button>
+                <button type="submit" className="btn btn-primary">{editingUniverseId ? 'Save Changes' : 'Save Entity'}</button>
               </div>
             </form>
           </div>
@@ -424,10 +538,10 @@ function PlanningPage() {
         <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-header">
-              <h3>Create Annual Audit Plan</h3>
-              <button className="close-btn" onClick={() => setShowPlanModal(false)}>×</button>
+              <h3>{editingPlanId ? 'Edit Annual Audit Plan' : 'Create Annual Audit Plan'}</h3>
+              <button className="close-btn" onClick={closePlanModal}>×</button>
             </div>
-            <form onSubmit={handleAddPlan}>
+            <form onSubmit={handleSavePlan}>
               <div className="modal-body">
                 <div className="form-group">
                   <label className="form-label">Plan Title</label>
@@ -465,8 +579,8 @@ function PlanningPage() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowPlanModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Create Plan</button>
+                <button type="button" className="btn btn-outline" onClick={closePlanModal}>Cancel</button>
+                <button type="submit" className="btn btn-primary">{editingPlanId ? 'Save Changes' : 'Create Plan'}</button>
               </div>
             </form>
           </div>
@@ -478,10 +592,10 @@ function PlanningPage() {
         <div className="modal-backdrop">
           <div className="modal-card modal-large">
             <div className="modal-header">
-              <h3>Schedule Audit Engagement</h3>
-              <button className="close-btn" onClick={() => setShowEngagementModal(false)}>×</button>
+              <h3>{editingEngagementId ? 'Edit Audit Engagement' : 'Schedule Audit Engagement'}</h3>
+              <button className="close-btn" onClick={closeEngagementModal}>×</button>
             </div>
-            <form onSubmit={handleAddEngagement}>
+            <form onSubmit={handleSaveEngagement}>
               <div className="modal-body">
                 <div className="form-group">
                   <label className="form-label">Engagement Title</label>
@@ -585,8 +699,8 @@ function PlanningPage() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowEngagementModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Schedule Engagement</button>
+                <button type="button" className="btn btn-outline" onClick={closeEngagementModal}>Cancel</button>
+                <button type="submit" className="btn btn-primary">{editingEngagementId ? 'Save Changes' : 'Schedule Engagement'}</button>
               </div>
             </form>
           </div>

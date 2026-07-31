@@ -89,4 +89,25 @@ export const authApi = {
   },
 };
 
+export const notificationApi = {
+  // List the current user's notifications (newest first, per the backend ordering).
+  list: async (params = {}) => {
+    const response = await apiClient.get('/notifications/', { params });
+    // Support both paginated ({ results: [...] }) and plain-array responses.
+    return response.data?.results ?? response.data;
+  },
+  markRead: async (id) => {
+    const response = await apiClient.post(`/notifications/${id}/mark-read/`);
+    return response.data;
+  },
+  markAllRead: async () => {
+    const response = await apiClient.post('/notifications/mark-all-read/');
+    return response.data;
+  },
+  unreadCount: async () => {
+    const response = await apiClient.get('/notifications/unread-count/');
+    return response.data?.unread ?? 0;
+  },
+};
+
 export default apiClient;

@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User, Department, AuditTrail, Role
 
@@ -47,6 +49,11 @@ class UserCreateSerializer(serializers.ModelSerializer):
         # Only check password match if confirm_password is provided
         if confirm_password and data['password'] != confirm_password:
             raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
+        # Enforce the project's AUTH_PASSWORD_VALIDATORS on API-created accounts.
+        try:
+            validate_password(data['password'])
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'password': list(exc.messages)})
         return data
 
     def create(self, validated_data):

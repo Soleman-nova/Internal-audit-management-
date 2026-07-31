@@ -11,12 +11,24 @@ import FollowUpPage from './pages/followup/FollowUpPage';
 import ReportsPage from './pages/reports/ReportsPage';
 import UsersPage from './pages/admin/UsersPage';
 import AuditTrailPage from './pages/admin/AuditTrailPage';
+import { hasCapability, getCurrentUser, CAPABILITIES } from './hooks/usePermissions';
 
 // Authenticated Route Guard
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('accessToken');
   if (!token) {
     return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
+// Capability Route Guard — blocks routes the current role may not open.
+// Backend permissions remain the real enforcement; this just avoids showing
+// pages a user cannot use.
+const CapabilityRoute = ({ capability, children }) => {
+  const user = getCurrentUser();
+  if (!hasCapability(user, capability)) {
+    return <Navigate to="/dashboard" replace />;
   }
   return children;
 };
@@ -43,8 +55,22 @@ function App() {
           <Route path="risk" element={<RiskAssessmentPage />} />
           <Route path="capa" element={<FollowUpPage />} />
           <Route path="reports" element={<ReportsPage />} />
-          <Route path="users" element={<UsersPage />} />
-          <Route path="audit-trail" element={<AuditTrailPage />} />
+          <Route
+            path="users"
+            element={
+              <CapabilityRoute capability={CAPABILITIES.MANAGE_USERS}>
+                <UsersPage />
+              </CapabilityRoute>
+            }
+          />
+          <Route
+            path="audit-trail"
+            element={
+              <CapabilityRoute capability={CAPABILITIES.VIEW_AUDIT_TRAIL}>
+                <AuditTrailPage />
+              </CapabilityRoute>
+            }
+          />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

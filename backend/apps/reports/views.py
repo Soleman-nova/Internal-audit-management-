@@ -5,18 +5,21 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.http import HttpResponse
 from django.utils import timezone
+from django.core.files.base import ContentFile
 from io import BytesIO
 from django.db.models import Count
 
 from .models import ReportTemplate, GeneratedReport
 from .serializers import ReportTemplateSerializer, GeneratedReportSerializer
-from apps.accounts.models import AuditTrail
+from apps.notifications.services import notify
+from apps.common.permissions import CanManageSettings, CanWriteAudit
+from apps.common.audit_utils import log_audit
 
 
 class ReportTemplateViewSet(viewsets.ModelViewSet):
     queryset = ReportTemplate.objects.all()
     serializer_class = ReportTemplateSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanManageSettings]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['template_type', 'is_default']
 
@@ -29,20 +32,39 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
         'template', 'engagement', 'generated_by'
     ).all()
     serializer_class = GeneratedReportSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['format', 'status', 'engagement']
 
     def perform_create(self, serializer):
         report = serializer.save(generated_by=self.request.user, status='generating')
         try:
-            self.generate_report_file(report)
+            self.generate_report_file(report, self.request)
         except Exception as e:
             report.status = 'failed'
             report.error_message = str(e)
             report.save()
+        # Notify the requester about the outcome of the (synchronous) generation.
+        link = f'/reports?id={report.id}'
+        if report.status == 'ready':
+            notify(
+                report.generated_by,
+                'report_ready',
+                f'Report ready: {report.title}',
+                f'Your {report.get_format_display() if hasattr(report, "get_format_display") else report.format} '
+                f'report "{report.title}" has been generated and is ready to download.',
+                link,
+            )
+        elif report.status == 'failed':
+            notify(
+                report.generated_by,
+                'system',
+                f'Report generation failed: {report.title}',
+                f'Your report "{report.title}" could not be generated. {report.error_message or ""}'.strip(),
+                link,
+            )
 
-    def generate_report_file(self, report):
+    def generate_report_file(self, report, request=None):
         from django.core.files.base import ContentFile
         from apps.findings.models import AuditFinding
         from apps.corrective_actions.models import CorrectiveAction
@@ -452,13 +474,10 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
             report.save()
             
             # Log the export
-            AuditTrail.objects.create(
-                user=report.generated_by,
-                action='EXPORT',
-                model_name='GeneratedReport',
-                object_id=str(report.id),
+            log_audit(
+                request, 'EXPORT', report,
                 object_repr=f"Generated PDF report: {report.title}",
-                ip_address=None,
+                user=report.generated_by,
             )
 
         elif report.format == 'excel':
@@ -767,13 +786,10 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
             report.status = 'ready'
             report.save()
             
-            AuditTrail.objects.create(
-                user=report.generated_by,
-                action='EXPORT',
-                model_name='GeneratedReport',
-                object_id=str(report.id),
+            log_audit(
+                request, 'EXPORT', report,
                 object_repr=f"Generated Excel report: {report.title}",
-                ip_address=None,
+                user=report.generated_by,
             )
             
         else:  # word or default text
@@ -1031,13 +1047,10 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
             report.status = 'ready'
             report.save()
             
-            AuditTrail.objects.create(
-                user=report.generated_by,
-                action='EXPORT',
-                model_name='GeneratedReport',
-                object_id=str(report.id),
+            log_audit(
+                request, 'EXPORT', report,
                 object_repr=f"Generated Word report: {report.title}",
-                ip_address=None,
+                user=report.generated_by,
             )
 
     @action(detail=True, methods=['get'], url_path='export')
@@ -1082,14 +1095,17 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
 
         doc.build(elements)
         buf.seek(0)
+        pdf_bytes = buf.read()
 
         report = GeneratedReport.objects.create(
             title=title, format='pdf', status='ready',
             generated_by=request.user,
             parameters=request.data
         )
+        # Persist the generated file so the `export` action can serve it later.
+        report.file.save(f"{title}.pdf", ContentFile(pdf_bytes), save=True)
 
-        response = HttpResponse(buf.read(), content_type='application/pdf')
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{title}.pdf"'
         return response
 
