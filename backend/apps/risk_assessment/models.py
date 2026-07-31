@@ -95,3 +95,5 @@ class SelfAssessment(models.Model):
     justification = models.TextField()
     mitigating_controls = models.TextField(blank=True)
     reviewer_notes = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='self_assessments_reviewed')
+    reviewed_at = models.DateTimeField(null=True, blank=True)

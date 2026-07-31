@@ -33,6 +33,7 @@ class CorrectiveAction(models.Model):
     due_date = models.DateField()
     extended_due_date = models.DateField(null=True, blank=True)
     completed_date = models.DateField(null=True, blank=True)
+    due_reminder_sent = models.BooleanField(default=False, help_text="True if 3-day due-soon reminder was sent")
     management_response = models.TextField(blank=True)
     follow_up_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

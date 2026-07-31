@@ -8,28 +8,46 @@ from django.utils import timezone
 
 from .models import AuditProgram, AuditProcedure, WorkingPaper
 from .serializers import AuditProgramSerializer, AuditProcedureSerializer, WorkingPaperSerializer
+from apps.common.permissions import CanWriteAudit, RequiresCapability, APPROVE_PLANS
+from apps.common.audit_utils import log_audit
+from apps.notifications.services import notify, notify_roles
 
 
 class AuditProgramViewSet(viewsets.ModelViewSet):
     queryset = AuditProgram.objects.select_related(
-        'engagement', 'prepared_by', 'approved_by'
+        'engagement', 'engagement__lead_auditor', 'prepared_by', 'approved_by'
     ).prefetch_related('procedures').all()
     serializer_class = AuditProgramSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['status', 'engagement']
     search_fields = ['title']
 
     def perform_create(self, serializer):
-        serializer.save(prepared_by=self.request.user)
+        program = serializer.save(prepared_by=self.request.user)
+        log_audit(self.request, 'CREATE', program)
 
-    @action(detail=True, methods=['post'], url_path='approve')
+    @action(detail=True, methods=['post'], url_path='approve',
+            permission_classes=[RequiresCapability.for_(APPROVE_PLANS)])
     def approve(self, request, pk=None):
         program = self.get_object()
         program.status = 'approved'
         program.approved_by = request.user
+        program.reviewed_by = request.user
         program.approved_at = timezone.now()
         program.save()
+        log_audit(request, 'APPROVE', program)
+        # Let the auditor who prepared/leads it know it was approved.
+        lead = program.engagement.lead_auditor if program.engagement else None
+        recipient = lead or program.prepared_by
+        if recipient and recipient != request.user:
+            notify(
+                recipient,
+                'approved',
+                f'Audit program approved: {program.title}',
+                f'The audit program "{program.title}" has been approved.',
+                f'/execution?program={program.id}',
+            )
         return Response({'detail': 'Audit program approved.'})
 
     @action(detail=True, methods=['post'], url_path='submit')
@@ -37,15 +55,26 @@ class AuditProgramViewSet(viewsets.ModelViewSet):
         program = self.get_object()
         program.status = 'submitted'
         program.save()
+        log_audit(request, 'UPDATE', program)
+        notify_roles(
+            ['audit_manager', 'supervisor'],
+            'approval_needed',
+            f'Audit program awaiting approval: {program.title}',
+            f'The audit program "{program.title}" was submitted for review by '
+            f'{request.user.get_full_name() or request.user.username}.',
+            f'/execution?program={program.id}',
+            exclude=request.user,
+        )
         return Response({'detail': 'Program submitted for review.'})
 
 
 class AuditProcedureViewSet(viewsets.ModelViewSet):
     queryset = AuditProcedure.objects.select_related(
-        'program', 'assigned_to', 'completed_by'
+        'program', 'program__engagement', 'program__engagement__lead_auditor',
+        'assigned_to', 'completed_by'
     ).all()
     serializer_class = AuditProcedureSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'program', 'procedure_type', 'assigned_to']
     search_fields = ['title', 'description', 'risk_area']
@@ -59,6 +88,19 @@ class AuditProcedureViewSet(viewsets.ModelViewSet):
         procedure.completed_at = timezone.now()
         procedure.conclusion = request.data.get('conclusion', '')
         procedure.save()
+        log_audit(request, 'UPDATE', procedure)
+        # Notify the engagement lead that a procedure was completed.
+        engagement = procedure.program.engagement if procedure.program else None
+        lead = engagement.lead_auditor if engagement else None
+        if lead and lead != request.user:
+            notify(
+                lead,
+                'system',
+                f'Procedure completed: {procedure.title}',
+                f'Procedure "{procedure.title}" was marked completed by '
+                f'{request.user.get_full_name() or request.user.username}.',
+                f'/execution?program={procedure.program_id}',
+            )
         return Response({'detail': 'Procedure marked as completed.'})
 
 
@@ -67,19 +109,31 @@ class WorkingPaperViewSet(viewsets.ModelViewSet):
         'engagement', 'procedure', 'prepared_by', 'reviewed_by'
     ).all()
     serializer_class = WorkingPaperSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['engagement', 'paper_type', 'is_reviewed', 'procedure']
     search_fields = ['title', 'reference', 'description']
 
     def perform_create(self, serializer):
-        serializer.save(prepared_by=self.request.user)
+        paper = serializer.save(prepared_by=self.request.user)
+        log_audit(self.request, 'CREATE', paper)
 
-    @action(detail=True, methods=['post'], url_path='review')
+    @action(detail=True, methods=['post'], url_path='review',
+            permission_classes=[RequiresCapability.for_(APPROVE_PLANS)])
     def review(self, request, pk=None):
         paper = self.get_object()
         paper.is_reviewed = True
         paper.reviewed_by = request.user
         paper.review_notes = request.data.get('review_notes', '')
         paper.save()
+        log_audit(request, 'UPDATE', paper)
+        # Notify the preparer that their working paper was reviewed.
+        if paper.prepared_by and paper.prepared_by != request.user:
+            notify(
+                paper.prepared_by,
+                'approved',
+                f'Working paper reviewed: {paper.title}',
+                f'Your working paper "{paper.title}" has been reviewed.',
+                f'/execution?engagement={paper.engagement_id}',
+            )
         return Response({'detail': 'Working paper reviewed.'})

@@ -5,6 +5,8 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from .models import Notification, SystemSetting
 from .serializers import NotificationSerializer, SystemSettingSerializer
+from apps.common.permissions import CanManageSettings
+from apps.common.audit_utils import log_audit
 
 
 class NotificationViewSet(viewsets.ModelViewSet):
@@ -38,7 +40,9 @@ class NotificationViewSet(viewsets.ModelViewSet):
 class SystemSettingViewSet(viewsets.ModelViewSet):
     queryset = SystemSetting.objects.all()
     serializer_class = SystemSettingSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanManageSettings]
 
     def perform_update(self, serializer):
-        serializer.save(updated_by=self.request.user)
+        setting = serializer.save(updated_by=self.request.user)
+        # Settings changes are sensitive — always record them.
+        log_audit(self.request, 'UPDATE', setting)

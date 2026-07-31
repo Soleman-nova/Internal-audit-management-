@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import apiClient, { authApi } from '../../api/apiClient';
+import { usePermissions } from '../../hooks/usePermissions';
 import { CheckCircle2, Clock, ShieldAlert, MessageCircle, RefreshCw, Plus, FileUp } from 'lucide-react';
 
 function FollowUpPage() {
+  const { canWriteAudit } = usePermissions();
   const [capas, setCapas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
@@ -204,7 +206,7 @@ function FollowUpPage() {
               <button className="btn btn-outline flex items-center gap-2" onClick={fetchCapas}>
                 <RefreshCw size={14} /> Refresh
               </button>
-              {isAuditorOrManager && (
+              {canWriteAudit && (
                 <button className="btn btn-accent flex items-center gap-2" onClick={() => setShowCreateModal(true)}>
                   <Plus size={16} /> Spawn CAPA Task
                 </button>

@@ -117,17 +117,34 @@ class Command(BaseCommand):
 
         # 4. Create Risk Parameters
         risk_params = [
-            {"name": "Financial Impact", "description": "Potential direct or indirect monetary loss to EEU", "weight": 0.3, "category": "impact"},
-            {"name": "Operational Disruption", "description": "Degree of interruption to power supply or utility services", "weight": 0.25, "category": "impact"},
-            {"name": "Compliance Violations", "description": "Exposure to regulatory penalties or audits exceptions", "weight": 0.2, "category": "impact"},
-            {"name": "Process Complexity", "description": "Internal controls complexity and number of actors", "weight": 0.15, "category": "likelihood"},
-            {"name": "System Automation", "description": "Lack of automated reconciliation or reliance on manual work", "weight": 0.1, "category": "likelihood"},
+            {"name": "Financial Impact", "description": "Potential direct or indirect monetary loss to EEU", "weight": 0.3, "category": "financial"},
+            {"name": "Operational Disruption", "description": "Degree of interruption to power supply or utility services", "weight": 0.25, "category": "operational"},
+            {"name": "Compliance Violations", "description": "Exposure to regulatory penalties or audits exceptions", "weight": 0.2, "category": "compliance"},
+            {"name": "Process Complexity", "description": "Internal controls complexity and number of actors", "weight": 0.15, "category": "operational"},
+            {"name": "System Automation", "description": "Lack of automated reconciliation or reliance on manual work", "weight": 0.1, "category": "it"},
         ]
         for rp in risk_params:
             RiskParameter.objects.get_or_create(
                 name=rp["name"],
                 defaults={"description": rp["description"], "weight": rp["weight"], "category": rp["category"]}
             )
+
+        # 4b. Create a Risk Assessment (so report "Risk Analysis" isn't empty on demo data).
+        # risk_score / risk_rating / residual_risk are computed in RiskAssessment.save().
+        ra, ra_created = RiskAssessment.objects.get_or_create(
+            department=depts["FIN"],
+            year=datetime.datetime.now().year,
+            assessment_period="Annual",
+            defaults={
+                "likelihood": 4,
+                "impact": 4,
+                "control_effectiveness": 3,
+                "notes": "Baseline annual risk assessment for financial systems and controls.",
+                "assessed_by": users[Role.AUDIT_MANAGER],
+            },
+        )
+        if ra_created:
+            self.stdout.write(f"Created Risk Assessment: {ra}")
 
         # 5. Create Audit Universe
         universe_data = [

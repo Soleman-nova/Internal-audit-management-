@@ -9,11 +9,15 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db import models
 from django.db.models import Count
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 from .models import User, Department, AuditTrail
 from apps.corrective_actions.models import CorrectiveAction
 from apps.audit_planning.models import AuditEngagement, AuditPlan
 from apps.findings.models import AuditFinding
+from apps.common.permissions import CanManageUsers, CanManageSettings, CanViewAuditTrail
+from apps.common.audit_utils import log_audit
 from .serializers import (
     UserSerializer, UserCreateSerializer, LoginSerializer,
     DepartmentSerializer, AuditTrailSerializer
@@ -30,11 +34,7 @@ class LoginView(generics.GenericAPIView):
         user = serializer.validated_data['user']
         refresh = RefreshToken.for_user(user)
         # Log the login
-        AuditTrail.objects.create(
-            user=user, action='LOGIN', model_name='User',
-            object_id=str(user.id), object_repr=str(user),
-            ip_address=request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(request, 'LOGIN', user, user=user)
         return Response({
             'access': str(refresh.access_token),
             'refresh': str(refresh),
@@ -50,10 +50,7 @@ class LogoutView(generics.GenericAPIView):
             refresh_token = request.data.get('refresh')
             token = RefreshToken(refresh_token)
             token.blacklist()
-            AuditTrail.objects.create(
-                user=request.user, action='LOGOUT', model_name='User',
-                ip_address=request.META.get('REMOTE_ADDR'),
-            )
+            log_audit(request, 'LOGOUT', request.user)
             return Response({'detail': 'Successfully logged out.'})
         except Exception:
             return Response({'detail': 'Invalid token.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -61,12 +58,18 @@ class LogoutView(generics.GenericAPIView):
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.select_related('department').all()
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanManageUsers]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['role', 'department', 'is_active']
     search_fields = ['email', 'first_name', 'last_name', 'employee_id']
     ordering_fields = ['first_name', 'created_at']
     ordering = ['first_name']
+
+    def get_permissions(self):
+        # `me` returns the caller's own profile — any authenticated user may read it.
+        if self.action == 'me':
+            return [IsAuthenticated()]
+        return super().get_permissions()
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -75,36 +78,18 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = serializer.save()
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='CREATE',
-            model_name='User',
-            object_id=str(user.id),
-            object_repr=str(user),
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'CREATE', user)
 
     def perform_update(self, serializer):
         old_repr = str(serializer.instance)
         user = serializer.save()
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='UPDATE',
-            model_name='User',
-            object_id=str(user.id),
+        log_audit(
+            self.request, 'UPDATE', user,
             object_repr=f"{old_repr} -> {str(user)}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
         )
 
     def perform_destroy(self, instance):
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='DELETE',
-            model_name='User',
-            object_id=str(instance.id),
-            object_repr=str(instance),
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'DELETE', instance)
         instance.delete()
 
     @action(detail=False, methods=['get'], url_path='me')
@@ -117,14 +102,7 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.get_object()
         user.is_active = True
         user.save()
-        AuditTrail.objects.create(
-            user=request.user,
-            action='UPDATE',
-            model_name='User',
-            object_id=str(user.id),
-            object_repr=f"Activated user {user.email}",
-            ip_address=request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(request, 'UPDATE', user, object_repr=f"Activated user {user.email}")
         return Response({'detail': 'User activated.'})
 
     @action(detail=True, methods=['post'], url_path='deactivate')
@@ -132,86 +110,59 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.get_object()
         user.is_active = False
         user.save()
-        AuditTrail.objects.create(
-            user=request.user,
-            action='UPDATE',
-            model_name='User',
-            object_id=str(user.id),
-            object_repr=f"Deactivated user {user.email}",
-            ip_address=request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(request, 'UPDATE', user, object_repr=f"Deactivated user {user.email}")
         return Response({'detail': 'User deactivated.'})
 
     @action(detail=True, methods=['post'], url_path='reset-password')
     def reset_password(self, request, pk=None):
         user = self.get_object()
         password = request.data.get('password')
-        if not password or len(password) < 8:
+        if not password:
             return Response(
-                {'detail': 'Password must be at least 8 characters long.'},
+                {'detail': 'Password is required.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        try:
+            validate_password(password, user=user)
+        except DjangoValidationError as exc:
+            return Response({'detail': ' '.join(exc.messages)},
+                            status=status.HTTP_400_BAD_REQUEST)
         user.set_password(password)
         user.save()
-        
+
         # Log the password reset
-        AuditTrail.objects.create(
-            user=request.user,
-            action='UPDATE',
-            model_name='User',
-            object_id=str(user.id),
-            object_repr=f"Reset password for {user.email}",
-            ip_address=request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(request, 'UPDATE', user, object_repr=f"Reset password for {user.email}")
         return Response({'detail': 'Password reset successful.'})
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanManageSettings]
     filter_backends = [SearchFilter, OrderingFilter]
     search_fields = ['name', 'code']
 
     def perform_create(self, serializer):
         dept = serializer.save()
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='CREATE',
-            model_name='Department',
-            object_id=str(dept.id),
-            object_repr=str(dept),
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'CREATE', dept)
 
     def perform_update(self, serializer):
         old_repr = str(serializer.instance)
         dept = serializer.save()
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='UPDATE',
-            model_name='Department',
-            object_id=str(dept.id),
+        log_audit(
+            self.request, 'UPDATE', dept,
             object_repr=f"{old_repr} -> {str(dept)}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
         )
 
     def perform_destroy(self, instance):
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='DELETE',
-            model_name='Department',
-            object_id=str(instance.id),
-            object_repr=str(instance),
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'DELETE', instance)
         instance.delete()
 
 
 class AuditTrailViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditTrail.objects.select_related('user').all()
     serializer_class = AuditTrailSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanViewAuditTrail]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['model_name', 'user']
     search_fields = ['object_repr', 'user__email', 'user__first_name', 'user__last_name']
@@ -240,29 +191,22 @@ class ChangePasswordView(generics.GenericAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if len(new_password) < 8:
-            return Response(
-                {'detail': 'New password must be at least 8 characters long.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         if not user.check_password(current_password):
             return Response(
                 {'detail': 'Current password is incorrect.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        try:
+            validate_password(new_password, user=user)
+        except DjangoValidationError as exc:
+            return Response({'detail': ' '.join(exc.messages)},
+                            status=status.HTTP_400_BAD_REQUEST)
+
         user.set_password(new_password)
         user.save()
 
-        AuditTrail.objects.create(
-            user=user,
-            action='UPDATE',
-            model_name='User',
-            object_id=str(user.id),
-            object_repr='Password changed',
-            ip_address=request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(request, 'UPDATE', user, object_repr='Password changed', user=user)
 
         return Response({'detail': 'Password changed successfully.'})
 

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import apiClient, { authApi } from '../../api/apiClient';
+import { usePermissions } from '../../hooks/usePermissions';
 import { TrendingUp, Sliders, Plus, RefreshCw, AlertOctagon, ClipboardList, CheckCircle2, Star } from 'lucide-react';
 
 function RiskAssessmentPage() {
+  const { canWriteAudit } = usePermissions();
   const [activePageTab, setActivePageTab] = useState('matrix'); // 'matrix' or 'selfAssessment'
   const [parameters, setParameters] = useState([]);
   const [assessments, setAssessments] = useState([]);
@@ -238,7 +240,7 @@ function RiskAssessmentPage() {
                   <button className="btn btn-outline btn-sm flex items-center gap-1" onClick={fetchAll}>
                     <RefreshCw size={13} /> Refresh
                   </button>
-                  {isManagerOrAuditor && (
+                  {canWriteAudit && (
                     <button className="btn btn-primary btn-sm flex items-center gap-1" onClick={() => setShowModal(true)}>
                       <Plus size={13} /> Add Assessment
                     </button>
@@ -322,7 +324,7 @@ function RiskAssessmentPage() {
                       <div className="text-center py-8">
                         <AlertOctagon size={40} className="mx-auto text-muted mb-3" />
                         <p className="text-muted">No risk assessments recorded yet.</p>
-                        {isManagerOrAuditor && (
+                        {canWriteAudit && (
                           <button className="btn btn-primary btn-sm mt-3" onClick={() => setShowModal(true)}>
                             <Plus size={14} className="inline mr-1" /> Create First Assessment
                           </button>

@@ -9,7 +9,9 @@ import random, string
 
 from .models import CorrectiveAction, ActionResponse, FollowUp
 from .serializers import CorrectiveActionSerializer, ActionResponseSerializer, FollowUpSerializer
-from apps.accounts.models import AuditTrail
+from apps.notifications.services import notify
+from apps.common.permissions import CanWriteAudit
+from apps.common.audit_utils import log_audit
 
 
 class CorrectiveActionViewSet(viewsets.ModelViewSet):
@@ -17,7 +19,7 @@ class CorrectiveActionViewSet(viewsets.ModelViewSet):
         'finding', 'owner', 'assigned_by'
     ).prefetch_related('responses', 'follow_ups').all()
     serializer_class = CorrectiveActionSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'priority', 'finding', 'owner']
     search_fields = ['title', 'description', 'recommendation', 'action_number']
@@ -39,38 +41,43 @@ class CorrectiveActionViewSet(viewsets.ModelViewSet):
             assigned_by=self.request.user,
             action_number=f'CAPA-{num}'
         )
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='CREATE',
-            model_name='CorrectiveAction',
-            object_id=str(action_obj.id),
-            object_repr=f"{action_obj.action_number} - {action_obj.title}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'CREATE', action_obj)
+        # Notify the owner that a corrective action was assigned to them.
+        if action_obj.owner and action_obj.owner != self.request.user:
+            due = action_obj.due_date.isoformat() if action_obj.due_date else 'no due date set'
+            notify(
+                action_obj.owner,
+                'assigned',
+                f'New corrective action: {action_obj.action_number}',
+                f'You have been assigned corrective action "{action_obj.title}" (due {due}).',
+                f'/corrective-actions?id={action_obj.id}',
+            )
 
     def perform_update(self, serializer):
+        prev_owner_id = serializer.instance.owner_id
+        prev_status = serializer.instance.status
         action_obj = serializer.save()
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='UPDATE',
-            model_name='CorrectiveAction',
-            object_id=str(action_obj.id),
-            object_repr=f"{action_obj.action_number} - {action_obj.title}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        changes = None
+        if action_obj.status != prev_status:
+            changes = {'status': [prev_status, action_obj.status]}
+        log_audit(self.request, 'UPDATE', action_obj, changes=changes)
+        # Notify a newly assigned owner.
+        if (action_obj.owner_id and action_obj.owner_id != prev_owner_id
+                and action_obj.owner != self.request.user):
+            notify(
+                action_obj.owner,
+                'assigned',
+                f'Corrective action assigned: {action_obj.action_number}',
+                f'You have been assigned corrective action "{action_obj.title}".',
+                f'/corrective-actions?id={action_obj.id}',
+            )
 
     def perform_destroy(self, instance):
-        AuditTrail.objects.create(
-            user=self.request.user,
-            action='DELETE',
-            model_name='CorrectiveAction',
-            object_id=str(instance.id),
-            object_repr=f"{instance.action_number} - {instance.title}",
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(self.request, 'DELETE', instance)
         instance.delete()
 
-    @action(detail=True, methods=['post'], url_path='add-response')
+    @action(detail=True, methods=['post'], url_path='add-response',
+            permission_classes=[IsAuthenticated])
     def add_response(self, request, pk=None):
         action_obj = self.get_object()
         data = request.data.copy()
@@ -79,16 +86,23 @@ class CorrectiveActionViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         response_obj = serializer.save(responder=request.user)
         # Update action status
+        prev_status = action_obj.status
         action_obj.status = data.get('status_update', action_obj.status)
         action_obj.save()
-        AuditTrail.objects.create(
-            user=request.user,
-            action='UPDATE',
-            model_name='CorrectiveAction',
-            object_id=str(action_obj.id),
-            object_repr=f"Response added to {action_obj.action_number}",
-            ip_address=request.META.get('REMOTE_ADDR'),
-        )
+        changes = None
+        if action_obj.status != prev_status:
+            changes = {'status': [prev_status, action_obj.status]}
+        log_audit(request, 'UPDATE', action_obj, changes=changes)
+        # Let the assigner know the owner responded / provided progress.
+        if action_obj.assigned_by and action_obj.assigned_by != request.user:
+            notify(
+                action_obj.assigned_by,
+                'follow_up',
+                f'Response on {action_obj.action_number}',
+                f'{request.user.get_full_name() or request.user.username} responded on '
+                f'corrective action "{action_obj.title}".',
+                f'/corrective-actions?id={action_obj.id}',
+            )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], url_path='schedule-followup')
@@ -99,14 +113,16 @@ class CorrectiveActionViewSet(viewsets.ModelViewSet):
         serializer = FollowUpSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         serializer.save(conducted_by=request.user)
-        AuditTrail.objects.create(
-            user=request.user,
-            action='UPDATE',
-            model_name='CorrectiveAction',
-            object_id=str(action_obj.id),
-            object_repr=f"Follow-up scheduled for {action_obj.action_number}",
-            ip_address=request.META.get('REMOTE_ADDR'),
-        )
+        log_audit(request, 'UPDATE', action_obj)
+        # Notify the owner that a follow-up was scheduled for their action.
+        if action_obj.owner and action_obj.owner != request.user:
+            notify(
+                action_obj.owner,
+                'follow_up',
+                f'Follow-up scheduled: {action_obj.action_number}',
+                f'A follow-up has been scheduled for corrective action "{action_obj.title}".',
+                f'/corrective-actions?id={action_obj.id}',
+            )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'], url_path='overdue')
