@@ -6,6 +6,8 @@ from apps.accounts.serializers import UserSerializer
 class AuditUniverseSerializer(serializers.ModelSerializer):
     department_name = serializers.SerializerMethodField()
     category_display = serializers.CharField(source='get_category_display', read_only=True)
+    due_for_re_audit = serializers.BooleanField(read_only=True)
+    latest_risk_assessment = serializers.SerializerMethodField()
 
     class Meta:
         model = AuditUniverse
@@ -15,6 +17,19 @@ class AuditUniverseSerializer(serializers.ModelSerializer):
         if obj.department:
             return obj.department.name
         return None
+
+    def get_latest_risk_assessment(self, obj):
+        """Expose the most recent linked risk assessment score/rating (Phase 3.1)."""
+        latest = obj.risk_assessments.order_by('-year', '-created_at').first()
+        if latest is None:
+            return None
+        return {
+            'id': latest.id,
+            'year': latest.year,
+            'assessment_period': latest.assessment_period,
+            'risk_score': str(latest.risk_score),
+            'risk_rating': latest.risk_rating,
+        }
 
 
 class AuditTeamMemberSerializer(serializers.ModelSerializer):

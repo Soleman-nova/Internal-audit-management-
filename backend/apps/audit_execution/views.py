@@ -4,7 +4,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.http import HttpResponse
 from django.utils import timezone
+import mimetypes
 
 from .models import AuditProgram, AuditProcedure, WorkingPaper
 from .serializers import AuditProgramSerializer, AuditProcedureSerializer, WorkingPaperSerializer
@@ -118,6 +120,17 @@ class WorkingPaperViewSet(viewsets.ModelViewSet):
         paper = serializer.save(prepared_by=self.request.user)
         log_audit(self.request, 'CREATE', paper)
 
+    def perform_destroy(self, instance):
+        log_audit(self.request, 'DELETE', instance)
+        # Remove the physical file from storage when the paper is deleted.
+        if instance.file:
+            storage, filename = instance.file.storage, instance.file.name
+            instance.delete()
+            if filename and storage.exists(filename):
+                storage.delete(filename)
+        else:
+            instance.delete()
+
     @action(detail=True, methods=['post'], url_path='review',
             permission_classes=[RequiresCapability.for_(APPROVE_PLANS)])
     def review(self, request, pk=None):
@@ -137,3 +150,18 @@ class WorkingPaperViewSet(viewsets.ModelViewSet):
                 f'/execution?engagement={paper.engagement_id}',
             )
         return Response({'detail': 'Working paper reviewed.'})
+
+    @action(detail=True, methods=['get'], url_path='download')
+    def download(self, request, pk=None):
+        paper = self.get_object()
+        if paper.file:
+            # Determine content type from file extension
+            content_type, _ = mimetypes.guess_type(paper.file.name)
+            if not content_type:
+                content_type = 'application/octet-stream'
+
+            response = HttpResponse(paper.file.read(), content_type=content_type)
+            filename = paper.file.name.split('/')[-1]
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        return Response({'detail': 'No file attached to this working paper.'}, status=status.HTTP_400_BAD_REQUEST)

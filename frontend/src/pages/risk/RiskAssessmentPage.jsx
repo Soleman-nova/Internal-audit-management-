@@ -1,18 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import apiClient, { authApi } from '../../api/apiClient';
+import { riskApi, usersApi, planningApi } from '../../api';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
-import { TrendingUp, Sliders, Plus, RefreshCw, AlertOctagon, ClipboardList, CheckCircle2, Star } from 'lucide-react';
+import { useI18n } from '../../context/I18nContext';
+import { validateForm, validators, hasErrors } from '../../utils/validation';
+import Modal from '../../components/ui/Modal';
+import Badge from '../../components/ui/Badge';
+import Spinner from '../../components/ui/Spinner';
+import EmptyState from '../../components/ui/EmptyState';
+import FormField from '../../components/ui/FormField';
+import { TrendingUp, Sliders, Plus, RefreshCw, AlertOctagon, ClipboardList, CheckCircle2, Star, X } from 'lucide-react';
 
 function RiskAssessmentPage() {
+  const toast = useToast();
+  const auth = useAuth();
+  const { t } = useI18n();
   const { canWriteAudit } = usePermissions();
   const [activePageTab, setActivePageTab] = useState('matrix'); // 'matrix' or 'selfAssessment'
+  const [formErrors, setFormErrors] = useState({});
   const [parameters, setParameters] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [universe, setUniverse] = useState([]);
   const [heatmapData, setHeatmapData] = useState([]);
   const [selectedCell, setSelectedCell] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState(null);
+  const currentUser = auth.user;
   const [summary, setSummary] = useState({ total: 0, critical: 0, high: 0, medium: 0, low: 0 });
 
   // Self Assessments from backend
@@ -21,7 +35,7 @@ function RiskAssessmentPage() {
   // New Assessment Modal (For Managers)
   const [showModal, setShowModal] = useState(false);
   const [newAssessment, setNewAssessment] = useState({
-    department: '', year: new Date().getFullYear(),
+    department: '', audit_universe: '', year: new Date().getFullYear(),
     assessment_period: 'Annual', likelihood: 3, impact: 3,
     control_effectiveness: 3, notes: ''
   });
@@ -46,30 +60,30 @@ function RiskAssessmentPage() {
   const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
-    const user = authApi.getCurrentUser();
-    setCurrentUser(user);
     fetchAll();
   }, []);
 
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [paramRes, assessRes, deptRes, heatRes, sumRes, selfRes] = await Promise.all([
-        apiClient.get('/risk/parameters/'),
-        apiClient.get('/risk/assessments/'),
-        apiClient.get('/auth/departments/'),
-        apiClient.get('/risk/assessments/heatmap/'),
-        apiClient.get('/risk/assessments/summary/'),
-        apiClient.get('/risk/self-assessments/')
+      const [paramRes, assessRes, deptRes, uniRes, heatRes, sumRes, selfRes] = await Promise.all([
+        riskApi.getParameters(),
+        riskApi.getAssessments(),
+        usersApi.getDepartments(),
+        planningApi.getUniverse(),
+        riskApi.getHeatmap(),
+        riskApi.getSummary(),
+        riskApi.getSelfAssessments(),
       ]);
-      setParameters(paramRes.data.results || []);
-      setAssessments(assessRes.data.results || []);
-      setDepartments(deptRes.data.results || []);
-      setHeatmapData(heatRes.data || []);
-      setSummary(sumRes.data || {});
-      setSelfAssessments(selfRes.data.results || []);
+      setParameters(paramRes || []);
+      setAssessments(assessRes || []);
+      setDepartments(deptRes || []);
+      setUniverse(uniRes || []);
+      setHeatmapData(heatRes || []);
+      setSummary(sumRes || {});
+      setSelfAssessments(selfRes || []);
     } catch (err) {
-      console.error('Risk data load failed:', err);
+      toast.error('Failed to load risk assessment data');
     } finally {
       setLoading(false);
     }
@@ -77,15 +91,32 @@ function RiskAssessmentPage() {
 
   const handleCreateAssessment = async (e) => {
     e.preventDefault();
+    // Validate form
+    const errors = validateForm(newAssessment, {
+      department: { validators: [validators.required] },
+      year: { validators: [validators.required, validators.integer] },
+      likelihood: { validators: [validators.required, validators.min(1), validators.max(5)] },
+      impact: { validators: [validators.required, validators.min(1), validators.max(5)] },
+      control_effectiveness: { validators: [validators.required, validators.min(1), validators.max(5)] },
+    });
+    if (hasErrors(errors)) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     setSaving(true);
     try {
-      const res = await apiClient.post('/risk/assessments/', newAssessment);
-      setAssessments([res.data, ...assessments]);
+      const payload = { ...newAssessment };
+      if (!payload.audit_universe) delete payload.audit_universe;
+      const res = await riskApi.createAssessment(payload);
+      setAssessments([res, ...assessments]);
       setShowModal(false);
-      setNewAssessment({ department: '', year: new Date().getFullYear(), assessment_period: 'Annual', likelihood: 3, impact: 3, control_effectiveness: 3, notes: '' });
+      setNewAssessment({ department: '', audit_universe: '', year: new Date().getFullYear(), assessment_period: 'Annual', likelihood: 3, impact: 3, control_effectiveness: 3, notes: '' });
+      toast.success('Risk assessment created successfully');
       fetchAll(); // Refresh heatmap
     } catch (err) {
-      alert('Failed: ' + JSON.stringify(err.response?.data || err.message));
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
+      toast.error('Failed to create assessment: ' + msg);
     } finally {
       setSaving(false);
     }
@@ -113,18 +144,19 @@ function RiskAssessmentPage() {
         status: 'submitted',
         ...surveyResponse
       };
-      await apiClient.post('/risk/self-assessments/', payload);
-      
+      await riskApi.createSelfAssessment(payload);
+
       // Update risk assessment parent to indicate self assessment is complete
-      await apiClient.patch(`/risk/assessments/${selectedAssessment.id}/`, {
+      await riskApi.updateAssessment(selectedAssessment.id, {
         is_self_assessment: true
       });
 
-      alert('Self-assessment survey submitted successfully!');
+      toast.success('Self-assessment survey submitted successfully!');
       setShowSurveyModal(false);
       fetchAll();
     } catch (err) {
-      alert('Failed to submit survey: ' + JSON.stringify(err.response?.data || err.message));
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
+      toast.error('Failed to submit survey: ' + msg);
     } finally {
       setSubmittingSurvey(false);
     }
@@ -141,15 +173,16 @@ function RiskAssessmentPage() {
     if (!selectedSelfAss) return;
     setSubmittingReview(true);
     try {
-      await apiClient.patch(`/risk/self-assessments/${selectedSelfAss.id}/`, {
+      await riskApi.updateSelfAssessment(selectedSelfAss.id, {
         reviewer_notes: reviewerNotes,
         status: 'reviewed'
       });
-      alert('Review submitted and status updated!');
+      toast.success('Review submitted and status updated!');
       setShowReviewModal(false);
       fetchAll();
     } catch (err) {
-      alert('Failed to save review: ' + JSON.stringify(err.response?.data || err.message));
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
+      toast.error('Failed to save review: ' + msg);
     } finally {
       setSubmittingReview(false);
     }
@@ -159,7 +192,7 @@ function RiskAssessmentPage() {
     const score = l * i;
     if (score >= 20) return 'risk-cell-critical';
     if (score >= 12) return 'risk-cell-high';
-    if (score >= 6)  return 'risk-cell-medium';
+    if (score >= 6) return 'risk-cell-medium';
     return 'risk-cell-low';
   };
 
@@ -181,9 +214,9 @@ function RiskAssessmentPage() {
   const getRatingClass = (rating) => {
     switch (rating) {
       case 'critical': return 'badge-danger';
-      case 'high':     return 'badge-warning';
-      case 'medium':   return 'badge-info';
-      default:         return 'badge-success';
+      case 'high': return 'badge-warning';
+      case 'medium': return 'badge-info';
+      default: return 'badge-success';
     }
   };
 
@@ -203,10 +236,10 @@ function RiskAssessmentPage() {
       {/* Top Level tab navigation */}
       <div className="tab-container mb-4">
         <button className={`tab-btn ${activePageTab === 'matrix' ? 'active' : ''}`} onClick={() => setActivePageTab('matrix')}>
-          <TrendingUp size={16} className="inline mr-1" /> Risk Matrix & Heat Map
+          <TrendingUp size={16} className="inline mr-1" /> {t('riskMatrixHeatMap')}
         </button>
         <button className={`tab-btn ${activePageTab === 'selfAssessment' ? 'active' : ''}`} onClick={() => setActivePageTab('selfAssessment')}>
-          <ClipboardList size={16} className="inline mr-1" /> Self Assessment Portal
+          <ClipboardList size={16} className="inline mr-1" /> {t('selfAssessmentPortal')}
         </button>
       </div>
 
@@ -215,11 +248,11 @@ function RiskAssessmentPage() {
           {/* Summary KPI Strip */}
           <div className="risk-kpi-strip mb-4">
             {[
-              { label: 'Total Assessments', value: summary.total || assessments.length, cls: 'badge-outline' },
-              { label: 'Critical',  value: summary.critical || 0,  cls: 'badge-danger' },
-              { label: 'High',      value: summary.high     || 0,  cls: 'badge-warning' },
-              { label: 'Medium',    value: summary.medium   || 0,  cls: 'badge-info' },
-              { label: 'Low',       value: summary.low      || 0,  cls: 'badge-success' },
+              { label: t('totalAssessments'), value: summary.total || assessments.length, cls: 'badge-outline' },
+              { label: t('critical'), value: summary.critical || 0, cls: 'badge-danger' },
+              { label: t('high'), value: summary.high || 0, cls: 'badge-warning' },
+              { label: t('medium'), value: summary.medium || 0, cls: 'badge-info' },
+              { label: t('low'), value: summary.low || 0, cls: 'badge-success' },
             ].map(k => (
               <div key={k.label} className="risk-kpi-card card">
                 <span className={`badge ${k.cls} text-lg font-bold`}>{k.value}</span>
@@ -233,23 +266,23 @@ function RiskAssessmentPage() {
             <div className="card heat-map-card">
               <div className="card-header justify-between">
                 <div>
-                  <h3>5 × 5 Risk Heat Map</h3>
-                  <p className="card-subtitle">Likelihood vs Impact — click any cell to inspect</p>
+                  <h3>{t('riskHeatMap')}</h3>
+                  <p className="card-subtitle">{t('likelihoodVsImpact')}</p>
                 </div>
                 <div className="flex gap-2">
                   <button className="btn btn-outline btn-sm flex items-center gap-1" onClick={fetchAll}>
-                    <RefreshCw size={13} /> Refresh
+                    <RefreshCw size={13} /> {t('refresh')}
                   </button>
                   {canWriteAudit && (
                     <button className="btn btn-primary btn-sm flex items-center gap-1" onClick={() => setShowModal(true)}>
-                      <Plus size={13} /> Add Assessment
+                      <Plus size={13} /> {t('addAssessment')}
                     </button>
                   )}
                 </div>
               </div>
 
               {loading ? (
-                <div className="loading-spinner">Loading risk matrix...</div>
+                <div className="loading-spinner">{t('loadingRiskMatrix')}</div>
               ) : (
                 <div className="heat-map-container mt-4">
                   <div className="y-axis-label"><span>IMPACT (1 — 5)</span></div>
@@ -277,9 +310,9 @@ function RiskAssessmentPage() {
               <div className="heat-map-legend mt-3">
                 {[
                   { cls: 'risk-cell-critical', label: 'Critical (≥20)' },
-                  { cls: 'risk-cell-high',     label: 'High (12–19)' },
-                  { cls: 'risk-cell-medium',   label: 'Medium (6–11)' },
-                  { cls: 'risk-cell-low',      label: 'Low (1–5)' },
+                  { cls: 'risk-cell-high', label: 'High (12–19)' },
+                  { cls: 'risk-cell-medium', label: 'Medium (6–11)' },
+                  { cls: 'risk-cell-low', label: 'Low (1–5)' },
                 ].map(l => (
                   <div key={l.label} className="legend-item">
                     <span className={`legend-swatch ${l.cls}`}></span>
@@ -317,16 +350,16 @@ function RiskAssessmentPage() {
                 </div>
               ) : (
                 <div>
-                  <h3>All Risk Assessments</h3>
-                  <p className="card-subtitle mb-4">Scored risk records across EEU departments</p>
+                  <h3>{t('allRiskAssessments')}</h3>
+                  <p className="card-subtitle mb-4">{t('scoredRiskRecords')}</p>
                   <div className="risk-full-list">
                     {assessments.length === 0 ? (
                       <div className="text-center py-8">
                         <AlertOctagon size={40} className="mx-auto text-muted mb-3" />
-                        <p className="text-muted">No risk assessments recorded yet.</p>
+                        <p className="text-muted">{t('noRiskAssessments')}</p>
                         {canWriteAudit && (
                           <button className="btn btn-primary btn-sm mt-3" onClick={() => setShowModal(true)}>
-                            <Plus size={14} className="inline mr-1" /> Create First Assessment
+                            <Plus size={14} className="inline mr-1" /> {t('createFirstAssessment')}
                           </button>
                         )}
                       </div>
@@ -357,22 +390,22 @@ function RiskAssessmentPage() {
           {/* Risk Parameter Weightings */}
           <div className="card">
             <div className="card-header">
-              <h3><Sliders size={18} className="inline mr-2" />Risk Parameter Weightings</h3>
-              <p className="card-subtitle">Configurable factors used to formulate risk scores</p>
+              <h3><Sliders size={18} className="inline mr-2" />{t('riskParameterWeightings')}</h3>
+              <p className="card-subtitle">{t('configurableFactors')}</p>
             </div>
             <div className="table-responsive mt-3">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Parameter Name</th>
-                    <th>Category</th>
-                    <th>Weight</th>
-                    <th>Description</th>
+                    <th>{t('parameterName')}</th>
+                    <th>{t('category')}</th>
+                    <th>{t('weight')}</th>
+                    <th>{t('description')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {parameters.length === 0 ? (
-                    <tr><td colSpan="4" className="text-center py-4 text-muted">No risk parameters configured. Run seed_data management command.</td></tr>
+                    <tr><td colSpan="4" className="text-center py-4 text-muted">{t('noRiskParameters')}</td></tr>
                   ) : (
                     parameters.map(param => (
                       <tr key={param.id}>
@@ -395,8 +428,8 @@ function RiskAssessmentPage() {
             <div className="card">
               <div className="card-header justify-between">
                 <div>
-                  <h3>Operational Risk Self-Assessments</h3>
-                  <p className="card-subtitle">Submit self-assessment surveys for your department</p>
+                  <h3>{t('operationalRiskSelfAssessments')}</h3>
+                  <p className="card-subtitle">{t('submitSelfAssessmentSurveys')}</p>
                 </div>
                 <button className="btn btn-outline btn-sm flex items-center gap-1" onClick={fetchAll}>
                   <RefreshCw size={13} /> Refresh
@@ -465,8 +498,8 @@ function RiskAssessmentPage() {
             <div className="card">
               <div className="card-header justify-between">
                 <div>
-                  <h3>Submitted Auditee Self-Assessments</h3>
-                  <p className="card-subtitle">Review operational feedback and adjust inherent risks</p>
+                  <h3>{t('submittedAuditeeSelfAssessments')}</h3>
+                  <p className="card-subtitle">{t('reviewOperationalFeedback')}</p>
                 </div>
                 <button className="btn btn-outline btn-sm flex items-center gap-1" onClick={fetchAll}>
                   <RefreshCw size={13} /> Refresh
@@ -533,11 +566,29 @@ function RiskAssessmentPage() {
 
       {/* New Assessment Modal (For Managers) */}
       {showModal && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setShowModal(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowModal(false); }}
+        >
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="assessment-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>Record Risk Assessment</h3>
-              <button className="close-btn" onClick={() => setShowModal(false)}>×</button>
+              <h3 id="assessment-modal-title">{t('recordRiskAssessment')}</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowModal(false)}
+                aria-label="Close dialog"
+              >
+                <X size={16} />
+              </button>
             </div>
             <form onSubmit={handleCreateAssessment}>
               <div className="modal-body">
@@ -554,6 +605,21 @@ function RiskAssessmentPage() {
                       {departments.map(d => (
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Audit Universe Entry</label>
+                    <select
+                      className="form-control"
+                      value={newAssessment.audit_universe}
+                      onChange={e => setNewAssessment({ ...newAssessment, audit_universe: e.target.value })}
+                    >
+                      <option value="">Auto (by department)</option>
+                      {universe
+                        .filter(u => !newAssessment.department || String(u.department) === String(newAssessment.department))
+                        .map(u => (
+                          <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
+                        ))}
                     </select>
                   </div>
                   <div className="form-group">
@@ -628,11 +694,29 @@ function RiskAssessmentPage() {
 
       {/* Auditee Survey Response Modal */}
       {showSurveyModal && selectedAssessment && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setShowSurveyModal(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowSurveyModal(false); }}
+        >
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="survey-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>Submit Risk Self-Assessment Survey</h3>
-              <button className="close-btn" onClick={() => setShowSurveyModal(false)}>×</button>
+              <h3 id="survey-modal-title">{t('submitRiskSelfAssessment')}</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowSurveyModal(false)}
+                aria-label="Close dialog"
+              >
+                <X size={16} />
+              </button>
             </div>
             <form onSubmit={handleSubmitSurvey}>
               <div className="modal-body">
@@ -692,11 +776,29 @@ function RiskAssessmentPage() {
 
       {/* Manager Review Modal */}
       {showReviewModal && selectedSelfAss && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setShowReviewModal(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowReviewModal(false); }}
+        >
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="review-mgr-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>Review Auditee Self-Assessment</h3>
-              <button className="close-btn" onClick={() => setShowReviewModal(false)}>×</button>
+              <h3 id="review-mgr-modal-title">{t('reviewAuditeeSelfAssessment')}</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowReviewModal(false)}
+                aria-label="Close dialog"
+              >
+                <X size={16} />
+              </button>
             </div>
             <form onSubmit={handleSubmitReview}>
               <div className="modal-body">

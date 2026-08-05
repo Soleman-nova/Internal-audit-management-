@@ -8,6 +8,7 @@ django.setup()
 
 from apps.accounts.models import User, Department, Role
 from apps.risk_assessment.models import RiskAssessment
+from apps.audit_planning.models import AuditUniverse
 import datetime
 
 current_year = datetime.datetime.now().year
@@ -28,6 +29,11 @@ assessor = User.objects.filter(role=Role.AUDIT_MANAGER).first()
 if not assessor:
     assessor = User.objects.filter(is_superuser=True).first()
 
+def _get_universe(dept):
+    """Resolve the active audit-universe entry for a department (Phase 3.1)."""
+    return AuditUniverse.objects.filter(department=dept, status='active').first()
+
+
 risk_data = [
     {"dept": proc, "likelihood": 4, "impact": 4, "ctrl": 2, "period": "Annual", "notes": "High-value procurement with weak controls"},
     {"dept": fin,  "likelihood": 3, "impact": 4, "ctrl": 3, "period": "Annual", "notes": "ERP financial controls — moderate risk"},
@@ -46,6 +52,7 @@ for rd in risk_data:
     if not exists:
         ra = RiskAssessment(
             department=rd["dept"],
+            audit_universe=_get_universe(rd["dept"]),
             year=current_year,
             assessment_period=rd["period"],
             likelihood=rd["likelihood"],

@@ -38,31 +38,11 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         report = serializer.save(generated_by=self.request.user, status='generating')
-        try:
-            self.generate_report_file(report, self.request)
-        except Exception as e:
-            report.status = 'failed'
-            report.error_message = str(e)
-            report.save()
-        # Notify the requester about the outcome of the (synchronous) generation.
-        link = f'/reports?id={report.id}'
-        if report.status == 'ready':
-            notify(
-                report.generated_by,
-                'report_ready',
-                f'Report ready: {report.title}',
-                f'Your {report.get_format_display() if hasattr(report, "get_format_display") else report.format} '
-                f'report "{report.title}" has been generated and is ready to download.',
-                link,
-            )
-        elif report.status == 'failed':
-            notify(
-                report.generated_by,
-                'system',
-                f'Report generation failed: {report.title}',
-                f'Your report "{report.title}" could not be generated. {report.error_message or ""}'.strip(),
-                link,
-            )
+        # Phase 3.4 — run the heavy compile off the request thread so the API
+        # returns immediately and the frontend can poll status:
+        # generating -> ready / failed.
+        from apps.reports.jobs import enqueue_report_generation
+        enqueue_report_generation(report)
 
     def generate_report_file(self, report, request=None):
         from django.core.files.base import ContentFile

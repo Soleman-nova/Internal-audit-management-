@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from apps.accounts.models import User, Department
 
 
@@ -31,6 +32,33 @@ class AuditUniverse(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def is_due_for_re_audit(self, as_of=None):
+        """Phase 3.3 — whether the entity is overdue for its next audit.
+
+        Driven by ``audit_frequency`` (highest first) relative to
+        ``last_audited``. Entities that were never audited are always due.
+        """
+        if self.last_audited is None:
+            return True
+        as_of = as_of or timezone.now().date()
+        months = {
+            'monthly': 1,
+            'quarterly': 3,
+            'bi-annually': 6,
+            'semi-annually': 6,
+            'annually': 12,
+            'yearly': 12,
+            'tri-annually': 36,
+            'biennially': 24,
+        }.get((self.audit_frequency or '').strip().lower())
+        if months is None:
+            return False
+        return (self.last_audited + timezone.timedelta(days=30 * months)) <= as_of
+
+    @property
+    def due_for_re_audit(self):
+        return self.is_due_for_re_audit()
 
     def __str__(self):
         return f"{self.code} - {self.name}"
