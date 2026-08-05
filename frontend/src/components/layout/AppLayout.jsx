@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 // ── Translations ──────────────────────────────────────────────
 const TRANSLATIONS = {
@@ -66,6 +66,8 @@ const TRANSLATIONS = {
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { authApi, notificationApi } from '../../api/apiClient';
 import { hasCapability, CAPABILITIES } from '../../hooks/usePermissions';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import {
   LayoutDashboard,
   Calendar,
@@ -102,17 +104,22 @@ import {
 } from 'lucide-react';
 
 function AppLayout() {
-  const [user, setUser] = useState({ email: '', role: 'auditor', first_name: 'Auditor' });
+  const auth = useAuth();
+  const { setLanguage, setTheme } = auth;
+  const toast = useToast();
+  const user = auth.user || { email: '', role: 'auditor', first_name: 'Auditor' };
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const notifContainerRef = useRef(null);
   const [apiServer, setApiServer] = useState(localStorage.getItem('apiBaseUrl') || 'http://localhost:8000/api');
-  const [themeMode, setThemeMode] = useState(localStorage.getItem('themeMode') || 'dark');
-  const [language, setLanguage] = useState(localStorage.getItem('lang') || 'EN');
+  const themeMode = auth.theme || 'light';
+  const language = auth.language === 'am' ? 'AM' : 'EN';
   const [saveSuccess, setSaveSuccess] = useState(false);
+
 
   // Translation helper
   const t = useCallback((key) => {
@@ -167,17 +174,36 @@ function AppLayout() {
     document.documentElement.setAttribute('lang', language === 'AM' ? 'am' : 'en');
   }, [language]);
 
+  // Close notifications popover on outside click
+  useEffect(() => {
+    if (!showNotifications) return;
+    const handleOutside = (e) => {
+      if (notifContainerRef.current && !notifContainerRef.current.contains(e.target)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [showNotifications]);
+
+  // Close Settings / Help modals on Escape key
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        if (showSettings) closeSettingsModal();
+        if (showHelp) setShowHelp(false);
+        if (showNotifications) setShowNotifications(false);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [showSettings, showHelp, showNotifications]);
+
   const handleSaveSettings = (e) => {
     e.preventDefault();
     localStorage.setItem('apiBaseUrl', apiServer);
-    localStorage.setItem('themeMode', themeMode);
-    localStorage.setItem('lang', language);
-    setSaveSuccess(true);
-    setTimeout(() => {
-      setSaveSuccess(false);
-      setShowSettings(false);
-      // No full reload needed — theme & language apply reactively via useEffect
-    }, 1200);
+    toast.success('System settings saved.');
+    setShowSettings(false);
   };
 
   const handleChangePassword = async (e) => {
@@ -185,16 +211,19 @@ function AppLayout() {
     setPwError('');
     if (pwNew !== pwConfirm) {
       setPwError('New passwords do not match.');
+      toast.error('New passwords do not match.');
       return;
     }
     if (pwNew.length < 8) {
       setPwError('New password must be at least 8 characters.');
+      toast.error('New password must be at least 8 characters.');
       return;
     }
     setPwLoading(true);
     try {
       await authApi.changePassword(pwCurrent, pwNew);
       setPwSuccess(true);
+      toast.success('Password changed successfully.');
       setPwCurrent('');
       setPwNew('');
       setPwConfirm('');
@@ -206,6 +235,7 @@ function AppLayout() {
         err?.response?.data?.new_password?.[0] ||
         'Password change failed. Please check your current password.';
       setPwError(msg);
+      toast.error(msg);
     } finally {
       setPwLoading(false);
     }
@@ -216,14 +246,14 @@ function AppLayout() {
     setProfileError('');
     setProfileSaving(true);
     try {
-      await authApi.updateProfile({ first_name: profileFirstName, last_name: profileLastName });
-      setUser(prev => ({ ...prev, first_name: profileFirstName, last_name: profileLastName }));
+      await auth.updateUser({ first_name: profileFirstName, last_name: profileLastName });
       setProfileSuccess(true);
+      toast.success('Profile updated successfully.');
       setTimeout(() => setProfileSuccess(false), 3000);
     } catch (err) {
-      setProfileError(
-        err?.response?.data?.detail || 'Failed to update profile. Please try again.'
-      );
+      const msg = err?.response?.data?.detail || 'Failed to update profile. Please try again.';
+      setProfileError(msg);
+      toast.error(msg);
     } finally {
       setProfileSaving(false);
     }
@@ -233,13 +263,11 @@ function AppLayout() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const currentUser = authApi.getCurrentUser();
-    if (currentUser) {
-      setUser(currentUser);
-      setProfileFirstName(currentUser.first_name || '');
-      setProfileLastName(currentUser.last_name || '');
+    if (user) {
+      setProfileFirstName(user.first_name || '');
+      setProfileLastName(user.last_name || '');
     }
-  }, []);
+  }, [user]);
 
   // Load notifications + unread count from the backend.
   const loadNotifications = useCallback(async () => {
@@ -266,11 +294,12 @@ function AppLayout() {
   const handleMarkAllRead = useCallback(async () => {
     try {
       await notificationApi.markAllRead();
+      toast.info('All notifications marked as read.');
     } catch (err) {
       console.error('Failed to mark all notifications read', err);
     }
     loadNotifications();
-  }, [loadNotifications]);
+  }, [loadNotifications, toast]);
 
   const handleNotificationClick = useCallback(async (n) => {
     if (!n.is_read) {
@@ -288,7 +317,7 @@ function AppLayout() {
   }, [loadNotifications, navigate]);
 
   const handleLogout = () => {
-    authApi.logout();
+    auth.logout();
   };
 
   const navItems = [
@@ -395,10 +424,13 @@ function AppLayout() {
 
           <div className="header-right">
             {/* Notifications Dropdown */}
-            <div className="notification-container">
+            <div className="notification-container" ref={notifContainerRef}>
               <button
                 className="header-action-btn relative"
                 onClick={() => setShowNotifications(!showNotifications)}
+                aria-haspopup="true"
+                aria-expanded={showNotifications}
+                aria-label={t('notifications')}
               >
                 <Bell size={20} />
                 {unreadCount > 0 && (
@@ -407,7 +439,11 @@ function AppLayout() {
               </button>
 
               {showNotifications && (
-                <div className="notifications-dropdown">
+                <div
+                  className="notifications-dropdown"
+                  role="dialog"
+                  aria-label={t('notifications')}
+                >
                   <div className="dropdown-header">
                     <h3>{t('notifications')}</h3>
                     <button className="text-btn" onClick={handleMarkAllRead}>
@@ -475,8 +511,19 @@ function AppLayout() {
 
       {/* Settings Modal */}
       {showSettings && (
-        <div className="app-modal-overlay" onClick={closeSettingsModal}>
-          <div className="app-modal app-modal-settings" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="app-modal-overlay"
+          onClick={closeSettingsModal}
+          onKeyDown={(e) => { if (e.key === 'Escape') closeSettingsModal(); }}
+          role="presentation"
+        >
+          <div
+            className="app-modal app-modal-settings"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-modal-title"
+          >
             <div className="app-modal-hero">
               <div className="app-modal-hero-inner">
                 <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
@@ -484,7 +531,7 @@ function AppLayout() {
                     <Settings size={22} />
                   </div>
                   <div className="app-modal-hero-text">
-                    <h3>{t('systemSettings')}</h3>
+                    <h3 id="settings-modal-title">{t('systemSettings')}</h3>
                     <p>Customize your experience — language, appearance, security, and profile preferences.</p>
                   </div>
                 </div>
@@ -559,7 +606,7 @@ function AppLayout() {
                               name="language"
                               value={lang.val}
                               checked={language === lang.val}
-                              onChange={() => setLanguage(lang.val)}
+                              onChange={() => setLanguage(lang.val === 'AM' ? 'am' : 'en')}
                               className="sr-only"
                             />
                             <span className="app-modal-lang-flag">{lang.flag}</span>
@@ -590,7 +637,7 @@ function AppLayout() {
                                 name="themeMode"
                                 value={th.val}
                                 checked={themeMode === th.val}
-                                onChange={() => setThemeMode(th.val)}
+                                onChange={() => setTheme(th.val)}
                                 className="sr-only"
                               />
                               <div className={`app-modal-theme-preview ${th.preview}`}>
@@ -793,8 +840,19 @@ function AppLayout() {
 
       {/* Help Modal */}
       {showHelp && (
-        <div className="app-modal-overlay" onClick={() => setShowHelp(false)}>
-          <div className="app-modal app-modal-help" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="app-modal-overlay"
+          onClick={() => setShowHelp(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowHelp(false); }}
+          role="presentation"
+        >
+          <div
+            className="app-modal app-modal-help"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="help-modal-title"
+          >
             <div className="app-modal-hero">
               <div className="app-modal-hero-inner">
                 <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
@@ -802,7 +860,7 @@ function AppLayout() {
                     <HelpCircle size={22} />
                   </div>
                   <div className="app-modal-hero-text">
-                    <h3>Workflow & Support Center</h3>
+                    <h3 id="help-modal-title">Workflow & Support Center</h3>
                     <p>Guides, role responsibilities, and step-by-step checklists for the EEU Internal Audit system.</p>
                   </div>
                 </div>

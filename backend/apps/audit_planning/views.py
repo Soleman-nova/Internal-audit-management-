@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.utils import timezone
 from .models import AuditUniverse, AuditPlan, AuditEngagement, AuditTeamMember
 from .serializers import (AuditUniverseSerializer, AuditPlanSerializer,
                           AuditEngagementSerializer, AuditTeamMemberSerializer)
@@ -33,6 +34,35 @@ class AuditUniverseViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         log_audit(self.request, 'DELETE', instance)
         instance.delete()
+
+    @action(detail=False, methods=['get'], url_path='due-for-re-audit')
+    def due_for_re_audit(self, request):
+        """Phase 3.3 — entities whose next audit window has lapsed.
+
+        Filters by the entity's configured ``audit_frequency`` relative to
+        ``last_audited``. Accepts ``?as_of=YYYY-MM-DD`` for "what if" queries
+        and optional ``?category=`` to narrow results.
+        """
+        queryset = self.get_queryset().filter(status='active')
+        category = request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category=category)
+        as_of = request.query_params.get('as_of')
+        as_of_date = None
+        if as_of:
+            try:
+                as_of_date = timezone.datetime.strptime(as_of, '%Y-%m-%d').date()
+            except ValueError:
+                return Response(
+                    {'detail': 'Invalid as_of date, expected YYYY-MM-DD.'},
+                    status=400,
+                )
+        results = [u for u in queryset if u.is_due_for_re_audit(as_of=as_of_date)]
+        page = self.paginate_queryset(results)
+        serializer = self.get_serializer(page or results, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
 
 
 class AuditPlanViewSet(viewsets.ModelViewSet):
@@ -165,12 +195,25 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Invalid status.'}, status=400)
         old_status = engagement.status
         engagement.status = new_status
-        from django.utils import timezone
         if new_status == 'in_progress' and not engagement.actual_start:
             engagement.actual_start = timezone.now().date()
         elif new_status == 'completed' and not engagement.actual_end:
             engagement.actual_end = timezone.now().date()
         engagement.save()
+        # Phase 3.3 — close the re-audit loop: record the audit date on the
+        # universe entry the engagement covered.
+        if new_status == 'completed':
+            universe = engagement.audit_universe
+            if universe is None and engagement.department_id:
+                universe = (
+                    AuditUniverse.objects
+                    .filter(department_id=engagement.department_id, status='active')
+                    .order_by('-risk_score')
+                    .first()
+                )
+            if universe is not None:
+                universe.last_audited = engagement.actual_end or timezone.now().date()
+                universe.save(update_fields=['last_audited', 'updated_at'])
         log_audit(request, 'UPDATE', engagement, changes={'status': [old_status, new_status]})
         # Notify the relevant parties of the status transition.
         link = f'/engagements?id={engagement.id}'

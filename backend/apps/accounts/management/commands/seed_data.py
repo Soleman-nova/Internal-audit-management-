@@ -130,12 +130,17 @@ class Command(BaseCommand):
             )
 
         # 4b. Create a Risk Assessment (so report "Risk Analysis" isn't empty on demo data).
-        # risk_score / risk_rating / residual_risk are computed in RiskAssessment.save().
+        # risk_score / risk_rating / residual_risk are computed in RiskAssessment.save(),
+        # and with Phase 3.1 the score propagates into the linked AuditUniverse.
+        fin_universe = AuditUniverse.objects.filter(
+            department=depts["FIN"], status="active"
+        ).first()
         ra, ra_created = RiskAssessment.objects.get_or_create(
             department=depts["FIN"],
             year=datetime.datetime.now().year,
             assessment_period="Annual",
             defaults={
+                "audit_universe": fin_universe,
                 "likelihood": 4,
                 "impact": 4,
                 "control_effectiveness": 3,
@@ -144,7 +149,7 @@ class Command(BaseCommand):
             },
         )
         if ra_created:
-            self.stdout.write(f"Created Risk Assessment: {ra}")
+            self.stdout.write(f"Created Risk Assessment: {ra} (linked to {fin_universe})")
 
         # 5. Create Audit Universe
         universe_data = [
@@ -171,6 +176,15 @@ class Command(BaseCommand):
             universe.append(entry)
             if created:
                 self.stdout.write(f"Created Universe item: {entry.name}")
+
+            # Phase 3.1 — backfill: if this universe has no linked risk
+            # assessment yet, link the most recent one for the same department
+            # so universe risk scores track the computed weighted scores.
+            if not entry.risk_assessments.exists():
+                latest = RiskAssessment.objects.filter(department=uni["dept"]).order_by('-year', '-created_at').first()
+                if latest is not None:
+                    latest.audit_universe = entry
+                    latest.save(update_fields=['audit_universe', 'updated_at'])
 
         # 6. Create Audit Plan
         current_year = datetime.datetime.now().year

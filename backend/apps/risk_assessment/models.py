@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from apps.accounts.models import User, Department
 
 
@@ -39,6 +40,15 @@ class RiskAssessment(models.Model):
     ]
 
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='risk_assessments')
+    # Phase 3.1 — link the assessment to the auditable entity it is about, so the
+    # computed risk score can be propagated into AuditUniverse.risk_score.
+    audit_universe = models.ForeignKey(
+        'audit_planning.AuditUniverse',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='risk_assessments',
+    )
     assessment_period = models.CharField(max_length=10, choices=PERIOD_CHOICES, default='Annual')
     year = models.IntegerField()
     likelihood = models.IntegerField(choices=[(i, i) for i in range(1, 6)], help_text="1=Rare, 5=Almost Certain")
@@ -57,8 +67,30 @@ class RiskAssessment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        self.risk_score = self.likelihood * self.impact
+    # Legacy fallback kept for records that were never weighted (score = L × I).
+    WEIGHT_MAX_UPLIFT = 0.3  # fully-configured parameter set adds at most +30%
+
+    def _compute_scores(self):
+        """Compute inherent/residual scores using active RiskParameter weights.
+
+        Phase 3.2 — the weighted RiskParameter configuration is now real:
+        the total weight of active parameters acts as a risk-exposure uplift on
+        the base likelihood×impact score (capped at the 1–25 scale so the
+        existing heat map / rating semantics keep working). An empty parameter
+        set falls back to the legacy likelihood × impact formula.
+        """
+        base = float(self.likelihood * self.impact)
+
+        weight_sum = 0.0
+        for param in RiskParameter.objects.filter(is_active=True):
+            weight_sum += float(param.weight or 0)
+
+        if weight_sum > 0:
+            uplift = min(weight_sum * 0.2, self.WEIGHT_MAX_UPLIFT)
+            self.risk_score = round(min(25, base * (1 + uplift)), 2)
+        else:
+            self.risk_score = round(base, 2)
+
         if self.risk_score <= 4:
             self.risk_rating = 'low'
         elif self.risk_score <= 9:
@@ -67,8 +99,66 @@ class RiskAssessment(models.Model):
             self.risk_rating = 'high'
         else:
             self.risk_rating = 'critical'
-        self.residual_risk = self.risk_score * (1 - (self.control_effectiveness - 1) * 0.2)
+
+        # Control effectiveness (1..5) reduces the inherent risk: CE=1 keeps 100%,
+        # CE=5 reduces to 20% of the inherent score.
+        self.residual_risk = round(
+            float(self.risk_score) * (1 - (int(self.control_effectiveness) - 1) * 0.2),
+            2,
+        )
+
+    def _propagate_to_universe(self):
+        """Phase 3.1 — push the computed score onto the linked AuditUniverse.
+
+        Falls back to resolving the universe by department when an explicit
+        link was not provided, so existing clients that only send `department`
+        still drive universe risk scores.
+        """
+        from apps.audit_planning.models import AuditUniverse
+
+        target = self.audit_universe
+        if target is None and self.department_id:
+            target = (
+                AuditUniverse.objects
+                .filter(department_id=self.department_id, status='active')
+                .order_by('-risk_score')
+                .first()
+            )
+        if target is not None:
+            target.risk_score = self.risk_score
+            target.save(update_fields=['risk_score', 'updated_at'])
+
+    def save(self, *args, **kwargs):
+        self._compute_scores()
         super().save(*args, **kwargs)
+        self._propagate_to_universe()
+
+    def delete(self, *args, **kwargs):
+        """Re-propagate the next latest assessment when this one is removed."""
+        from apps.audit_planning.models import AuditUniverse
+
+        universe = self.audit_universe
+        dept_id = self.department_id
+        super().delete(*args, **kwargs)
+
+        if universe is not None:
+            latest = (
+                RiskAssessment.objects
+                .filter(audit_universe=universe)
+                .exclude(pk=self.pk)
+                .order_by('-year', '-created_at')
+                .first()
+            )
+            if latest is None and dept_id is not None:
+                latest = (
+                    RiskAssessment.objects
+                    .filter(department_id=dept_id)
+                    .exclude(pk=self.pk)
+                    .order_by('-year', '-created_at')
+                    .first()
+                )
+            universe.risk_score = latest.risk_score if latest else 0
+            universe.save(update_fields=['risk_score', 'updated_at'])
 
     def __str__(self):
         return f"Risk: {self.department} - {self.year} {self.assessment_period}"

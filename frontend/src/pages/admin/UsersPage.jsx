@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import apiClient from '../../api/apiClient';
-import { UserPlus, Shield, Activity, UserCheck, Edit2, Key } from 'lucide-react';
+import { usersApi } from '../../api';
+import { useToast } from '../../context/ToastContext';
+import { useI18n } from '../../context/I18nContext';
+import { validateForm, validators, hasErrors } from '../../utils/validation';
+import Modal from '../../components/ui/Modal';
+import DataTable from '../../components/ui/DataTable';
+import Badge from '../../components/ui/Badge';
+import FormField from '../../components/ui/FormField';
+import { UserPlus, Shield, Activity, UserCheck, Edit2, Key, X } from 'lucide-react';
 
 function UsersPage() {
+  const toast = useToast();
+  const { t } = useI18n();
   const [users, setUsers] = useState([]);
+  const [formErrors, setFormErrors] = useState({});
   const [auditTrail, setAuditTrail] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,15 +39,15 @@ function UsersPage() {
     setLoading(true);
     try {
       const [usersRes, trailRes, deptsRes] = await Promise.all([
-        apiClient.get('/auth/users/'),
-        apiClient.get('/auth/audit-trail/'),
-        apiClient.get('/auth/departments/')
+        usersApi.getUsers(),
+        usersApi.getAuditTrail(),
+        usersApi.getDepartments()
       ]);
-      setUsers(usersRes.data.results || usersRes.data || []);
-      setAuditTrail(trailRes.data.results || trailRes.data || []);
-      setDepartments(deptsRes.data.results || deptsRes.data || []);
+      setUsers(usersRes || []);
+      setAuditTrail(trailRes?.results || trailRes || []);
+      setDepartments(deptsRes || []);
     } catch (err) {
-      console.error(err);
+      toast.error('Failed to load user management data');
     } finally {
       setLoading(false);
     }
@@ -45,13 +55,28 @@ function UsersPage() {
 
   const handleAddUser = async (e) => {
     e.preventDefault();
+    // Validate form
+    const errors = validateForm(newUser, {
+      first_name: { validators: [validators.required, validators.minLength(2)] },
+      last_name: { validators: [validators.required, validators.minLength(2)] },
+      username: { validators: [validators.required, validators.minLength(3)] },
+      email: { validators: [validators.required, validators.email] },
+      employee_id: { validators: [validators.required, validators.employeeId] },
+      password: { validators: [validators.required, validators.password] },
+      phone: { validators: [validators.phone] },
+    });
+    if (hasErrors(errors)) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     try {
       const payload = { ...newUser };
       if (payload.department === '') {
         payload.department = null;
       }
-      const res = await apiClient.post('/auth/users/', payload);
-      setUsers([...users, res.data]);
+      const res = await usersApi.createUser(payload);
+      setUsers([...users, res]);
       setShowAddModal(false);
       // Reset
       setNewUser({
@@ -59,44 +84,59 @@ function UsersPage() {
         role: 'auditor', employee_id: '', password: 'user1234',
         department: '', phone: ''
       });
-      alert('User created successfully!');
+      toast.success('User created successfully!');
       fetchUsersAndTrail(); // Refresh audit trail for user creation
     } catch (err) {
-      alert('Failed: ' + JSON.stringify(err.response?.data || err.message));
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
+      toast.error('Failed to create user: ' + msg);
     }
   };
 
   const handleEditUser = async (e) => {
     e.preventDefault();
+    // Validate form
+    const errors = validateForm(editingUser, {
+      first_name: { validators: [validators.required, validators.minLength(2)] },
+      last_name: { validators: [validators.required, validators.minLength(2)] },
+      username: { validators: [validators.required, validators.minLength(3)] },
+      email: { validators: [validators.required, validators.email] },
+      employee_id: { validators: [validators.required, validators.employeeId] },
+      phone: { validators: [validators.phone] },
+    });
+    if (hasErrors(errors)) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     try {
       const { id, ...dataToUpdate } = editingUser;
       if (dataToUpdate.department === '') {
         dataToUpdate.department = null;
       }
-      const res = await apiClient.patch(`/auth/users/${id}/`, dataToUpdate);
-      setUsers(users.map(u => u.id === id ? res.data : u));
+      const res = await usersApi.updateUser(id, dataToUpdate);
+      setUsers(users.map(u => u.id === id ? res : u));
       setShowEditModal(false);
-      alert('User updated successfully!');
+      toast.success('User updated successfully!');
       fetchUsersAndTrail();
     } catch (err) {
-      alert('Failed to update: ' + JSON.stringify(err.response?.data || err.message));
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
+      toast.error('Failed to update user: ' + msg);
     }
   };
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
     if (!resetPasswordVal || resetPasswordVal.length < 8) {
-      alert('Password must be at least 8 characters long.');
+      toast.warning('Password must be at least 8 characters long.');
       return;
     }
     try {
-      await apiClient.post(`/auth/users/${editingUser.id}/reset-password/`, {
-        password: resetPasswordVal
-      });
-      alert('Password reset successfully!');
+      await usersApi.resetPassword(editingUser.id, resetPasswordVal);
+      toast.success('Password reset successfully!');
       setResetPasswordVal('');
     } catch (err) {
-      alert('Failed to reset password: ' + JSON.stringify(err.response?.data || err.message));
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
+      toast.error('Failed to reset password: ' + msg);
     }
   };
 
@@ -107,16 +147,16 @@ function UsersPage() {
         <div className="card users-list-card">
           <div className="card-header justify-between">
             <div>
-              <h3>Corporate Users & Role Management</h3>
-              <p className="card-subtitle">Maintain account activations and system access levels (RBAC)</p>
+              <h3>{t('corporateUsers')}</h3>
+              <p className="card-subtitle">{t('maintainAccounts')}</p>
             </div>
             <button className="btn btn-primary flex items-center gap-1" onClick={() => setShowAddModal(true)}>
-              <UserPlus size={16} /> Add Account
+              <UserPlus size={16} /> {t('addAccount')}
             </button>
           </div>
 
           {loading ? (
-            <div className="loading-spinner">Loading users registry...</div>
+            <div className="loading-spinner">{t('loadingUsers')}</div>
           ) : (
             <div className="table-responsive mt-3">
               <table className="table">
@@ -181,8 +221,8 @@ function UsersPage() {
       {/* Audit Trail Section */}
       <div className="card mt-6">
         <div className="card-header">
-          <h3><Activity size={18} className="inline mr-2 text-accent" /> Security Audit Log</h3>
-          <p className="card-subtitle">Real-time log of administrative and transactional changes</p>
+          <h3><Activity size={18} className="inline mr-2 text-accent" /> {t('securityAuditLog')}</h3>
+          <p className="card-subtitle">{t('realTimeLog')}</p>
         </div>
 
         <div className="table-responsive mt-3">
@@ -223,11 +263,29 @@ function UsersPage() {
 
       {/* Add User Modal */}
       {showAddModal && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setShowAddModal(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowAddModal(false); }}
+        >
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-user-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>Create Staff Account</h3>
-              <button className="close-btn" onClick={() => setShowAddModal(false)}>×</button>
+              <h3 id="add-user-modal-title">{t('createStaffAccount')}</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowAddModal(false)}
+                aria-label="Close dialog"
+              >
+                <X size={16} />
+              </button>
             </div>
             <form onSubmit={handleAddUser}>
               <div className="modal-body">
@@ -238,7 +296,7 @@ function UsersPage() {
                       type="text"
                       className="form-control"
                       value={newUser.first_name}
-                      onChange={(e) => setNewUser({...newUser, first_name: e.target.value})}
+                      onChange={(e) => setNewUser({ ...newUser, first_name: e.target.value })}
                       required
                     />
                   </div>
@@ -248,7 +306,7 @@ function UsersPage() {
                       type="text"
                       className="form-control"
                       value={newUser.last_name}
-                      onChange={(e) => setNewUser({...newUser, last_name: e.target.value})}
+                      onChange={(e) => setNewUser({ ...newUser, last_name: e.target.value })}
                       required
                     />
                   </div>
@@ -261,7 +319,7 @@ function UsersPage() {
                       type="text"
                       className="form-control"
                       value={newUser.username}
-                      onChange={(e) => setNewUser({...newUser, username: e.target.value})}
+                      onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
                       required
                     />
                   </div>
@@ -272,7 +330,7 @@ function UsersPage() {
                       className="form-control"
                       placeholder="e.g. EEU-10255"
                       value={newUser.employee_id}
-                      onChange={(e) => setNewUser({...newUser, employee_id: e.target.value})}
+                      onChange={(e) => setNewUser({ ...newUser, employee_id: e.target.value })}
                       required
                     />
                   </div>
@@ -286,7 +344,7 @@ function UsersPage() {
                       className="form-control"
                       placeholder="name@eeu.com"
                       value={newUser.email}
-                      onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
                       required
                     />
                   </div>
@@ -297,7 +355,7 @@ function UsersPage() {
                       className="form-control"
                       placeholder="e.g. +251911..."
                       value={newUser.phone}
-                      onChange={(e) => setNewUser({...newUser, phone: e.target.value})}
+                      onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
                     />
                   </div>
                 </div>
@@ -308,7 +366,7 @@ function UsersPage() {
                     <select
                       className="form-control"
                       value={newUser.role}
-                      onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                      onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
                     >
                       <option value="admin">System Administrator</option>
                       <option value="audit_manager">Audit Manager</option>
@@ -322,7 +380,7 @@ function UsersPage() {
                     <select
                       className="form-control"
                       value={newUser.department}
-                      onChange={(e) => setNewUser({...newUser, department: e.target.value})}
+                      onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
                     >
                       <option value="">Select Department (Optional)</option>
                       {departments.map(d => (
@@ -338,7 +396,7 @@ function UsersPage() {
                     type="password"
                     className="form-control"
                     value={newUser.password}
-                    onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                     required
                   />
                 </div>
@@ -354,13 +412,32 @@ function UsersPage() {
 
       {/* Edit User / Reset Password Modal */}
       {showEditModal && editingUser && (
-        <div className="modal-backdrop">
-          <div className="modal-card" style={{ maxWidth: '600px' }}>
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setShowEditModal(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowEditModal(false); }}
+        >
+          <div
+            className="modal-card"
+            style={{ maxWidth: '600px' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-user-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>Edit User Account: {editingUser.first_name} {editingUser.last_name}</h3>
-              <button className="close-btn" onClick={() => setShowEditModal(false)}>×</button>
+              <h3 id="edit-user-modal-title">{t('editUserAccount', `${editingUser.first_name} ${editingUser.last_name}`)}</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowEditModal(false)}
+                aria-label="Close dialog"
+              >
+                <X size={16} />
+              </button>
             </div>
-            
+
             <div className="modal-body">
               {/* Reset Password Form Section */}
               <div className="card bg-surface-variant p-4 mb-5 border border-primary/20">
@@ -388,7 +465,7 @@ function UsersPage() {
                 <h4 className="flex items-center gap-2 mb-3 text-accent">
                   <Edit2 size={16} /> Edit Account Details
                 </h4>
-                
+
                 <div className="form-group-row">
                   <div className="form-group">
                     <label className="form-label">First Name</label>
@@ -396,7 +473,7 @@ function UsersPage() {
                       type="text"
                       className="form-control"
                       value={editingUser.first_name}
-                      onChange={(e) => setEditingUser({...editingUser, first_name: e.target.value})}
+                      onChange={(e) => setEditingUser({ ...editingUser, first_name: e.target.value })}
                       required
                     />
                   </div>
@@ -406,7 +483,7 @@ function UsersPage() {
                       type="text"
                       className="form-control"
                       value={editingUser.last_name}
-                      onChange={(e) => setEditingUser({...editingUser, last_name: e.target.value})}
+                      onChange={(e) => setEditingUser({ ...editingUser, last_name: e.target.value })}
                       required
                     />
                   </div>
@@ -419,7 +496,7 @@ function UsersPage() {
                       type="text"
                       className="form-control"
                       value={editingUser.username}
-                      onChange={(e) => setEditingUser({...editingUser, username: e.target.value})}
+                      onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
                       required
                     />
                   </div>
@@ -429,7 +506,7 @@ function UsersPage() {
                       type="text"
                       className="form-control"
                       value={editingUser.employee_id}
-                      onChange={(e) => setEditingUser({...editingUser, employee_id: e.target.value})}
+                      onChange={(e) => setEditingUser({ ...editingUser, employee_id: e.target.value })}
                       required
                     />
                   </div>
@@ -442,7 +519,7 @@ function UsersPage() {
                       type="email"
                       className="form-control"
                       value={editingUser.email}
-                      onChange={(e) => setEditingUser({...editingUser, email: e.target.value})}
+                      onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
                       required
                     />
                   </div>
@@ -453,7 +530,7 @@ function UsersPage() {
                       className="form-control"
                       placeholder="e.g. +251911..."
                       value={editingUser.phone}
-                      onChange={(e) => setEditingUser({...editingUser, phone: e.target.value})}
+                      onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })}
                     />
                   </div>
                 </div>
@@ -464,7 +541,7 @@ function UsersPage() {
                     <select
                       className="form-control"
                       value={editingUser.department || ''}
-                      onChange={(e) => setEditingUser({...editingUser, department: e.target.value})}
+                      onChange={(e) => setEditingUser({ ...editingUser, department: e.target.value })}
                     >
                       <option value="">Select Department (Optional)</option>
                       {departments.map(d => (
@@ -477,7 +554,7 @@ function UsersPage() {
                     <select
                       className="form-control"
                       value={editingUser.role}
-                      onChange={(e) => setEditingUser({...editingUser, role: e.target.value})}
+                      onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
                     >
                       <option value="admin">System Administrator</option>
                       <option value="audit_manager">Audit Manager</option>
@@ -493,7 +570,7 @@ function UsersPage() {
                     type="checkbox"
                     id="edit_is_active"
                     checked={editingUser.is_active}
-                    onChange={(e) => setEditingUser({...editingUser, is_active: e.target.checked})}
+                    onChange={(e) => setEditingUser({ ...editingUser, is_active: e.target.checked })}
                   />
                   <label htmlFor="edit_is_active" className="form-label mb-0 cursor-pointer">
                     Account is Active and Enabled
