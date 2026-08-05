@@ -1,14 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import apiClient, { authApi } from '../../api/apiClient';
+import { useNavigate } from 'react-router-dom';
+import { capaApi, findingsApi, usersApi } from '../../api';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
-import { CheckCircle2, Clock, ShieldAlert, MessageCircle, RefreshCw, Plus, FileUp } from 'lucide-react';
+import { useI18n } from '../../context/I18nContext';
+import { validateForm, validators, hasErrors } from '../../utils/validation';
+import Modal from '../../components/ui/Modal';
+import Badge from '../../components/ui/Badge';
+import Spinner from '../../components/ui/Spinner';
+import EmptyState from '../../components/ui/EmptyState';
+import FormField from '../../components/ui/FormField';
+import { CheckCircle2, Clock, ShieldAlert, MessageCircle, RefreshCw, Plus, FileUp, X } from 'lucide-react';
 
 function FollowUpPage() {
+  const toast = useToast();
+  const auth = useAuth();
+  const { t } = useI18n();
+  const navigate = useNavigate();
   const { canWriteAudit } = usePermissions();
   const [capas, setCapas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
-  const [currentUser, setCurrentUser] = useState(null);
+  const [formErrors, setFormErrors] = useState({});
+  const currentUser = auth.user;
 
   // Spawning CAPA Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -34,21 +49,19 @@ function FollowUpPage() {
   const [submittingResponse, setSubmittingResponse] = useState(false);
 
   useEffect(() => {
-    const user = authApi.getCurrentUser();
-    setCurrentUser(user);
     fetchCapas();
-    if (user && user.role !== 'auditee') {
+    if (currentUser && currentUser.role !== 'auditee') {
       fetchFindingsAndAuditees();
     }
-  }, []);
+  }, [currentUser]);
 
   const fetchCapas = async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get('/corrective/actions/');
-      setCapas(res.data.results || []);
+      const res = await capaApi.getActions();
+      setCapas(Array.isArray(res) ? res : []);
     } catch (err) {
-      console.error(err);
+      toast.error('Failed to load CAPA actions');
     } finally {
       setLoading(false);
     }
@@ -57,13 +70,13 @@ function FollowUpPage() {
   const fetchFindingsAndAuditees = async () => {
     try {
       const [findingsRes, usersRes] = await Promise.all([
-        apiClient.get('/findings/findings/'),
-        apiClient.get('/auth/users/?role=auditee')
+        findingsApi.getFindings(),
+        usersApi.getUsers({ role: 'auditee' })
       ]);
-      setFindings(findingsRes.data.results || []);
-      setAuditees(usersRes.data.results || []);
+      setFindings(Array.isArray(findingsRes) ? findingsRes : []);
+      setAuditees(Array.isArray(usersRes) ? usersRes : []);
     } catch (err) {
-      console.error('Error fetching findings/auditees:', err);
+      toast.error('Failed to fetch findings and auditees list');
     }
   };
 
@@ -91,10 +104,34 @@ function FollowUpPage() {
 
   const handleCreateCapa = async (e) => {
     e.preventDefault();
+    // Validate form
+    const errors = validateForm(newCapa, {
+      finding: { validators: [validators.required] },
+      title: { validators: [validators.required, validators.minLength(5)] },
+      description: { validators: [validators.required, validators.minLength(10)] },
+      recommendation: { validators: [validators.required, validators.minLength(10)] },
+      owner: { validators: [validators.required] },
+      due_date: {
+        validators: [validators.required, validators.date],
+        crossField: (values) => {
+          if (!values.due_date) return {};
+          const today = new Date().toISOString().split('T')[0];
+          if (values.due_date < today) {
+            return { due_date: 'Due date must be in the future.' };
+          }
+          return {};
+        },
+      },
+    });
+    if (hasErrors(errors)) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     setCreating(true);
     try {
-      const res = await apiClient.post('/corrective/actions/', newCapa);
-      setCapas([res.data, ...capas]);
+      const res = await capaApi.createAction(newCapa);
+      setCapas([res, ...capas]);
       setShowCreateModal(false);
       setNewCapa({
         finding: '',
@@ -105,9 +142,10 @@ function FollowUpPage() {
         priority: 'medium',
         due_date: ''
       });
-      alert('CAPA task successfully spawned and assigned!');
+      toast.success('CAPA task successfully created and assigned!');
     } catch (err) {
-      alert('Failed to spawn CAPA: ' + JSON.stringify(err.response?.data || err.message));
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
+      toast.error('Failed to create CAPA: ' + msg);
     } finally {
       setCreating(false);
     }
@@ -134,19 +172,16 @@ function FollowUpPage() {
         formData.append('evidence_file', evidenceFile);
       }
 
-      await apiClient.post(`/corrective/actions/${selectedCapa.id}/add-response/`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      await capaApi.addResponse(selectedCapa.id, formData);
 
       // Update local state
       setCapas(capas.map(c => c.id === selectedCapa.id ? { ...c, status: statusUpdate } : c));
       setShowResponseModal(false);
-      alert('Response recorded and CAPA status updated!');
+      toast.success('Response recorded and CAPA status updated!');
       fetchCapas(); // Refresh list to get files or related fields updated
     } catch (err) {
-      alert('Failed: ' + JSON.stringify(err.response?.data || err.message));
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
+      toast.error('Failed to submit response: ' + msg);
     } finally {
       setSubmittingResponse(false);
     }
@@ -180,35 +215,35 @@ function FollowUpPage() {
     <div className="followup-view">
       <div className="tab-container">
         <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>
-          All CAPAs ({capas.length})
+          {t('allCapas', capas.length)}
         </button>
         <button className={`tab-btn ${activeTab === 'open' ? 'active' : ''}`} onClick={() => setActiveTab('open')}>
-          Open / In Progress
+          {t('openInProgress')}
         </button>
         <button className={`tab-btn ${activeTab === 'resolved' ? 'active' : ''}`} onClick={() => setActiveTab('resolved')}>
-          Resolved
+          {t('resolvedCapas')}
         </button>
         <button className={`tab-btn ${activeTab === 'overdue' ? 'active' : ''}`} onClick={() => setActiveTab('overdue')}>
-          Overdue
+          {t('overdueCapas')}
         </button>
       </div>
 
       {loading ? (
-        <div className="loading-spinner">Loading corrective actions...</div>
+        <div className="loading-spinner">{t('loadingCapas')}</div>
       ) : (
         <div className="card mt-4">
           <div className="card-header justify-between flex-wrap gap-4">
             <div>
-              <h3>Corrective and Preventive Actions (CAPA)</h3>
-              <p className="card-subtitle">Follow-up tracking on approved auditor recommendations</p>
+              <h3>{t('capaTitle')}</h3>
+              <p className="card-subtitle">{t('followUpTracking')}</p>
             </div>
             <div className="flex gap-2">
               <button className="btn btn-outline flex items-center gap-2" onClick={fetchCapas}>
-                <RefreshCw size={14} /> Refresh
+                <RefreshCw size={14} /> {t('refresh')}
               </button>
               {canWriteAudit && (
                 <button className="btn btn-accent flex items-center gap-2" onClick={() => setShowCreateModal(true)}>
-                  <Plus size={16} /> Spawn CAPA Task
+                  <Plus size={16} /> {t('spawnCapaTask')}
                 </button>
               )}
             </div>
@@ -234,7 +269,7 @@ function FollowUpPage() {
                   </tr>
                 ) : (
                   filteredCapas.map(c => (
-                    <tr key={c.id}>
+                    <tr key={c.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/50" onClick={() => navigate(`/capa/${c.id}`)} title={t('clickForDetails') || 'Click to view details'}>
                       <td><strong>{c.action_number}</strong></td>
                       <td>
                         <div className="capa-title-container">
@@ -270,11 +305,29 @@ function FollowUpPage() {
 
       {/* Spawn CAPA Modal */}
       {showCreateModal && (
-        <div className="modal-backdrop">
-          <div className="modal-card modal-large">
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setShowCreateModal(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
+        >
+          <div
+            className="modal-card modal-large"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="capa-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>Spawn CAPA Task linked to Finding</h3>
-              <button className="close-btn" onClick={() => setShowCreateModal(false)}>×</button>
+              <h3 id="capa-modal-title">{t('spawnCapaLinked')}</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowCreateModal(false)}
+                aria-label="Close dialog"
+              >
+                <X size={16} />
+              </button>
             </div>
             <form onSubmit={handleCreateCapa}>
               <div className="modal-body">
@@ -384,11 +437,29 @@ function FollowUpPage() {
 
       {/* Auditee Response Modal */}
       {showResponseModal && selectedCapa && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setShowResponseModal(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowResponseModal(false); }}
+        >
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="response-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>Submit Management Update for {selectedCapa.action_number}</h3>
-              <button className="close-btn" onClick={() => setShowResponseModal(false)}>×</button>
+              <h3 id="response-modal-title">Submit Management Update for {selectedCapa.action_number}</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowResponseModal(false)}
+                aria-label="Close dialog"
+              >
+                <X size={16} />
+              </button>
             </div>
             <form onSubmit={handleSubmitResponse}>
               <div className="modal-body">

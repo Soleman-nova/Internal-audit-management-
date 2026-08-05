@@ -1,27 +1,41 @@
 import React, { useState, useEffect } from 'react';
-import apiClient from '../../api/apiClient';
-import { Activity, Search, RefreshCw, Filter, User, Clock, Shield } from 'lucide-react';
+import { usersApi } from '../../api';
+import { useToast } from '../../context/ToastContext';
+import { useI18n } from '../../context/I18nContext';
+import DataTable from '../../components/ui/DataTable';
+import Badge from '../../components/ui/Badge';
+import { Activity, Search, RefreshCw, Filter, Clock, User, Shield } from 'lucide-react';
 
 function AuditTrailPage() {
+  const toast = useToast();
+  const { t } = useI18n();
   const [trail, setTrail] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterAction, setFilterAction] = useState('');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [sortBy, setSortBy] = useState('timestamp');
+  const [sortDirection, setSortDirection] = useState('desc');
+  const [filters, setFilters] = useState({});
   const PAGE_SIZE = 25;
 
   const fetchAuditTrail = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page });
-      if (filterAction) params.append('action', filterAction);
-      if (searchQuery) params.append('search', searchQuery);
-      const res = await apiClient.get(`/auth/audit-trail/?${params.toString()}`);
-      setTrail(res.data.results || res.data || []);
-      setTotalCount(res.data.count || 0);
+      const params = { page, page_size: PAGE_SIZE };
+      if (filterAction) params.action = filterAction;
+      if (searchQuery) params.search = searchQuery;
+      if (sortBy) params.ordering = (sortDirection === 'desc' ? '-' : '') + sortBy;
+      // Apply column filters
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) params[key] = value;
+      });
+      const res = await usersApi.getAuditTrail(params);
+      setTrail(res.results || res || []);
+      setTotalCount(res.count || (Array.isArray(res) ? res.length : 0));
     } catch (err) {
-      console.error('Failed to load audit trail:', err);
+      toast.error('Failed to load audit trail');
     } finally {
       setLoading(false);
     }
@@ -30,13 +44,12 @@ function AuditTrailPage() {
   useEffect(() => {
     fetchAuditTrail();
     // eslint-disable-next-line
-  }, [page, filterAction]);
+  }, [page, filterAction, sortBy, sortDirection, filters]);
 
   const handleSearch = (e) => {
     e.preventDefault();
     setPage(1);
-    // Use timeout to ensure page state updates before fetch
-    setTimeout(() => fetchAuditTrail(), 0);
+    fetchAuditTrail();
   };
 
   const handleFilterChange = (e) => {
@@ -44,16 +57,15 @@ function AuditTrailPage() {
     setPage(1);
   };
 
-  const getActionBadgeClass = (action) => {
-    if (!action) return 'badge-outline';
-    const a = action.toLowerCase();
-    if (a.includes('create') || a.includes('add')) return 'badge-success';
-    if (a.includes('delete') || a.includes('remove')) return 'badge-danger';
-    if (a.includes('login') || a.includes('auth')) return 'badge-info';
-    if (a.includes('update') || a.includes('edit') || a.includes('change')) return 'badge-warning';
-    if (a.includes('approve') || a.includes('submit')) return 'badge-accent';
-    if (a.includes('export') || a.includes('download')) return 'badge-primary';
-    return 'badge-outline';
+  const handleSortChange = ({ key, direction }) => {
+    setSortBy(key);
+    setSortDirection(direction);
+    setPage(1);
+  };
+
+  const handleFilterInput = (nextFilters) => {
+    setFilters(nextFilters);
+    setPage(1);
   };
 
   const formatDate = (dateStr) => {
@@ -65,142 +77,140 @@ function AuditTrailPage() {
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
+  const columns = [
+    {
+      header: t('timestamp'),
+      key: 'timestamp',
+      sortable: true,
+      cell: (row) => <span className="font-mono text-secondary">{formatDate(row.timestamp || row.created_at)}</span>,
+    },
+    {
+      header: t('user'),
+      key: 'user_email',
+      sortable: true,
+      filterable: true,
+      cell: (row) => (
+        <div>
+          <strong className="block text-primary font-medium">{row.user_name || row.user_email || '—'}</strong>
+          <span className="text-xs text-muted">{row.user_email}</span>
+        </div>
+      ),
+    },
+    {
+      header: t('action'),
+      key: 'action',
+      sortable: true,
+      filterable: true,
+      cell: (row) => <Badge status={row.action || 'info'}>{row.action || 'system'}</Badge>,
+    },
+    {
+      header: t('targetResource'),
+      key: 'object_repr',
+      filterable: true,
+      cell: (row) => (
+        <span className="truncate max-w-xs block text-secondary">
+          {row.object_repr || row.target || row.description || '—'}
+        </span>
+      ),
+    },
+    {
+      header: t('ipAddress'),
+      key: 'ip_address',
+      cell: (row) => <span className="font-mono text-xs text-muted">{row.ip_address || '127.0.0.1'}</span>,
+    },
+    {
+      header: t('role'),
+      key: 'user_role',
+      cell: (row) => (
+        <Badge variant="neutral">
+          {row.user_role || (row.user ? row.user.role || 'user' : 'user')}
+        </Badge>
+      ),
+    },
+  ];
+
   return (
     <div className="audit-trail-view">
       {/* Header Controls */}
-      <div className="card mb-4">
-        <div className="card-header justify-between flex-wrap gap-3">
+      <div className="card">
+        <div className="card-header justify-between">
           <div>
-            <h3><Activity size={18} className="inline mr-2" />System Audit Trail</h3>
-            <p className="card-subtitle">Complete chronological log of all user actions and system events</p>
+            <h3 className="flex items-center gap-2">
+              <Activity className="w-5 h-5 text-accent" />
+              {t('systemAuditTrail')}
+            </h3>
+            <p className="card-subtitle mt-1">
+              {t('completeChronologicalLog')}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="badge badge-outline">{totalCount} Total Events</span>
-            <button className="btn btn-outline flex items-center gap-1" onClick={() => { setPage(1); fetchAuditTrail(); }}>
-              <RefreshCw size={14} /> Refresh
+          <div className="flex items-center gap-3">
+            <Badge variant="neutral">{t('events', totalCount)}</Badge>
+            <button
+              className="btn btn-sm btn-outline flex items-center gap-1.5"
+              onClick={() => { setPage(1); fetchAuditTrail(); }}
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh
             </button>
           </div>
         </div>
 
         {/* Search + Filter Bar */}
-        <div className="mt-4 flex gap-3 flex-wrap">
-          <form onSubmit={handleSearch} className="flex gap-2 flex-1">
+        <div className="flex gap-3 flex-wrap items-center">
+          <form onSubmit={handleSearch} className="flex gap-2 flex-1 min-w-[240px]">
             <div className="relative flex-1">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <input
                 type="text"
                 className="form-control pl-9"
-                placeholder="Search by user, action, or target..."
+                placeholder={t('searchByUser')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <button type="submit" className="btn btn-primary">Search</button>
+            <button type="submit" className="btn btn-primary btn-sm">
+              Search
+            </button>
           </form>
 
           <div className="flex items-center gap-2">
-            <Filter size={16} className="text-muted" />
+            <Filter className="w-4 h-4 text-muted" />
             <select
               className="form-control"
+              style={{ width: 'auto' }}
               value={filterAction}
               onChange={handleFilterChange}
             >
-              <option value="">All Actions</option>
-              <option value="login">Login / Auth</option>
-              <option value="create">Create</option>
-              <option value="update">Update / Edit</option>
-              <option value="delete">Delete</option>
-              <option value="approve">Approve / Submit</option>
-              <option value="export">Export / Download</option>
+              <option value="">{t('allActions')}</option>
+              <option value="login">{t('loginAuth')}</option>
+              <option value="create">{t('create')}</option>
+              <option value="update">{t('updateEdit')}</option>
+              <option value="delete">{t('delete')}</option>
+              <option value="approve">{t('approveSubmit')}</option>
+              <option value="export">{t('exportDownload')}</option>
             </select>
           </div>
         </div>
       </div>
 
       {/* Trail Table */}
-      <div className="card">
-        {loading ? (
-          <div className="loading-spinner">Loading audit events...</div>
-        ) : (
-          <>
-            <div className="table-responsive">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th><Clock size={14} className="inline mr-1" />Timestamp</th>
-                    <th><User size={14} className="inline mr-1" />User</th>
-                    <th>Action</th>
-                    <th>Target / Resource</th>
-                    <th>IP Address</th>
-                    <th><Shield size={14} className="inline mr-1" />Role</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trail.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="text-center py-12">
-                        <Activity size={36} className="mx-auto text-muted mb-3" />
-                        <p className="text-muted">No audit trail events found for this filter.</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    trail.map((entry, idx) => (
-                      <tr key={entry.id || idx}>
-                        <td className="text-sm whitespace-nowrap">{formatDate(entry.timestamp || entry.created_at)}</td>
-                        <td>
-                          <div>
-                            <strong className="block">{entry.user_name || entry.user_email || '—'}</strong>
-                            <span className="text-xs text-muted">{entry.user_email}</span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className={`badge ${getActionBadgeClass(entry.action)}`}>
-                            {entry.action || 'system'}
-                          </span>
-                        </td>
-                        <td className="max-w-xs truncate text-sm">
-                          {entry.object_repr || entry.target || entry.description || '—'}
-                        </td>
-                        <td className="text-xs text-muted font-mono">{entry.ip_address || '127.0.0.1'}</td>
-                        <td>
-                          <span className="badge badge-outline text-xs">
-                            {entry.user_role || (entry.user ? entry.user.role || 'user' : 'user')}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-border-color">
-                <span className="text-sm text-muted">
-                  Page {page} of {totalPages} ({totalCount} events)
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    className="btn btn-outline btn-sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                  >
-                    Previous
-                  </button>
-                  <button
-                    className="btn btn-outline btn-sm"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      <DataTable
+        columns={columns}
+        data={trail}
+        loading={loading}
+        emptyTitle={t('noAuditTrailEvents')}
+        emptyDescription={t('tryAdjusting')}
+        page={page}
+        pageCount={totalPages}
+        onPageChange={setPage}
+        sortBy={sortBy}
+        sortDirection={sortDirection}
+        onSortChange={handleSortChange}
+        filters={filters}
+        onFilterChange={handleFilterInput}
+        totalCount={totalCount}
+        showPageSize={false}
+        pageSize={PAGE_SIZE}
+      />
     </div>
   );
 }

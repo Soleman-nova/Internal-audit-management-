@@ -1,0 +1,14 @@
+{
+    "include": [
+        "apps",
+        "core",
+        "manage.py"
+    ],
+    "extraPaths": [
+        "."
+    ],
+    "pythonVersion": "3.13",
+    "analysis": {
+        "typeCheckingMode": "basic"
+    }
+}

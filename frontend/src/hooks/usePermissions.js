@@ -1,6 +1,4 @@
-// Frontend mirror of backend/apps/common/permissions.py.
-// This drives UI gating ONLY (hiding buttons/nav, guarding routes). The backend
-// capability matrix remains the real enforcement — keep the two in sync.
+import { useAuth } from '../context/AuthContext';
 
 export const CAPABILITIES = {
   MANAGE_USERS: 'manage_users',
@@ -39,14 +37,20 @@ export function hasCapability(user, capability) {
   return caps.includes(capability);
 }
 
-// Hook: returns the current user's capability helpers. Reads from localStorage,
-// matching how the rest of the app resolves the logged-in user.
 export function usePermissions() {
-  const user = getCurrentUser();
+  let user = null;
+  try {
+    const auth = useAuth();
+    user = auth.user;
+  } catch {
+    user = getCurrentUser();
+  }
+  if (!user) user = getCurrentUser();
+
   const can = (capability) => hasCapability(user, capability);
   return {
     user,
-    role: user.role,
+    role: user?.role,
     can,
     canManageUsers: can(MANAGE_USERS),
     canManageSettings: can(MANAGE_SETTINGS),

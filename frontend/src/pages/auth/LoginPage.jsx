@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authApi } from '../../api/apiClient';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import {
   User, Lock, Eye, EyeOff, LogIn, Zap, ChevronRight,
   ShieldCheck, Shield, BarChart2, Users,
@@ -58,6 +59,8 @@ function DemoButton({ role, loading, active, onClick }) {
    MAIN COMPONENT
 ====================================================================== */
 function LoginPage() {
+  const auth = useAuth();
+  const toast = useToast();
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -74,14 +77,17 @@ function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await authApi.login(id, pwd);
+      await auth.login(id, pwd);
+      toast.success('Signed in successfully');
       navigate('/dashboard');
     } catch (err) {
       const data = err.response?.data;
-      if (data?.detail) setError(data.detail);
-      else if (data?.non_field_errors) setError(data.non_field_errors.join(' '));
-      else if (typeof data === 'object') setError(Object.values(data).flat().join(' '));
-      else setError('Invalid Employee ID or password. Please try again.');
+      let errMsg = 'Invalid Employee ID or password. Please try again.';
+      if (data?.detail) errMsg = data.detail;
+      else if (data?.non_field_errors) errMsg = data.non_field_errors.join(' ');
+      else if (typeof data === 'object') errMsg = Object.values(data).flat().join(' ');
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setLoading(false);
     }
