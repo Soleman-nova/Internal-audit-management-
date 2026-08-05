@@ -37,12 +37,15 @@ class RiskParameterViewSet(viewsets.ModelViewSet):
 
 class RiskAssessmentViewSet(viewsets.ModelViewSet):
     queryset = RiskAssessment.objects.select_related(
-        'department', 'assessed_by', 'reviewed_by'
+        'department', 'audit_universe', 'assessed_by', 'reviewed_by'
     ).prefetch_related('self_assessment').all()
     serializer_class = RiskAssessmentSerializer
     permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['department', 'year', 'assessment_period', 'risk_rating', 'is_self_assessment']
+    filterset_fields = [
+        'department', 'audit_universe', 'year', 'assessment_period',
+        'risk_rating', 'is_self_assessment',
+    ]
     search_fields = ['department__name', 'notes']
     ordering_fields = ['risk_score', 'created_at', 'year']
     ordering = ['-risk_score']

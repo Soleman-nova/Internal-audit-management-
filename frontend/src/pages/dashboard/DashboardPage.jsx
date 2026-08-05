@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import apiClient from '../../api/apiClient';
+import { reportsApi, usersApi } from '../../api';
+import { useToast } from '../../context/ToastContext';
+import { useI18n } from '../../context/I18nContext';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area
@@ -9,6 +11,8 @@ import { TrendingUp, AlertTriangle, FolderKanban, Clock } from 'lucide-react';
 const CHART_TOOLTIP_STYLE = { backgroundColor: '#1a2235', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' };
 
 function DashboardPage() {
+  const toast = useToast();
+  const { t } = useI18n();
   const [stats, setStats] = useState({
     activeAudits: 3,
     openFindings: 12,
@@ -18,9 +22,9 @@ function DashboardPage() {
 
   const [findingsData] = useState([
     { name: 'Critical', value: 1, color: '#ef4444' },
-    { name: 'High',     value: 4, color: '#f59e0b' },
-    { name: 'Medium',   value: 5, color: '#3b82f6' },
-    { name: 'Low',      value: 2, color: '#10b981' },
+    { name: 'High', value: 4, color: '#f59e0b' },
+    { name: 'Medium', value: 5, color: '#3b82f6' },
+    { name: 'Low', value: 2, color: '#10b981' },
   ]);
 
   const [monthlyAudits] = useState([
@@ -40,25 +44,42 @@ function DashboardPage() {
     { name: 'Q1 2026', score: 92.4 },
   ]);
 
-  const [activities] = useState([
-    { id: 1, user: 'Tsion Girma',   action: 'Created audit finding',   target: 'FIND-001 in ERP Security Audit',  time: '2 hours ago' },
-    { id: 2, user: 'Martha Hailu',  action: 'Approved Annual Plan',     target: 'EEU Annual Audit Plan 2026',      time: '1 day ago'   },
-    { id: 3, user: 'Kidus Yosef',   action: 'Uploaded working paper',   target: 'SoD matrix validation document',  time: '2 days ago'  },
-    { id: 4, user: 'Bekele Dejene', action: 'Completed audit procedure',target: 'PROC-001 (SoD Review)',            time: '3 days ago'  },
+  const [activities, setActivities] = useState([
+    { id: 1, user: 'Tsion Girma', action: 'Created audit finding', target: 'FIND-001 in ERP Security Audit', time: '2 hours ago' },
+    { id: 2, user: 'Martha Hailu', action: 'Approved Annual Plan', target: 'EEU Annual Audit Plan 2026', time: '1 day ago' },
+    { id: 3, user: 'Kidus Yosef', action: 'Uploaded working paper', target: 'SoD matrix validation document', time: '2 days ago' },
+    { id: 4, user: 'Bekele Dejene', action: 'Completed audit procedure', target: 'PROC-001 (SoD Review)', time: '3 days ago' },
   ]);
 
   useEffect(() => {
-    apiClient.get('/auth/dashboard/stats/')
-      .then(res => {
-        const d = res.data;
-        setStats({
-          activeAudits:    d.active_engagements  ?? 3,
-          openFindings:    d.open_findings        ?? 12,
-          overdueActions:  d.overdue_actions      ?? 2,
-          complianceScore: 92.4,
-        });
+    reportsApi.getAnalytics()
+      .then(d => {
+        if (d) {
+          setStats({
+            activeAudits: d.active_engagements ?? 3,
+            openFindings: d.open_findings ?? 12,
+            overdueActions: d.overdue_actions ?? 2,
+            complianceScore: d.compliance_score ?? 92.4,
+          });
+        }
       })
-      .catch(() => {/* use defaults */});
+      .catch(() => {/* fallback defaults */ });
+
+    // Fetch recent activity from the audit trail
+    usersApi.getAuditTrail({ page_size: 5 })
+      .then(res => {
+        const items = res.results || (Array.isArray(res) ? res : []);
+        if (items.length > 0) {
+          setActivities(items.map((log, idx) => ({
+            id: log.id || idx,
+            user: log.user_name || log.user_email || 'System',
+            action: log.action || 'Event',
+            target: log.object_repr || log.description || '—',
+            time: log.timestamp ? new Date(log.timestamp).toLocaleString() : '—',
+          })));
+        }
+      })
+      .catch(() => {/* keep defaults */ });
   }, []);
 
   return (
@@ -66,10 +87,10 @@ function DashboardPage() {
 
       {/* ── KPI Cards ── */}
       <div className="kpi-grid">
-        <StatCard icon={<FolderKanban size={22}/>} label="Active Audits"      value={stats.activeAudits}    sub="Ongoing engagements"         color="blue"   />
-        <StatCard icon={<AlertTriangle size={22}/>} label="Open Findings"     value={stats.openFindings}    sub="4 high-severity items"       color="orange" />
-        <StatCard icon={<Clock size={22}/>}         label="Overdue CAPAs"     value={stats.overdueActions}  sub="Require escalation"          color="red"    />
-        <StatCard icon={<TrendingUp size={22}/>}    label="Overall Compliance" value={`${stats.complianceScore}%`} sub="+2.4% vs last quarter" color="green"  />
+        <StatCard icon={<FolderKanban size={22} />} label={t('activeAudits')} value={stats.activeAudits} sub={t('ongoingEngagements')} color="blue" />
+        <StatCard icon={<AlertTriangle size={22} />} label={t('openFindings')} value={stats.openFindings} sub={t('highSeverityItems')} color="orange" />
+        <StatCard icon={<Clock size={22} />} label={t('overdueCapas')} value={stats.overdueActions} sub={t('requireEscalation')} color="red" />
+        <StatCard icon={<TrendingUp size={22} />} label={t('overallCompliance')} value={`${stats.complianceScore}%`} sub={t('vsLastQuarter')} color="green" />
       </div>
 
       {/* ── Main Charts Row ── */}
@@ -78,8 +99,8 @@ function DashboardPage() {
         {/* Bar Chart */}
         <div className="chart-box">
           <div className="chart-box-header">
-            <h3>Audit Execution Status</h3>
-            <span>Monthly completed vs. active</span>
+            <h3>{t('auditExecutionStatus')}</h3>
+            <span>{t('monthlyCompletedVsActive')}</span>
           </div>
           <div style={{ width: '100%', height: 280 }}>
             <ResponsiveContainer width="100%" height={280}>
@@ -89,8 +110,8 @@ function DashboardPage() {
                 <YAxis stroke="#64748b" tick={{ fontSize: 12 }} />
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                 <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
-                <Bar dataKey="Completed"  fill="#10b981" radius={[4,4,0,0]} />
-                <Bar dataKey="InProgress" fill="#2563eb" radius={[4,4,0,0]} />
+                <Bar dataKey="Completed" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="InProgress" fill="#2563eb" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -99,8 +120,8 @@ function DashboardPage() {
         {/* Donut Chart */}
         <div className="chart-box">
           <div className="chart-box-header">
-            <h3>Findings by Severity</h3>
-            <span>Distribution of open findings</span>
+            <h3>{t('findingsBySeverity')}</h3>
+            <span>{t('distributionOfOpenFindings')}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 24, height: 280 }}>
             <div style={{ width: 180, height: 180, flexShrink: 0 }}>
@@ -132,16 +153,16 @@ function DashboardPage() {
         {/* Area Chart */}
         <div className="chart-box">
           <div className="chart-box-header">
-            <h3>Compliance Rating Trend</h3>
-            <span>Quarterly EEU audit score history</span>
+            <h3>{t('complianceRatingTrend')}</h3>
+            <span>{t('quarterlyAuditScoreHistory')}</span>
           </div>
           <div style={{ width: '100%', height: 240 }}>
             <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={complianceTrend} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#2563eb" stopOpacity={0.35}/>
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -157,11 +178,11 @@ function DashboardPage() {
         {/* Activity Feed */}
         <div className="chart-box">
           <div className="chart-box-header">
-            <h3>Recent System Activity</h3>
-            <span>Real-time audit trail</span>
+            <h3>{t('recentSystemActivity')}</h3>
+            <span>{t('realTimeAuditTrail')}</span>
           </div>
           <div className="activity-feed">
-            {activities.map(act => (
+            {activities.slice(0, 5).map(act => (
               <div key={act.id} className="activity-row">
                 <div className="activity-bullet" />
                 <div className="activity-body">

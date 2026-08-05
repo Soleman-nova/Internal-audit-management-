@@ -1,17 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import apiClient from '../../api/apiClient';
-import { Calendar, Plus, Users, Shield, Clock, Pencil } from 'lucide-react';
+import { planningApi, usersApi } from '../../api';
+import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useI18n } from '../../context/I18nContext';
+import { validateForm, validators, hasErrors } from '../../utils/validation';
+import Modal from '../../components/ui/Modal';
+import Badge from '../../components/ui/Badge';
+import Spinner from '../../components/ui/Spinner';
+import EmptyState from '../../components/ui/EmptyState';
+import FormField from '../../components/ui/FormField';
+import { Calendar, Plus, Users, Shield, Clock, Pencil, X } from 'lucide-react';
 
 function PlanningPage() {
+  const toast = useToast();
+  const { t } = useI18n();
   const { canWriteAudit, canApprovePlans } = usePermissions();
   const [activeTab, setActiveTab] = useState('universe');
+  const [formErrors, setFormErrors] = useState({});
   const [universe, setUniverse] = useState([]);
   const [plans, setPlans] = useState([]);
   const [engagements, setEngagements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [departments, setDepartments] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [dueForAudit, setDueForAudit] = useState([]);
 
   // Form State
   const emptyUniverse = { name: '', code: '', category: 'system', risk_score: 3.5, audit_frequency: 'Annually', owner: '', department: '', status: 'active' };
@@ -48,20 +60,22 @@ function PlanningPage() {
   const fetchPlanningData = async () => {
     setLoading(true);
     try {
-      const [univRes, plansRes, engRes, depRes, usersRes] = await Promise.all([
-        apiClient.get('/planning/universe/'),
-        apiClient.get('/planning/plans/'),
-        apiClient.get('/planning/engagements/'),
-        apiClient.get('/auth/departments/'),
-        apiClient.get('/auth/users/')
+      const [univRes, plansRes, engRes, depRes, usersRes, dueRes] = await Promise.all([
+        planningApi.getUniverse(),
+        planningApi.getPlans(),
+        planningApi.getEngagements(),
+        usersApi.getDepartments(),
+        usersApi.getUsers(),
+        planningApi.getDueForReAudit(),
       ]);
-      setUniverse(univRes.data.results || []);
-      setPlans(plansRes.data.results || []);
-      setEngagements(engRes.data.results || []);
-      setDepartments(depRes.data.results || []);
-      setAllUsers(usersRes.data.results || []);
+      setUniverse(univRes || []);
+      setPlans(plansRes || []);
+      setEngagements(engRes || []);
+      setDepartments(depRes || []);
+      setAllUsers(usersRes || []);
+      setDueForAudit(dueRes || []);
     } catch (err) {
-      console.error("Error loading planning data:", err);
+      toast.error("Failed to load planning data");
     } finally {
       setLoading(false);
     }
@@ -94,19 +108,33 @@ function PlanningPage() {
 
   const handleSaveUniverse = async (e) => {
     e.preventDefault();
+    // Validate form
+    const errors = validateForm(newUniverse, {
+      name: { validators: [validators.required, validators.minLength(3)] },
+      code: { validators: [validators.required, validators.code] },
+      risk_score: { validators: [validators.required, validators.min(1), validators.max(5)] },
+    });
+    if (hasErrors(errors)) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     try {
       const payload = { ...newUniverse };
       if (!payload.department) delete payload.department;
       if (editingUniverseId) {
-        const response = await apiClient.patch(`/planning/universe/${editingUniverseId}/`, payload);
-        setUniverse(universe.map(u => (u.id === editingUniverseId ? response.data : u)));
+        const response = await planningApi.updateUniverse(editingUniverseId, payload);
+        setUniverse(universe.map(u => (u.id === editingUniverseId ? response : u)));
+        toast.success('Audit universe item updated successfully');
       } else {
-        const response = await apiClient.post('/planning/universe/', payload);
-        setUniverse([response.data, ...universe]);
+        const response = await planningApi.createUniverse(payload);
+        setUniverse([response, ...universe]);
+        toast.success('Audit universe item created successfully');
       }
       closeUniverseModal();
     } catch (err) {
-      alert(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to save universe item');
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to save universe item';
+      toast.error(msg);
     }
   };
 
@@ -135,17 +163,42 @@ function PlanningPage() {
 
   const handleSavePlan = async (e) => {
     e.preventDefault();
+    // Validate form
+    const errors = validateForm(newPlan, {
+      title: { validators: [validators.required, validators.minLength(5)] },
+      year: { validators: [validators.required, validators.integer] },
+      total_budget_days: { validators: [validators.required, validators.integer, validators.min(0)] },
+      start_date: { validators: [validators.required, validators.date] },
+      end_date: {
+        validators: [validators.required, validators.date],
+        crossField: (values) => {
+          if (!values.start_date || !values.end_date) return {};
+          if (new Date(values.end_date) < new Date(values.start_date)) {
+            return { end_date: 'End date must be after start date.' };
+          }
+          return {};
+        },
+      },
+    });
+    if (hasErrors(errors)) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     try {
       if (editingPlanId) {
-        const response = await apiClient.patch(`/planning/plans/${editingPlanId}/`, newPlan);
-        setPlans(plans.map(p => (p.id === editingPlanId ? response.data : p)));
+        const response = await planningApi.updatePlan(editingPlanId, newPlan);
+        setPlans(plans.map(p => (p.id === editingPlanId ? response : p)));
+        toast.success('Annual plan updated successfully');
       } else {
-        const response = await apiClient.post('/planning/plans/', newPlan);
-        setPlans([response.data, ...plans]);
+        const response = await planningApi.createPlan(newPlan);
+        setPlans([response, ...plans]);
+        toast.success('Annual plan created successfully');
       }
       closePlanModal();
     } catch (err) {
-      alert(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to save plan');
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to save plan';
+      toast.error(msg);
     }
   };
 
@@ -175,6 +228,28 @@ function PlanningPage() {
 
   const handleSaveEngagement = async (e) => {
     e.preventDefault();
+    // Validate form
+    const errors = validateForm(newEngagement, {
+      title: { validators: [validators.required, validators.minLength(5)] },
+      plan: { validators: [validators.required] },
+      planned_days: { validators: [validators.integer, validators.min(0)] },
+      planned_start: { validators: [validators.required, validators.date] },
+      planned_end: {
+        validators: [validators.required, validators.date],
+        crossField: (values) => {
+          if (!values.planned_start || !values.planned_end) return {};
+          if (new Date(values.planned_end) < new Date(values.planned_start)) {
+            return { planned_end: 'End date must be after start date.' };
+          }
+          return {};
+        },
+      },
+    });
+    if (hasErrors(errors)) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     try {
       const payload = { ...newEngagement };
       if (!payload.department) delete payload.department;
@@ -182,35 +257,40 @@ function PlanningPage() {
       if (!payload.lead_auditor) delete payload.lead_auditor;
       if (!payload.supervisor) delete payload.supervisor;
       if (editingEngagementId) {
-        const response = await apiClient.patch(`/planning/engagements/${editingEngagementId}/`, payload);
-        setEngagements(engagements.map(en => (en.id === editingEngagementId ? response.data : en)));
+        const response = await planningApi.updateEngagement(editingEngagementId, payload);
+        setEngagements(engagements.map(en => (en.id === editingEngagementId ? response : en)));
+        toast.success('Audit engagement updated successfully');
       } else {
-        const response = await apiClient.post('/planning/engagements/', payload);
-        setEngagements([response.data, ...engagements]);
+        const response = await planningApi.createEngagement(payload);
+        setEngagements([response, ...engagements]);
+        toast.success('Audit engagement created successfully');
       }
       closeEngagementModal();
     } catch (err) {
-      alert(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to save engagement');
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to save engagement';
+      toast.error(msg);
     }
   };
 
   const handleSubmitPlan = async (planId) => {
     try {
-      await apiClient.post(`/planning/plans/${planId}/submit/`);
-      alert('Plan submitted for approval successfully!');
+      await planningApi.submitPlan(planId);
+      toast.success('Plan submitted for approval successfully!');
       fetchPlanningData();
     } catch (err) {
-      alert(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to submit plan');
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to submit plan';
+      toast.error(msg);
     }
   };
 
   const handleApprovePlan = async (planId) => {
     try {
-      await apiClient.post(`/planning/plans/${planId}/approve/`);
-      alert('Plan approved successfully!');
+      await planningApi.approvePlan(planId);
+      toast.success('Plan approved successfully!');
       fetchPlanningData();
     } catch (err) {
-      alert(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to approve plan');
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to approve plan';
+      toast.error(msg);
     }
   };
 
@@ -220,24 +300,25 @@ function PlanningPage() {
     setTeamMember({ user: '', role: 'member', allocated_days: 0 });
     // Fetch current team for this engagement
     try {
-      const res = await apiClient.get(`/planning/engagements/${engagement.id}/`);
-      setEngagementTeam(res.data.team_members || []);
+      const res = await planningApi.getEngagement(engagement.id);
+      setEngagementTeam(res.team_members || []);
     } catch (err) {
-      console.error(err);
+      toast.error('Failed to load engagement team members');
     }
   };
 
   const handleAddTeamMember = async (e) => {
     e.preventDefault();
     try {
-      await apiClient.post(`/planning/engagements/${selectedEngagement.id}/add-member/`, teamMember);
-      alert('Team member assigned successfully!');
+      await planningApi.addTeamMember(selectedEngagement.id, teamMember);
+      toast.success('Team member assigned successfully!');
       // Refresh team
-      const res = await apiClient.get(`/planning/engagements/${selectedEngagement.id}/`);
-      setEngagementTeam(res.data.team_members || []);
+      const res = await planningApi.getEngagement(selectedEngagement.id);
+      setEngagementTeam(res.team_members || []);
       setTeamMember({ user: '', role: 'member', allocated_days: 0 });
     } catch (err) {
-      alert(err.response?.data ? JSON.stringify(err.response.data) : 'Failed to assign team member');
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to assign team member';
+      toast.error(msg);
     }
   };
 
@@ -268,11 +349,18 @@ function PlanningPage() {
                   <h3>EEU Risk-Weighted Audit Universe</h3>
                   <p className="card-subtitle">Complete directory of all auditable operational nodes and systems</p>
                 </div>
-                {canWriteAudit && (
-                  <button className="btn btn-primary flex items-center gap-2" onClick={openAddUniverse}>
-                    <Plus size={16} /> Add Entity
-                  </button>
-                )}
+                <div className="flex gap-2">
+                  {dueForAudit.length > 0 && (
+                    <span className="badge badge-danger flex items-center gap-1">
+                      <Clock size={13} /> {dueForAudit.length} due for re-audit
+                    </span>
+                  )}
+                  {canWriteAudit && (
+                    <button className="btn btn-primary flex items-center gap-2" onClick={openAddUniverse}>
+                      <Plus size={16} /> Add Entity
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="table-responsive">
                 <table className="table">
@@ -284,6 +372,8 @@ function PlanningPage() {
                       <th>Department</th>
                       <th>Risk Score</th>
                       <th>Frequency</th>
+                      <th>Last Audited</th>
+                      <th>Re-Audit</th>
                       <th>Status</th>
                       <th>Actions</th>
                     </tr>
@@ -301,6 +391,14 @@ function PlanningPage() {
                           </span>
                         </td>
                         <td>{item.audit_frequency}</td>
+                        <td>{item.last_audited || 'Never'}</td>
+                        <td>
+                          {item.due_for_re_audit ? (
+                            <span className="badge badge-danger">Due</span>
+                          ) : (
+                            <span className="badge badge-success">OK</span>
+                          )}
+                        </td>
                         <td>
                           <span className={`badge ${item.status === 'active' ? 'badge-success' : 'badge-warning'}`}>
                             {item.status}
@@ -393,7 +491,7 @@ function PlanningPage() {
                 )}
               </div>
               <div className="table-responsive">
-                <table className="table">
+                <table className="table engagements-table">
                   <thead>
                     <tr>
                       <th>Ref Number</th>
@@ -472,28 +570,46 @@ function PlanningPage() {
 
       {/* Universe Entity Modal */}
       {showUniverseModal && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={closeUniverseModal}
+          onKeyDown={(e) => { if (e.key === 'Escape') closeUniverseModal(); }}
+        >
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="universe-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>{editingUniverseId ? 'Edit Auditable Entity' : 'Add Auditable Entity'}</h3>
-              <button className="close-btn" onClick={closeUniverseModal}>×</button>
+              <h3 id="universe-modal-title">{editingUniverseId ? 'Edit Auditable Entity' : 'Add Auditable Entity'}</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={closeUniverseModal}
+                aria-label="Close dialog"
+              >
+                <X size={16} />
+              </button>
             </div>
             <form onSubmit={handleSaveUniverse}>
               <div className="modal-body">
                 <div className="form-group">
                   <label className="form-label">Entity Name</label>
                   <input type="text" className="form-control" placeholder="e.g. Substation Asset Management"
-                    value={newUniverse.name} onChange={(e) => setNewUniverse({...newUniverse, name: e.target.value})} required />
+                    value={newUniverse.name} onChange={(e) => setNewUniverse({ ...newUniverse, name: e.target.value })} required />
                 </div>
                 <div className="form-group-row">
                   <div className="form-group">
                     <label className="form-label">Unique Code</label>
                     <input type="text" className="form-control" placeholder="e.g. UNIV-DIST-06"
-                      value={newUniverse.code} onChange={(e) => setNewUniverse({...newUniverse, code: e.target.value})} required />
+                      value={newUniverse.code} onChange={(e) => setNewUniverse({ ...newUniverse, code: e.target.value })} required />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Category</label>
-                    <select className="form-control" value={newUniverse.category} onChange={(e) => setNewUniverse({...newUniverse, category: e.target.value})}>
+                    <select className="form-control" value={newUniverse.category} onChange={(e) => setNewUniverse({ ...newUniverse, category: e.target.value })}>
                       <option value="department">Department</option>
                       <option value="process">Business Process</option>
                       <option value="system">IT System</option>
@@ -504,7 +620,7 @@ function PlanningPage() {
                 <div className="form-group-row">
                   <div className="form-group">
                     <label className="form-label">Associated Department</label>
-                    <select className="form-control" value={newUniverse.department} onChange={(e) => setNewUniverse({...newUniverse, department: e.target.value})}>
+                    <select className="form-control" value={newUniverse.department} onChange={(e) => setNewUniverse({ ...newUniverse, department: e.target.value })}>
                       <option value="">Select Department...</option>
                       {departments.map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}
                     </select>
@@ -512,11 +628,11 @@ function PlanningPage() {
                   <div className="form-group">
                     <label className="form-label">Initial Risk Score (1-5)</label>
                     <input type="number" step="0.05" min="1" max="5" className="form-control"
-                      value={newUniverse.risk_score} onChange={(e) => setNewUniverse({...newUniverse, risk_score: parseFloat(e.target.value)})} required />
+                      value={newUniverse.risk_score} onChange={(e) => setNewUniverse({ ...newUniverse, risk_score: parseFloat(e.target.value) })} required />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Audit Frequency</label>
-                    <select className="form-control" value={newUniverse.audit_frequency} onChange={(e) => setNewUniverse({...newUniverse, audit_frequency: e.target.value})}>
+                    <select className="form-control" value={newUniverse.audit_frequency} onChange={(e) => setNewUniverse({ ...newUniverse, audit_frequency: e.target.value })}>
                       <option value="Annually">Annually</option>
                       <option value="Bi-annually">Bi-annually</option>
                       <option value="Tri-annually">Tri-annually</option>
@@ -535,47 +651,65 @@ function PlanningPage() {
 
       {/* Annual Plan Modal */}
       {showPlanModal && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={closePlanModal}
+          onKeyDown={(e) => { if (e.key === 'Escape') closePlanModal(); }}
+        >
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="plan-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>{editingPlanId ? 'Edit Annual Audit Plan' : 'Create Annual Audit Plan'}</h3>
-              <button className="close-btn" onClick={closePlanModal}>×</button>
+              <h3 id="plan-modal-title">{editingPlanId ? 'Edit Annual Audit Plan' : 'Create Annual Audit Plan'}</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={closePlanModal}
+                aria-label="Close dialog"
+              >
+                <X size={16} />
+              </button>
             </div>
             <form onSubmit={handleSavePlan}>
               <div className="modal-body">
                 <div className="form-group">
                   <label className="form-label">Plan Title</label>
                   <input type="text" className="form-control" placeholder="e.g. FY 2026 Comprehensive Audit Plan"
-                    value={newPlan.title} onChange={(e) => setNewPlan({...newPlan, title: e.target.value})} required />
+                    value={newPlan.title} onChange={(e) => setNewPlan({ ...newPlan, title: e.target.value })} required />
                 </div>
                 <div className="form-group-row">
                   <div className="form-group">
                     <label className="form-label">Year</label>
                     <input type="number" className="form-control" value={newPlan.year}
-                      onChange={(e) => setNewPlan({...newPlan, year: parseInt(e.target.value)})} required />
+                      onChange={(e) => setNewPlan({ ...newPlan, year: parseInt(e.target.value) })} required />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Budget Days</label>
                     <input type="number" className="form-control" value={newPlan.total_budget_days}
-                      onChange={(e) => setNewPlan({...newPlan, total_budget_days: parseInt(e.target.value)})} />
+                      onChange={(e) => setNewPlan({ ...newPlan, total_budget_days: parseInt(e.target.value) })} />
                   </div>
                 </div>
                 <div className="form-group-row">
                   <div className="form-group">
                     <label className="form-label">Start Date</label>
                     <input type="date" className="form-control" value={newPlan.start_date}
-                      onChange={(e) => setNewPlan({...newPlan, start_date: e.target.value})} />
+                      onChange={(e) => setNewPlan({ ...newPlan, start_date: e.target.value })} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">End Date</label>
                     <input type="date" className="form-control" value={newPlan.end_date}
-                      onChange={(e) => setNewPlan({...newPlan, end_date: e.target.value})} />
+                      onChange={(e) => setNewPlan({ ...newPlan, end_date: e.target.value })} />
                   </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Description / Objectives</label>
                   <textarea rows="2" className="form-control" value={newPlan.description}
-                    onChange={(e) => setNewPlan({...newPlan, description: e.target.value})} />
+                    onChange={(e) => setNewPlan({ ...newPlan, description: e.target.value })} />
                 </div>
               </div>
               <div className="modal-footer">
@@ -589,24 +723,42 @@ function PlanningPage() {
 
       {/* Engagement Modal — with Lead Auditor, Supervisor & Days */}
       {showEngagementModal && (
-        <div className="modal-backdrop">
-          <div className="modal-card modal-large">
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={closeEngagementModal}
+          onKeyDown={(e) => { if (e.key === 'Escape') closeEngagementModal(); }}
+        >
+          <div
+            className="modal-card modal-large"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="engagement-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>{editingEngagementId ? 'Edit Audit Engagement' : 'Schedule Audit Engagement'}</h3>
-              <button className="close-btn" onClick={closeEngagementModal}>×</button>
+              <h3 id="engagement-modal-title">{editingEngagementId ? 'Edit Audit Engagement' : 'Schedule Audit Engagement'}</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={closeEngagementModal}
+                aria-label="Close dialog"
+              >
+                <X size={16} />
+              </button>
             </div>
             <form onSubmit={handleSaveEngagement}>
               <div className="modal-body">
                 <div className="form-group">
                   <label className="form-label">Engagement Title</label>
                   <input type="text" className="form-control" placeholder="e.g. Q1 Payroll Compliance Audit"
-                    value={newEngagement.title} onChange={(e) => setNewEngagement({...newEngagement, title: e.target.value})} required />
+                    value={newEngagement.title} onChange={(e) => setNewEngagement({ ...newEngagement, title: e.target.value })} required />
                 </div>
                 <div className="form-group-row">
                   <div className="form-group">
                     <label className="form-label">Target Annual Plan</label>
                     <select className="form-control" value={newEngagement.plan}
-                      onChange={(e) => setNewEngagement({...newEngagement, plan: e.target.value})} required>
+                      onChange={(e) => setNewEngagement({ ...newEngagement, plan: e.target.value })} required>
                       <option value="">Select Plan...</option>
                       {plans.map(p => (<option key={p.id} value={p.id}>{p.title}</option>))}
                     </select>
@@ -614,7 +766,7 @@ function PlanningPage() {
                   <div className="form-group">
                     <label className="form-label">Engagement Type</label>
                     <select className="form-control" value={newEngagement.engagement_type}
-                      onChange={(e) => setNewEngagement({...newEngagement, engagement_type: e.target.value})}>
+                      onChange={(e) => setNewEngagement({ ...newEngagement, engagement_type: e.target.value })}>
                       <option value="operational">Operational</option>
                       <option value="financial">Financial</option>
                       <option value="compliance">Compliance</option>
@@ -624,7 +776,7 @@ function PlanningPage() {
                   <div className="form-group">
                     <label className="form-label">Risk Level</label>
                     <select className="form-control" value={newEngagement.risk_level}
-                      onChange={(e) => setNewEngagement({...newEngagement, risk_level: e.target.value})}>
+                      onChange={(e) => setNewEngagement({ ...newEngagement, risk_level: e.target.value })}>
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
                       <option value="high">High</option>
@@ -641,7 +793,7 @@ function PlanningPage() {
                   <div className="form-group">
                     <label className="form-label">Lead Auditor</label>
                     <select className="form-control" value={newEngagement.lead_auditor}
-                      onChange={(e) => setNewEngagement({...newEngagement, lead_auditor: e.target.value})}>
+                      onChange={(e) => setNewEngagement({ ...newEngagement, lead_auditor: e.target.value })}>
                       <option value="">Select Lead Auditor...</option>
                       {auditors.map(u => (
                         <option key={u.id} value={u.id}>{u.full_name || `${u.first_name} ${u.last_name}`} ({u.employee_id})</option>
@@ -651,7 +803,7 @@ function PlanningPage() {
                   <div className="form-group">
                     <label className="form-label">Supervisor</label>
                     <select className="form-control" value={newEngagement.supervisor}
-                      onChange={(e) => setNewEngagement({...newEngagement, supervisor: e.target.value})}>
+                      onChange={(e) => setNewEngagement({ ...newEngagement, supervisor: e.target.value })}>
                       <option value="">Select Supervisor...</option>
                       {supervisors.map(u => (
                         <option key={u.id} value={u.id}>{u.full_name || `${u.first_name} ${u.last_name}`} ({u.employee_id})</option>
@@ -663,7 +815,7 @@ function PlanningPage() {
                     <input type="number" min="0" className="form-control"
                       placeholder="e.g. 10"
                       value={newEngagement.planned_days}
-                      onChange={(e) => setNewEngagement({...newEngagement, planned_days: parseInt(e.target.value) || 0})} />
+                      onChange={(e) => setNewEngagement({ ...newEngagement, planned_days: parseInt(e.target.value) || 0 })} />
                   </div>
                 </div>
 
@@ -671,7 +823,7 @@ function PlanningPage() {
                   <div className="form-group">
                     <label className="form-label">Audit Universe Node (Optional)</label>
                     <select className="form-control" value={newEngagement.audit_universe}
-                      onChange={(e) => setNewEngagement({...newEngagement, audit_universe: e.target.value})}>
+                      onChange={(e) => setNewEngagement({ ...newEngagement, audit_universe: e.target.value })}>
                       <option value="">Select Entity...</option>
                       {universe.map(u => (<option key={u.id} value={u.id}>{u.code} - {u.name}</option>))}
                     </select>
@@ -679,7 +831,7 @@ function PlanningPage() {
                   <div className="form-group">
                     <label className="form-label">Department</label>
                     <select className="form-control" value={newEngagement.department}
-                      onChange={(e) => setNewEngagement({...newEngagement, department: e.target.value})}>
+                      onChange={(e) => setNewEngagement({ ...newEngagement, department: e.target.value })}>
                       <option value="">Select Department...</option>
                       {departments.map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}
                     </select>
@@ -689,12 +841,12 @@ function PlanningPage() {
                   <div className="form-group">
                     <label className="form-label">Planned Start</label>
                     <input type="date" className="form-control" value={newEngagement.planned_start}
-                      onChange={(e) => setNewEngagement({...newEngagement, planned_start: e.target.value})} />
+                      onChange={(e) => setNewEngagement({ ...newEngagement, planned_start: e.target.value })} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Planned End</label>
                     <input type="date" className="form-control" value={newEngagement.planned_end}
-                      onChange={(e) => setNewEngagement({...newEngagement, planned_end: e.target.value})} />
+                      onChange={(e) => setNewEngagement({ ...newEngagement, planned_end: e.target.value })} />
                   </div>
                 </div>
               </div>
@@ -709,11 +861,29 @@ function PlanningPage() {
 
       {/* Team Assignment Modal */}
       {showTeamModal && selectedEngagement && (
-        <div className="modal-backdrop">
-          <div className="modal-card modal-large">
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setShowTeamModal(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowTeamModal(false); }}
+        >
+          <div
+            className="modal-card modal-large"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="team-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>Manage Team — {selectedEngagement.title}</h3>
-              <button className="close-btn" onClick={() => setShowTeamModal(false)}>×</button>
+              <h3 id="team-modal-title">Manage Team — {selectedEngagement.title}</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowTeamModal(false)}
+                aria-label="Close dialog"
+              >
+                <X size={16} />
+              </button>
             </div>
             <div className="modal-body">
               {/* Existing team */}
@@ -748,7 +918,7 @@ function PlanningPage() {
                   <div className="form-group">
                     <label className="form-label">User</label>
                     <select className="form-control" value={teamMember.user}
-                      onChange={(e) => setTeamMember({...teamMember, user: e.target.value})} required>
+                      onChange={(e) => setTeamMember({ ...teamMember, user: e.target.value })} required>
                       <option value="">Select User...</option>
                       {allUsers.map(u => (
                         <option key={u.id} value={u.id}>{u.full_name || `${u.first_name} ${u.last_name}`} ({u.role})</option>
@@ -758,7 +928,7 @@ function PlanningPage() {
                   <div className="form-group">
                     <label className="form-label">Role in Engagement</label>
                     <select className="form-control" value={teamMember.role}
-                      onChange={(e) => setTeamMember({...teamMember, role: e.target.value})}>
+                      onChange={(e) => setTeamMember({ ...teamMember, role: e.target.value })}>
                       <option value="lead">Lead Auditor</option>
                       <option value="member">Team Member</option>
                       <option value="supervisor">Supervisor</option>
@@ -769,10 +939,10 @@ function PlanningPage() {
                     <label className="form-label">Allocated Days</label>
                     <input type="number" min="0" className="form-control"
                       value={teamMember.allocated_days}
-                      onChange={(e) => setTeamMember({...teamMember, allocated_days: parseInt(e.target.value) || 0})} />
+                      onChange={(e) => setTeamMember({ ...teamMember, allocated_days: parseInt(e.target.value) || 0 })} />
                   </div>
                 </div>
-                <div className="modal-footer" style={{padding: 0, marginTop: '1rem'}}>
+                <div className="modal-footer" style={{ padding: 0, marginTop: '1rem' }}>
                   <button type="button" className="btn btn-outline" onClick={() => setShowTeamModal(false)}>Close</button>
                   <button type="submit" className="btn btn-primary">Add Member</button>
                 </div>

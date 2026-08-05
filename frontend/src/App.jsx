@@ -6,8 +6,10 @@ import DashboardPage from './pages/dashboard/DashboardPage';
 import PlanningPage from './pages/planning/PlanningPage';
 import ExecutionPage from './pages/execution/ExecutionPage';
 import FindingsPage from './pages/findings/FindingsPage';
+import FindingDetailPage from './pages/findings/FindingDetailPage';
 import RiskAssessmentPage from './pages/risk/RiskAssessmentPage';
 import FollowUpPage from './pages/followup/FollowUpPage';
+import CapaDetailPage from './pages/followup/CapaDetailPage';
 import ReportsPage from './pages/reports/ReportsPage';
 import UsersPage from './pages/admin/UsersPage';
 import AuditTrailPage from './pages/admin/AuditTrailPage';
@@ -38,7 +40,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        
+
         <Route
           path="/"
           element={
@@ -52,8 +54,10 @@ function App() {
           <Route path="planning" element={<PlanningPage />} />
           <Route path="execution" element={<ExecutionPage />} />
           <Route path="findings" element={<FindingsPage />} />
+          <Route path="findings/:id" element={<FindingDetailPage />} />
           <Route path="risk" element={<RiskAssessmentPage />} />
           <Route path="capa" element={<FollowUpPage />} />
+          <Route path="capa/:id" element={<CapaDetailPage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route
             path="users"
