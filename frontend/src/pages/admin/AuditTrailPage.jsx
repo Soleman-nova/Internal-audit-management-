@@ -155,28 +155,29 @@ function AuditTrailPage() {
         </div>
 
         {/* Search + Filter Bar */}
-        <div className="flex gap-3 flex-wrap items-center">
-          <form onSubmit={handleSearch} className="flex gap-2 flex-1 min-w-[240px]">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+        <div className="trail-toolbar">
+          <form onSubmit={handleSearch} className="trail-search">
+            <div className="input-group">
+              <span className="input-icon">
+                <Search size={16} />
+              </span>
               <input
                 type="text"
-                className="form-control pl-9"
+                className="form-control"
                 placeholder={t('searchByUser')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <button type="submit" className="btn btn-primary btn-sm">
+            <button type="submit" className="btn btn-primary">
               Search
             </button>
           </form>
 
-          <div className="flex items-center gap-2">
+          <div className="trail-filter">
             <Filter className="w-4 h-4 text-muted" />
             <select
               className="form-control"
-              style={{ width: 'auto' }}
               value={filterAction}
               onChange={handleFilterChange}
             >

@@ -3,9 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { capaApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
-import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
-import { ArrowLeft, CheckCircle2, Clock, AlertCircle, MessageCircle, FileText } from 'lucide-react';
+import { ArrowLeft, AlertCircle, MessageCircle, FileText } from 'lucide-react';
 
 function CapaDetailPage() {
     const { id } = useParams();
@@ -65,7 +64,7 @@ function CapaDetailPage() {
 
     if (loading) {
         return (
-            <div className="flex justify-center py-16">
+            <div className="loading-spinner">
                 <Spinner message={t('loadingCapas')} />
             </div>
         );
@@ -74,32 +73,33 @@ function CapaDetailPage() {
     if (error || !capa) {
         return (
             <div className="card text-center py-12">
-                <AlertCircle className="w-12 h-12 mx-auto text-rose-500 mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{error || 'CAPA not found'}</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{t('noCapaRecords')}</p>
+                <AlertCircle size={48} className="mx-auto text-danger mb-4" />
+                <h3>{error || 'CAPA not found'}</h3>
+                <p className="text-muted mt-2">{t('noCapaRecords')}</p>
                 <Link to="/capa" className="btn btn-primary mt-6 inline-flex items-center gap-2">
-                    <ArrowLeft className="w-4 h-4" /> {t('correctiveActions')}
+                    <ArrowLeft size={16} /> {t('correctiveActions')}
                 </Link>
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
+        <div className="capa-detail-view">
             {/* Back button */}
             <button
+                type="button"
+                className="btn btn-outline btn-sm inline-flex items-center gap-2 self-start"
                 onClick={() => navigate('/capa')}
-                className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
-                <ArrowLeft className="w-4 h-4" /> {t('correctiveActions')}
+                <ArrowLeft size={14} /> {t('correctiveActions')}
             </button>
 
             {/* Header Card */}
-            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
+            <div className="card">
                 <div className="flex items-start justify-between flex-wrap gap-4">
                     <div>
                         <div className="flex items-center gap-3 mb-2">
-                            <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{capa.action_number}</span>
+                            <span className="font-mono text-xs text-muted">{capa.action_number}</span>
                             <span className={`badge ${getPriorityBadge(capa.priority)}`}>
                                 {capa.priority?.toUpperCase()}
                             </span>
@@ -107,38 +107,42 @@ function CapaDetailPage() {
                                 {capa.status?.replace('_', ' ').toUpperCase()}
                             </span>
                         </div>
-                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{capa.title}</h1>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            {capa.owner_name && <span className="inline-flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {capa.owner_name}</span>}
-                        </p>
+                        <h2>{capa.title}</h2>
+                        {capa.owner_name && (
+                            <p className="text-sm text-secondary mt-1 inline-flex items-center gap-1">
+                                <FileText size={14} /> {capa.owner_name}
+                            </p>
+                        )}
                     </div>
-                    <div className="flex items-center gap-3">
-                        <div className="text-right">
-                            <span className="block text-xs text-gray-400">{t('dueDate')}</span>
-                            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{capa.due_date || '—'}</span>
-                        </div>
+                    <div className="text-right">
+                        <span className="block text-xs text-muted">{t('dueDate')}</span>
+                        <strong className="text-sm">{capa.due_date || '—'}</strong>
                     </div>
                 </div>
             </div>
 
             {/* Detail Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="capa-detail-grid">
                 {/* Description */}
-                <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                        {t('description')}
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{capa.description || '—'}</p>
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="flex items-center gap-2">
+                            <FileText size={16} className="text-accent" />
+                            {t('description')}
+                        </h3>
+                    </div>
+                    <p className="text-sm text-secondary">{capa.description || '—'}</p>
                 </div>
 
                 {/* Recommendation */}
-                <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                        <MessageCircle className="w-4 h-4 text-blue-500" />
-                        {t('recommendation')}
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{capa.recommendation || '—'}</p>
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="flex items-center gap-2">
+                            <MessageCircle size={16} className="text-accent" />
+                            {t('recommendation')}
+                        </h3>
+                    </div>
+                    <p className="text-sm text-secondary">{capa.recommendation || '—'}</p>
                 </div>
             </div>
         </div>

@@ -318,6 +318,16 @@ function LoginPage() {
           </div>
         ))}
       </div>
+
+      {/* ============================================================ FOOTER */}
+      <div className="relative z-10 flex flex-col items-center gap-1 mt-6 px-4 text-center">
+        <div className="text-[12px] text-white/75 drop-shadow-md">
+          © 2026 EEU Internal Audit management system. All rights reserved.
+        </div>
+        <div className="text-[11.5px] font-semibold text-amber-300/90 drop-shadow-md">
+          Designed &amp; Developed by EEU IT
+        </div>
+      </div>
     </div>
   );
 }

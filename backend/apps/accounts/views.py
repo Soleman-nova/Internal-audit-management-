@@ -16,7 +16,7 @@ from .models import User, Department, AuditTrail
 from apps.corrective_actions.models import CorrectiveAction
 from apps.audit_planning.models import AuditEngagement, AuditPlan
 from apps.findings.models import AuditFinding
-from apps.common.permissions import CanManageUsers, CanManageSettings, CanViewAuditTrail
+from apps.common.permissions import CanManageUsers, CanManageSettings, CanViewAuditTrail, CanWriteAudit
 from apps.common.audit_utils import log_audit
 from .serializers import (
     UserSerializer, UserCreateSerializer, LoginSerializer,
@@ -138,7 +138,7 @@ class UserViewSet(viewsets.ModelViewSet):
 class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
-    permission_classes = [CanManageSettings]
+    permission_classes = [CanWriteAudit]  # reads open to any authenticated user
     filter_backends = [SearchFilter, OrderingFilter]
     search_fields = ['name', 'code']
 

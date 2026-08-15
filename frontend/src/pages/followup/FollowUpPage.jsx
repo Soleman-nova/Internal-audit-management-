@@ -290,7 +290,7 @@ function FollowUpPage() {
                         </span>
                       </td>
                       <td>
-                        <button className="btn btn-outline btn-sm flex items-center gap-1" onClick={() => handleOpenResponse(c)}>
+                        <button className="btn btn-outline btn-sm flex items-center gap-1" onClick={(e) => { e.stopPropagation(); handleOpenResponse(c); }}>
                           <MessageCircle size={14} /> Respond
                         </button>
                       </td>

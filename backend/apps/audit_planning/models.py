@@ -24,12 +24,25 @@ class AuditUniverse(models.Model):
     code = models.CharField(max_length=50, unique=True)
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+    directorate = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='directorate_universe_items',
+        help_text='EEU Internal Audit directorate that owns this universe item.',
+    )
     description = models.TextField(blank=True)
     owner = models.CharField(max_length=200, blank=True)
     risk_score = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     audit_frequency = models.CharField(max_length=50, blank=True)
     last_audited = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    technical_metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Utility-specific technical audit parameters (Asset Type, Voltage Level, Feeder ID, Energy Loss Score, etc.).',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -80,6 +93,11 @@ class AuditPlan(models.Model):
         ('cancelled', 'Cancelled'),
     ]
 
+    PLAN_SCOPE_CHOICES = [
+        ('directorate', 'Directorate Plan'),
+        ('consolidated', 'EEU Consolidated Master Plan'),
+    ]
+
     title = models.CharField(max_length=300)
     year = models.IntegerField()
     description = models.TextField(blank=True)
@@ -87,6 +105,28 @@ class AuditPlan(models.Model):
     scope = models.TextField(blank=True)
     methodology = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    directorate = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='directorate_audit_plans',
+        help_text='Directorate that owns this plan segment. Null for the EEU Consolidated Master Plan.',
+    )
+    plan_scope = models.CharField(
+        max_length=20,
+        choices=PLAN_SCOPE_CHOICES,
+        default='directorate',
+        help_text='Whether this is a directorate-level plan or the consolidated master plan.',
+    )
+    parent_plan = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='child_plans',
+        help_text='For directorate plans, the consolidated master plan they roll up into.',
+    )
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_plans')
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_plans')
     approved_at = models.DateTimeField(null=True, blank=True)
@@ -116,21 +156,26 @@ class AuditEngagement(models.Model):
 
     ENGAGEMENT_TYPE_CHOICES = [
         ('financial', 'Financial Audit'),
-        ('operational', 'Operational Audit'),
-        ('compliance', 'Compliance Audit'),
-        ('it', 'IT Audit'),
         ('performance', 'Performance Audit'),
-        ('investigative', 'Investigative Audit'),
-        ('followup', 'Follow-up Audit'),
-        ('special', 'Special Audit'),
+        ('technical', 'Technical & Engineering Audit (Substations, Distribution Grids, Loss Reduction, Transmission)'),
+        ('it', 'Information Technology Audit (ERP, CIS Billing, Cybersecurity, Infrastructure)'),
+        ('special', 'Planning & Special Review Audit'),
     ]
 
     plan = models.ForeignKey(AuditPlan, on_delete=models.CASCADE, related_name='engagements')
     audit_universe = models.ForeignKey(AuditUniverse, on_delete=models.SET_NULL, null=True, blank=True)
     title = models.CharField(max_length=300)
     engagement_number = models.CharField(max_length=50, unique=True)
-    engagement_type = models.CharField(max_length=50, choices=ENGAGEMENT_TYPE_CHOICES, default='operational')
+    engagement_type = models.CharField(max_length=50, choices=ENGAGEMENT_TYPE_CHOICES, default='financial')
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+    directorate = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='directorate_engagements',
+        help_text='EEU Internal Audit directorate that owns this engagement.',
+    )
     objectives = models.TextField(blank=True)
     scope = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planned')
@@ -143,6 +188,11 @@ class AuditEngagement(models.Model):
     planned_days = models.IntegerField(default=0)
     actual_days = models.IntegerField(default=0)
     risk_level = models.CharField(max_length=20, choices=[('low','Low'),('medium','Medium'),('high','High'),('critical','Critical')], default='medium')
+    technical_metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Utility-specific technical audit parameters (Asset Type, Voltage Level, Feeder ID, Energy Loss Score, Engineering Compliance Rating, etc.).',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

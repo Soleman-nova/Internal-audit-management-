@@ -93,6 +93,8 @@ const TRANSLATIONS = {
         quarterlyAuditScoreHistory: 'Quarterly EEU audit score history',
         recentSystemActivity: 'Recent System Activity',
         realTimeAuditTrail: 'Real-time audit trail',
+        enterpriseConsolidatedView: 'EEU Consolidated Enterprise View',
+        directorateView: 'Directorate View',
 
         // Planning
         auditPlanning: 'Audit Planning',
@@ -548,6 +550,8 @@ const TRANSLATIONS = {
         quarterlyAuditScoreHistory: 'ሩብ ዓመታዊ የEEU ኦዲት ውጤት ታሪክ',
         recentSystemActivity: 'የቅርብ ስርዓት እንቅስቃሴ',
         realTimeAuditTrail: 'የእውነተኛ ጊዜ የኦዲት ዱካ',
+        enterpriseConsolidatedView: 'የEEU የተዋሃደ ኢንተርፕራይዝ እይታ',
+        directorateView: 'የዳይሬክቶሬት እይታ',
 
         // Planning
         auditPlanning: 'የኦዲት እቅድ',
