@@ -7,9 +7,28 @@ from .models import User, Department, AuditTrail, Role
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
+    directorate_type_display = serializers.CharField(source='get_directorate_type_display', read_only=True)
+    children = serializers.SerializerMethodField()
+
     class Meta:
         model = Department
         fields = '__all__'
+
+    def get_children(self, obj):
+        """Expose child departments for the org chart."""
+        children = obj.children.filter(is_active=True).order_by('name')
+        return [
+            {
+                'id': c.id,
+                'name': c.name,
+                'code': c.code,
+                'head': c.head,
+                'staff_count': c.staff_count,
+                'directorate_type': c.directorate_type,
+                'directorate_type_display': c.get_directorate_type_display(),
+            }
+            for c in children
+        ]
 
 
 class UserSerializer(serializers.ModelSerializer):

@@ -14,11 +14,11 @@ from apps.notifications.services import notify, notify_roles
 
 
 class AuditUniverseViewSet(viewsets.ModelViewSet):
-    queryset = AuditUniverse.objects.select_related('department').all()
+    queryset = AuditUniverse.objects.select_related('department', 'directorate').all()
     serializer_class = AuditUniverseSerializer
     permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['category', 'status', 'department']
+    filterset_fields = ['category', 'status', 'department', 'directorate']
     search_fields = ['name', 'code', 'owner']
     ordering_fields = ['risk_score', 'name', 'last_audited']
     ordering = ['-risk_score']
@@ -66,11 +66,11 @@ class AuditUniverseViewSet(viewsets.ModelViewSet):
 
 
 class AuditPlanViewSet(viewsets.ModelViewSet):
-    queryset = AuditPlan.objects.select_related('created_by', 'approved_by').prefetch_related('engagements').all()
+    queryset = AuditPlan.objects.select_related('created_by', 'approved_by', 'directorate', 'parent_plan').prefetch_related('engagements').all()
     serializer_class = AuditPlanSerializer
     permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['status', 'year']
+    filterset_fields = ['status', 'year', 'directorate', 'plan_scope']
     search_fields = ['title', 'description']
     ordering = ['-year']
 
@@ -130,12 +130,12 @@ class AuditPlanViewSet(viewsets.ModelViewSet):
 
 class AuditEngagementViewSet(viewsets.ModelViewSet):
     queryset = AuditEngagement.objects.select_related(
-        'plan', 'department', 'lead_auditor', 'supervisor', 'audit_universe'
+        'plan', 'department', 'directorate', 'lead_auditor', 'supervisor', 'audit_universe'
     ).prefetch_related('team_members', 'findings').all()
     serializer_class = AuditEngagementSerializer
     permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['status', 'engagement_type', 'plan', 'department', 'risk_level']
+    filterset_fields = ['status', 'engagement_type', 'plan', 'department', 'directorate', 'risk_level']
     search_fields = ['title', 'engagement_number', 'objectives']
     ordering = ['-created_at']
 

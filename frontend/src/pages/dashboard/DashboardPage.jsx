@@ -6,7 +6,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
-import { TrendingUp, AlertTriangle, FolderKanban, Clock } from 'lucide-react';
+import { TrendingUp, AlertTriangle, FolderKanban, Clock, Building2, Filter } from 'lucide-react';
+import EEUOrgChart from '../../components/EEUOrgChart';
 
 const CHART_TOOLTIP_STYLE = { backgroundColor: '#1a2235', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' };
 
@@ -51,6 +52,11 @@ function DashboardPage() {
     { id: 4, user: 'Bekele Dejene', action: 'Completed audit procedure', target: 'PROC-001 (SoD Review)', time: '3 days ago' },
   ]);
 
+  // ── Directorate Filter Switcher ──
+  const [directorates, setDirectorates] = useState([]);
+  const [selectedDirectorate, setSelectedDirectorate] = useState('all');
+  const [directorateStats, setDirectorateStats] = useState(null);
+
   useEffect(() => {
     reportsApi.getAnalytics()
       .then(d => {
@@ -80,10 +86,69 @@ function DashboardPage() {
         }
       })
       .catch(() => {/* keep defaults */ });
+
+    // Load directorates for the filter switcher
+    usersApi.getDepartments()
+      .then(depts => {
+        const directorateList = (Array.isArray(depts) ? depts : (depts?.results || []))
+          .filter(d => ['FPA', 'TA', 'ITA', 'PP'].includes(d.directorate_type));
+        setDirectorates(directorateList);
+      })
+      .catch(() => {/* keep empty */ });
   }, []);
+
+  const handleDirectorateSelect = (dept) => {
+    if (!dept) {
+      setSelectedDirectorate('all');
+      setDirectorateStats(null);
+      return;
+    }
+    setSelectedDirectorate(dept.id);
+    setDirectorateStats({
+      name: dept.name,
+      code: dept.directorate_type,
+      head: dept.head,
+      staffCount: dept.staff_count,
+    });
+  };
+
+  const handleFilterChange = (e) => {
+    const value = e.target.value;
+    if (value === 'all') {
+      handleDirectorateSelect(null);
+    } else {
+      const dept = directorates.find(d => d.id === Number(value));
+      if (dept) handleDirectorateSelect(dept);
+    }
+  };
 
   return (
     <div className="dashboard-view">
+
+      {/* ── Directorate Filter Switcher ── */}
+      <div className="directorate-filter-bar">
+        <div className="directorate-filter-label">
+          <Filter size={16} />
+          <span>{selectedDirectorate === 'all' ? t('enterpriseConsolidatedView') : t('directorateView')}</span>
+        </div>
+        <select
+          className="directorate-filter-select"
+          value={selectedDirectorate}
+          onChange={handleFilterChange}
+          aria-label="Filter by directorate"
+        >
+          <option value="all">EEU Consolidated Master View</option>
+          {directorates.map(d => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
+        </select>
+        {directorateStats && (
+          <div className="directorate-filter-info">
+            <span className="directorate-filter-head">Head: {directorateStats.head}</span>
+            <span className="directorate-filter-staff">Staff: {directorateStats.staffCount}</span>
+          </div>
+        )}
+      </div>
 
       {/* ── KPI Cards ── */}
       <div className="kpi-grid">
@@ -91,6 +156,15 @@ function DashboardPage() {
         <StatCard icon={<AlertTriangle size={22} />} label={t('openFindings')} value={stats.openFindings} sub={t('highSeverityItems')} color="orange" />
         <StatCard icon={<Clock size={22} />} label={t('overdueCapas')} value={stats.overdueActions} sub={t('requireEscalation')} color="red" />
         <StatCard icon={<TrendingUp size={22} />} label={t('overallCompliance')} value={`${stats.complianceScore}%`} sub={t('vsLastQuarter')} color="green" />
+      </div>
+
+      {/* ── Organizational Structure ── */}
+      <div className="chart-box org-chart-box">
+        <div className="chart-box-header">
+          <h3><Building2 size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />EEU Internal Audit Organizational Structure</h3>
+          <span>Executive Office & Directorate Hierarchy — click a card to filter the dashboard</span>
+        </div>
+        <EEUOrgChart onSelectDirectorate={handleDirectorateSelect} />
       </div>
 
       {/* ── Main Charts Row ── */}

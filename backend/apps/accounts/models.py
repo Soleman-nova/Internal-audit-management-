@@ -30,10 +30,37 @@ class Role(models.Model):
 
 
 class Department(models.Model):
+    """Department / Directorate within EEU.
+
+    Supports the official EEU Internal Audit Executive Office structure:
+    the Internal Audit Executive Office (IAEO) is the parent node that
+    oversees four core directorates:
+      - Financial & Performance Audit (FPA)
+      - Technical Audit (TA)
+      - Information Technology Audit (ITA)
+      - Planning & Performance (PP)
+    """
+
+    DIRECTORATE_CHOICES = [
+        ('IAEO', 'Internal Audit Executive Office'),
+        ('FPA', 'Financial & Performance Audit Directorate'),
+        ('TA', 'Technical Audit Directorate'),
+        ('ITA', 'Information Technology Audit Directorate'),
+        ('PP', 'Planning & Performance Directorate'),
+        ('OTHER', 'Other / Non-Directorate'),
+    ]
+
     name = models.CharField(max_length=200)
     code = models.CharField(max_length=20, unique=True)
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='children')
     head = models.CharField(max_length=200, blank=True)
+    directorate_type = models.CharField(
+        max_length=20,
+        choices=DIRECTORATE_CHOICES,
+        default='OTHER',
+        help_text='Explicit EEU Internal Audit directorate classification.',
+    )
+    staff_count = models.PositiveIntegerField(default=0, help_text='Number of staff assigned to this directorate.')
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
 

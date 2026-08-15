@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Bind Tailwind's `dark:` variant to the app's own theme switch.
+   Without this, Tailwind v4 resolves `dark:` from the OS `prefers-color-scheme`
+   media query, so utility-styled components (DataTable, EmptyState, Spinner…)
+   would ignore the in-app light/dark toggle and clash with the `[data-theme]`
+   rules further down this file. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* ============================================================
    EEU Internal Audit Management System - Main Stylesheet
    ============================================================ */
@@ -463,7 +470,6 @@ body {
 .btn-primary {
   background: linear-gradient(135deg, var(--primary), var(--primary-dark));
   color: white;
-  width: 100%;
   box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
 }
 
@@ -2983,6 +2989,8 @@ textarea.form-control {
 .input-icon {
   position: absolute;
   left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--text-muted);
   display: flex;
   align-items: center;
@@ -3807,6 +3815,395 @@ textarea.form-control {
 }
 
 /* ============================================================
+   DIRECTORATE FILTER BAR (Dashboard)
+   ============================================================ */
+.directorate-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  flex-wrap: wrap;
+}
+
+.directorate-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.directorate-filter-label svg {
+  color: var(--primary-light);
+}
+
+.directorate-filter-select {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 8px 12px;
+  min-width: 260px;
+  cursor: pointer;
+  outline: none;
+  transition: var(--transition);
+}
+
+.directorate-filter-select:focus {
+  border-color: var(--border-active);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.directorate-filter-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.directorate-filter-head,
+.directorate-filter-staff {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+}
+
+/* ============================================================
+   EEU ORGANIZATIONAL CHART
+   ============================================================ */
+.org-chart-box {
+  overflow-x: auto;
+}
+
+.org-chart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 8px;
+  min-width: 720px;
+}
+
+.org-chart-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.org-chart-loading .spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.org-chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Root node */
+.org-root {
+  margin-bottom: 8px;
+}
+
+.org-node {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  min-width: 280px;
+  max-width: 340px;
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+}
+
+.org-node::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--node-color, var(--primary));
+}
+
+.org-node:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--node-color, var(--primary));
+}
+
+.org-node-root {
+  min-width: 360px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), var(--bg-card2));
+}
+
+.org-node-pp {
+  border-color: rgba(6, 182, 212, 0.35);
+}
+
+.org-node-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.org-node-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.org-node-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.org-node-title h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  margin: 0;
+}
+
+.org-node-code {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.org-node-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.org-node-toggle:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.org-node-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.org-node-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.org-node-head strong {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.org-node-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+
+.org-node-stats {
+  display: flex;
+  gap: 6px;
+}
+
+.org-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  padding: 6px 4px;
+  gap: 2px;
+}
+
+.org-stat svg {
+  color: var(--text-muted);
+}
+
+.org-stat span {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.org-stat small {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.org-node-risk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.risk-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.risk-low {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.risk-medium {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.risk-high {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.risk-critical {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.org-node-risk-score {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.org-node-pp-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #22d3ee;
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+
+/* Branching connectors */
+.org-branches {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.org-connector-vertical {
+  width: 2px;
+  height: 24px;
+  background: var(--border-active);
+}
+
+.org-connector-horizontal {
+  width: 100%;
+  max-width: 900px;
+  height: 2px;
+  background: var(--border-active);
+  margin-bottom: 0;
+}
+
+.org-children {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  width: 100%;
+  max-width: 1100px;
+  padding: 0 8px;
+}
+
+.org-child-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.org-connector-vertical-short {
+  width: 2px;
+  height: 24px;
+  background: var(--border-active);
+}
+
+.org-grandchildren {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Responsive: stack the org children */
+@media (max-width: 1000px) {
+  .org-children {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .org-children {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
    PLANNING PAGE
    ============================================================ */
 .planning-view {
@@ -4438,6 +4835,38 @@ textarea.form-control {
   max-width: 320px;
 }
 
+/* ── CAPA Detail Page ── */
+.capa-detail-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.capa-detail-view>.btn {
+  align-self: flex-start;
+}
+
+.capa-detail-view h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.capa-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .capa-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ============================================================
    REPORTS PAGE
    ============================================================ */
@@ -4873,20 +5302,61 @@ textarea.form-control {
 .audit-trail-view {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 16px;
 }
 
 .audit-trail-view .card .card-header {
   align-items: flex-start;
 }
 
-.audit-trail-view .table td {
+.audit-trail-view .data-table td {
   vertical-align: middle;
 }
 
-.audit-trail-view .table td .text-xs {
+.audit-trail-view .data-table td .text-xs {
   display: block;
   margin-top: 2px;
+}
+
+/* Toolbar: search box + button aligned to the same height */
+.trail-toolbar {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.trail-toolbar .trail-search {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex: 1;
+  min-width: 240px;
+}
+
+.trail-toolbar .trail-search .input-group {
+  flex: 1;
+  align-self: stretch;
+}
+
+.trail-toolbar .trail-search .form-control {
+  height: 38px;
+}
+
+.trail-toolbar .trail-search .btn {
+  height: 38px;
+}
+
+.trail-toolbar .trail-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trail-toolbar .trail-filter .form-control {
+  width: auto;
+  min-width: 160px;
+  height: 38px;
 }
 
 /* Monospace IP addresses */
