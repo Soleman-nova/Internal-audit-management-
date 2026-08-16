@@ -14,6 +14,30 @@ from apps.audit_planning.models import AuditUniverse, AuditPlan, AuditEngagement
 from apps.risk_assessment.models import RiskParameter, RiskAssessment
 
 
+def backfill_audit_fields(dept, name_am='', head_title='', head_title_am=''):
+    """Fill in fields added after this command first ran.
+
+    ``get_or_create`` defaults are ignored for rows that already exist, so a
+    database seeded before ``unit_type``/``name_am``/``head_title`` existed would
+    keep the model defaults forever. Only blank fields are written, so manual
+    edits made through the admin or API are preserved.
+    """
+    updates = {}
+    if dept.unit_type != Department.AUDIT:
+        updates['unit_type'] = Department.AUDIT
+    if name_am and not dept.name_am:
+        updates['name_am'] = name_am
+    if head_title and not dept.head_title:
+        updates['head_title'] = head_title
+    if head_title_am and not dept.head_title_am:
+        updates['head_title_am'] = head_title_am
+    if updates:
+        for field, value in updates.items():
+            setattr(dept, field, value)
+        dept.save(update_fields=list(updates))
+    return dept
+
+
 class Command(BaseCommand):
     help = 'Seeds the EEU Internal Audit Executive Office organizational structure with directorates, heads, universe items, plans, and engagements.'
 
@@ -23,15 +47,35 @@ class Command(BaseCommand):
         current_year = datetime.datetime.now().year
 
         # ── 1. Create the Internal Audit Executive Office hierarchy ──────────
+        # If the corporate structure has been seeded (seed_org_structure), hang
+        # the IAEO off the Internal Audit chief office so the CEO-rooted tree and
+        # the audit directorate tree form one hierarchy. Otherwise IAEO is a root.
+        audit_chief_office = Department.objects.filter(code='Audit').first()
+
         iaeo, _ = Department.objects.get_or_create(
             code='IAEO',
             defaults={
                 'name': 'Internal Audit Executive Office',
+                'name_am': 'የውስጥ ኦዲት ሥራ አስፈጻሚ ጽሕፈት ቤት',
                 'directorate_type': 'IAEO',
+                'unit_type': Department.AUDIT,
                 'head': 'Martha Hailu',
+                'head_title': 'Chief Internal Audit officer',
+                'head_title_am': 'ዋና ውስጣዊ ኦዲት ኦፊሰር',
                 'staff_count': 4,
+                'parent': audit_chief_office,
                 'description': 'Executive office overseeing all EEU internal audit directorates.',
             },
+        )
+        # Backfill the parent link for databases seeded before the corporate structure.
+        if audit_chief_office and iaeo.parent_id != audit_chief_office.id:
+            iaeo.parent = audit_chief_office
+            iaeo.save(update_fields=['parent'])
+        backfill_audit_fields(
+            iaeo,
+            name_am='የውስጥ ኦዲት ሥራ አስፈጻሚ ጽሕፈት ቤት',
+            head_title='Chief Internal Audit officer',
+            head_title_am='ዋና ውስጣዊ ኦዲት ኦፊሰር',
         )
         self.stdout.write(f'  Created/verified: {iaeo.name}')
 
@@ -39,6 +83,7 @@ class Command(BaseCommand):
             {
                 'code': 'FPA',
                 'name': 'Financial & Performance Audit Directorate',
+                'name_am': 'የፋይናንስና የአፈጻጸም ኦዲት ዳይሬክቶሬት',
                 'directorate_type': 'FPA',
                 'head': 'Abebe Kebede',
                 'staff_count': 12,
@@ -47,6 +92,7 @@ class Command(BaseCommand):
             {
                 'code': 'TA',
                 'name': 'Technical Audit Directorate',
+                'name_am': 'የቴክኒክ ኦዲት ዳይሬክቶሬት',
                 'directorate_type': 'TA',
                 'head': 'Dawit Tesfaye',
                 'staff_count': 10,
@@ -55,6 +101,7 @@ class Command(BaseCommand):
             {
                 'code': 'ITA',
                 'name': 'Information Technology Audit Directorate',
+                'name_am': 'የኢንፎርሜሽን ቴክኖሎጂ ኦዲት ዳይሬክቶሬት',
                 'directorate_type': 'ITA',
                 'head': 'Sarah Mohammed',
                 'staff_count': 8,
@@ -63,6 +110,7 @@ class Command(BaseCommand):
             {
                 'code': 'PP',
                 'name': 'Planning & Performance Directorate',
+                'name_am': 'የዕቅድና አፈጻጸም ዳይሬክቶሬት',
                 'directorate_type': 'PP',
                 'head': 'Tigist Assefa',
                 'staff_count': 6,
@@ -76,7 +124,9 @@ class Command(BaseCommand):
                 code=d['code'],
                 defaults={
                     'name': d['name'],
+                    'name_am': d['name_am'],
                     'directorate_type': d['directorate_type'],
+                    'unit_type': Department.AUDIT,
                     'head': d['head'],
                     'staff_count': d['staff_count'],
                     'description': d['description'],
@@ -86,6 +136,8 @@ class Command(BaseCommand):
             dept_map[d['code']] = dept
             if created:
                 self.stdout.write(f'  Created directorate: {dept.name}')
+            else:
+                backfill_audit_fields(dept, name_am=d['name_am'])
 
         # ── 2. Create Directorate Head user accounts ─────────────────────────
         head_accounts = [

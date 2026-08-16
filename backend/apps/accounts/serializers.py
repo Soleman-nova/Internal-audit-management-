@@ -8,6 +8,7 @@ from .models import User, Department, AuditTrail, Role
 
 class DepartmentSerializer(serializers.ModelSerializer):
     directorate_type_display = serializers.CharField(source='get_directorate_type_display', read_only=True)
+    unit_type_display = serializers.CharField(source='get_unit_type_display', read_only=True)
     children = serializers.SerializerMethodField()
 
     class Meta:
@@ -21,9 +22,14 @@ class DepartmentSerializer(serializers.ModelSerializer):
             {
                 'id': c.id,
                 'name': c.name,
+                'name_am': c.name_am,
                 'code': c.code,
                 'head': c.head,
+                'head_title': c.head_title,
+                'head_title_am': c.head_title_am,
                 'staff_count': c.staff_count,
+                'unit_type': c.unit_type,
+                'unit_type_display': c.get_unit_type_display(),
                 'directorate_type': c.directorate_type,
                 'directorate_type_display': c.get_directorate_type_display(),
             }

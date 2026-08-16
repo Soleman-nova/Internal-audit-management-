@@ -1,0 +1,4076 @@
+[
+  {
+    "id": 1,
+    "csc_code": "AA02",
+    "csc_name": "CSC3",
+    "region": "AA",
+    "region_id": 29
+  },
+  {
+    "id": 2,
+    "csc_code": "AA03",
+    "csc_name": "CSC4",
+    "region": "AA",
+    "region_id": 29
+  },
+  {
+    "id": 3,
+    "csc_code": "AA04",
+    "csc_name": "CSC5",
+    "region": "AA",
+    "region_id": 29
+  },
+  {
+    "id": 4,
+    "csc_code": "AA05",
+    "csc_name": "CSC6",
+    "region": "AA",
+    "region_id": 29
+  },
+  {
+    "id": 5,
+    "csc_code": "AA06",
+    "csc_name": "CSC7",
+    "region": "AA",
+    "region_id": 29
+  },
+  {
+    "id": 6,
+    "csc_code": "AA07",
+    "csc_name": "CSC9",
+    "region": "AA",
+    "region_id": 29
+  },
+  {
+    "id": 7,
+    "csc_code": "AA10",
+    "csc_name": "CSC8",
+    "region": "AA",
+    "region_id": 29
+  },
+  {
+    "id": 8,
+    "csc_code": "AB03",
+    "csc_name": "CSC 3",
+    "region": "AB",
+    "region_id": 31
+  },
+  {
+    "id": 9,
+    "csc_code": "AB05",
+    "csc_name": "CSC 5",
+    "region": "AB",
+    "region_id": 31
+  },
+  {
+    "id": 10,
+    "csc_code": "AB06",
+    "csc_name": "CSC 6",
+    "region": "AB",
+    "region_id": 31
+  },
+  {
+    "id": 11,
+    "csc_code": "AB07",
+    "csc_name": "CSC 7",
+    "region": "AB",
+    "region_id": 31
+  },
+  {
+    "id": 12,
+    "csc_code": "AB08",
+    "csc_name": "CSC 8",
+    "region": "AB",
+    "region_id": 31
+  },
+  {
+    "id": 13,
+    "csc_code": "AB09",
+    "csc_name": "CSC 9",
+    "region": "AB",
+    "region_id": 31
+  },
+  {
+    "id": 14,
+    "csc_code": "AB10",
+    "csc_name": "CSC 10",
+    "region": "AB",
+    "region_id": 31
+  },
+  {
+    "id": 15,
+    "csc_code": "AB12",
+    "csc_name": "CSC 4",
+    "region": "AB",
+    "region_id": 31
+  },
+  {
+    "id": 16,
+    "csc_code": "AB17",
+    "csc_name": "CSC 2",
+    "region": "AB",
+    "region_id": 31
+  },
+  {
+    "id": 17,
+    "csc_code": "AC01",
+    "csc_name": "CSC 1",
+    "region": "AC",
+    "region_id": 32
+  },
+  {
+    "id": 18,
+    "csc_code": "AC09",
+    "csc_name": "CSC 2",
+    "region": "AC",
+    "region_id": 32
+  },
+  {
+    "id": 19,
+    "csc_code": "AC10",
+    "csc_name": "CSC 3",
+    "region": "AC",
+    "region_id": 32
+  },
+  {
+    "id": 20,
+    "csc_code": "AC11",
+    "csc_name": "CSC 4",
+    "region": "AC",
+    "region_id": 32
+  },
+  {
+    "id": 21,
+    "csc_code": "AC12",
+    "csc_name": "CSC 6",
+    "region": "AC",
+    "region_id": 32
+  },
+  {
+    "id": 22,
+    "csc_code": "AC14",
+    "csc_name": "CSC 7",
+    "region": "AC",
+    "region_id": 32
+  },
+  {
+    "id": 23,
+    "csc_code": "AC15",
+    "csc_name": "CSC 8",
+    "region": "AC",
+    "region_id": 32
+  },
+  {
+    "id": 24,
+    "csc_code": "AD01",
+    "csc_name": "csc1",
+    "region": "AD",
+    "region_id": 30
+  },
+  {
+    "id": 25,
+    "csc_code": "AD02",
+    "csc_name": "csc2",
+    "region": "AD",
+    "region_id": 30
+  },
+  {
+    "id": 26,
+    "csc_code": "AD03",
+    "csc_name": "csc3",
+    "region": "AD",
+    "region_id": 30
+  },
+  {
+    "id": 27,
+    "csc_code": "AD04",
+    "csc_name": "csc4",
+    "region": "AD",
+    "region_id": 30
+  },
+  {
+    "id": 28,
+    "csc_code": "AD09",
+    "csc_name": "csc5",
+    "region": "AD",
+    "region_id": 30
+  },
+  {
+    "id": 29,
+    "csc_code": "AD10",
+    "csc_name": " FERENSAY CSC",
+    "region": "AD",
+    "region_id": 30
+  },
+  {
+    "id": 30,
+    "csc_code": "AD11",
+    "csc_name": " AWELIA CSC",
+    "region": "AD",
+    "region_id": 30
+  },
+  {
+    "id": 31,
+    "csc_code": "BA01",
+    "csc_name": "Adama csc. No.1",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 32,
+    "csc_code": "BA02",
+    "csc_name": "Adama csc. No.2",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 33,
+    "csc_code": "BA03",
+    "csc_name": "Adama csc. No.3",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 34,
+    "csc_code": "BA04",
+    "csc_name": "Adama csc. No.4",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 35,
+    "csc_code": "BA05",
+    "csc_name": "Abomesa",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 36,
+    "csc_code": "BA06",
+    "csc_name": "Adamitulu",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 37,
+    "csc_code": "BA07",
+    "csc_name": "Bekoji",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 38,
+    "csc_code": "BA08",
+    "csc_name": "Bulbula",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 39,
+    "csc_code": "BA09",
+    "csc_name": "Dera",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 40,
+    "csc_code": "BA10",
+    "csc_name": "Kersa",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 41,
+    "csc_code": "BA11",
+    "csc_name": "Awash Melkasa",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 42,
+    "csc_code": "BA12",
+    "csc_name": "Sagure",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 43,
+    "csc_code": "BA13",
+    "csc_name": "Wolenchity",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 44,
+    "csc_code": "BA14",
+    "csc_name": "Asella No.1",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 45,
+    "csc_code": "BA15",
+    "csc_name": "Wonji",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 46,
+    "csc_code": "BA16",
+    "csc_name": "Metehara",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 47,
+    "csc_code": "BA17",
+    "csc_name": "Modjo",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 48,
+    "csc_code": "BA18",
+    "csc_name": "Zeway",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 49,
+    "csc_code": "BA19",
+    "csc_name": "Gobessa",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 50,
+    "csc_code": "BA20",
+    "csc_name": "Arsirobe",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 51,
+    "csc_code": "BA21",
+    "csc_name": "Alemtena ",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 52,
+    "csc_code": "BA22",
+    "csc_name": "Eteya",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 53,
+    "csc_code": "BA23",
+    "csc_name": "Chole",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 54,
+    "csc_code": "BA24",
+    "csc_name": "Ogolcho",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 55,
+    "csc_code": "BA25",
+    "csc_name": "Diksis",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 56,
+    "csc_code": "BA26",
+    "csc_name": "Huruta",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 57,
+    "csc_code": "BA27",
+    "csc_name": "Meki",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 58,
+    "csc_code": "BA28",
+    "csc_name": "Asella No.2",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 59,
+    "csc_code": "BA29",
+    "csc_name": "Bele",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 60,
+    "csc_code": "BA30",
+    "csc_name": "Arboye",
+    "region": "BA",
+    "region_id": 1
+  },
+  {
+    "id": 61,
+    "csc_code": "BB01",
+    "csc_name": "FINFINE DST SENDAFA CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 62,
+    "csc_code": "BB02",
+    "csc_name": "FINFINE DST SHENO CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 63,
+    "csc_code": "BB03",
+    "csc_name": "FINFINE DST MUKETURI CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 64,
+    "csc_code": "BB04",
+    "csc_name": "FINFINE DST FICHE CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 65,
+    "csc_code": "BB05",
+    "csc_name": "FINFINEDST GEBREGURACHA CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 66,
+    "csc_code": "BB06",
+    "csc_name": "FINFINE DST EJERE CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 67,
+    "csc_code": "BB07",
+    "csc_name": "FINFINE DST GUNDOMESKEL CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 68,
+    "csc_code": "BB08",
+    "csc_name": "FINFINE DST LEGETAFO CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 69,
+    "csc_code": "BB09",
+    "csc_name": "FINFINE DST GOHATSION CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 70,
+    "csc_code": "BB10",
+    "csc_name": "FINFINE DST BURAYU CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 71,
+    "csc_code": "BB11",
+    "csc_name": "FINFINE DST TERE CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 72,
+    "csc_code": "BB12",
+    "csc_name": "FINFINE DST CHANCO CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 73,
+    "csc_code": "BB13",
+    "csc_name": "FINFINE DST HOLETA CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 74,
+    "csc_code": "BB14",
+    "csc_name": "FINFINE DST MUGER CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 75,
+    "csc_code": "BB15",
+    "csc_name": "FINFINE DST SULULTA CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 76,
+    "csc_code": "BB16",
+    "csc_name": "FINFINE DST TATEKE CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 77,
+    "csc_code": "BB17",
+    "csc_name": "FINFINE DST DUKEM CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 78,
+    "csc_code": "BB18",
+    "csc_name": "FINFINEDST BISHOFTUCSC NO.1",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 79,
+    "csc_code": "BB19",
+    "csc_name": "FINFINEDST BISHOFTUCSC NO.2",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 80,
+    "csc_code": "BB20",
+    "csc_name": "FINFINE DST CHEFE DONSA CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 81,
+    "csc_code": "BB21",
+    "csc_name": "FINFINE DST ADULALA CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 82,
+    "csc_code": "BB22",
+    "csc_name": "FINFINE DST GELAN CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 83,
+    "csc_code": "BB23",
+    "csc_name": "FINFINE DST SEBETA CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 84,
+    "csc_code": "BB24",
+    "csc_name": "FINFINE DST ALEMGENA CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 85,
+    "csc_code": "BB25",
+    "csc_name": "FINIFINE DST FURI CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 86,
+    "csc_code": "BB26",
+    "csc_name": "FINIFINE DST ANFO MED CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 87,
+    "csc_code": "BB27",
+    "csc_name": "FINIFINE DST LEMEN CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 88,
+    "csc_code": "BB28",
+    "csc_name": "FINFINE D.OROM.CONDO CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 89,
+    "csc_code": "BB29",
+    "csc_name": "FINFINE ZURIA DST SHINO CSC",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 90,
+    "csc_code": "BB30",
+    "csc_name": "TEJI",
+    "region": "BB",
+    "region_id": 22
+  },
+  {
+    "id": 91,
+    "csc_code": "BC01",
+    "csc_name": "SHASHEMENE NO 1",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 92,
+    "csc_code": "BC02",
+    "csc_name": "SHASHEMENE NO 2 ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 93,
+    "csc_code": "BC03",
+    "csc_name": "BORE ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 94,
+    "csc_code": "BC04",
+    "csc_name": "H/MARIAM ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 95,
+    "csc_code": "BC05",
+    "csc_name": "KOFELE ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 96,
+    "csc_code": "BC06",
+    "csc_name": "N/BORENA ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 97,
+    "csc_code": "BC07",
+    "csc_name": "SHAKISO ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 98,
+    "csc_code": "BC08",
+    "csc_name": "YABELO ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 99,
+    "csc_code": "BC09",
+    "csc_name": "A/NEGELE ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 100,
+    "csc_code": "BC10",
+    "csc_name": "K/MENGIST ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 101,
+    "csc_code": "BC11",
+    "csc_name": "MOYALE ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 102,
+    "csc_code": "BC12",
+    "csc_name": "SOLOMO ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 103,
+    "csc_code": "BC13",
+    "csc_name": "TORE ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 104,
+    "csc_code": "BC14",
+    "csc_name": "KOKOSA ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 105,
+    "csc_code": "BC15",
+    "csc_name": "B/GURACHA ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 106,
+    "csc_code": "BC16",
+    "csc_name": "GOWNGUA ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 107,
+    "csc_code": "BC17",
+    "csc_name": "KERCHA ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 108,
+    "csc_code": "BC18",
+    "csc_name": "AJE",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 109,
+    "csc_code": "BC19",
+    "csc_name": "MEGA ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 110,
+    "csc_code": "BC20",
+    "csc_name": "GOLJOTA ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 111,
+    "csc_code": "BC21",
+    "csc_name": "H/KELO ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 112,
+    "csc_code": "BC22",
+    "csc_name": "BIDIRE ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 113,
+    "csc_code": "BC23",
+    "csc_name": "DIMITU ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 114,
+    "csc_code": "BC24",
+    "csc_name": "M/SODA",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 115,
+    "csc_code": "BC25",
+    "csc_name": "ASASA ",
+    "region": "BC",
+    "region_id": 21
+  },
+  {
+    "id": 116,
+    "csc_code": "BD01",
+    "csc_name": "Chiro",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 117,
+    "csc_code": "BD02",
+    "csc_name": "Babile",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 118,
+    "csc_code": "BD03",
+    "csc_name": "Bedessa",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 119,
+    "csc_code": "BD04",
+    "csc_name": "Bisidimo",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 120,
+    "csc_code": "BD05",
+    "csc_name": "Kombolcha",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 121,
+    "csc_code": "BD06",
+    "csc_name": "Gelemso",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 122,
+    "csc_code": "BD07",
+    "csc_name": "Gursum",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 123,
+    "csc_code": "BD08",
+    "csc_name": "Hirna",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 124,
+    "csc_code": "BD09",
+    "csc_name": "Karamile",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 125,
+    "csc_code": "BD10",
+    "csc_name": "Kerssa",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 126,
+    "csc_code": "BD11",
+    "csc_name": "Deder",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 127,
+    "csc_code": "BD12",
+    "csc_name": "Haromaya",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 128,
+    "csc_code": "BD13",
+    "csc_name": "Girawa",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 129,
+    "csc_code": "BD14",
+    "csc_name": "Mechara",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 130,
+    "csc_code": "BD15",
+    "csc_name": "Mieso",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 131,
+    "csc_code": "BD16",
+    "csc_name": "Chinaksen",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 132,
+    "csc_code": "BD17",
+    "csc_name": "Fedis",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 133,
+    "csc_code": "BD18",
+    "csc_name": "Awoday",
+    "region": "BD",
+    "region_id": 8
+  },
+  {
+    "id": 134,
+    "csc_code": "BE01",
+    "csc_name": "JIMMA DST JIMMA CSC NO.1",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 135,
+    "csc_code": "BE02",
+    "csc_name": "JIMMA DST JIMMA CSC NO.2",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 136,
+    "csc_code": "BE03",
+    "csc_name": "JIMMA DST ASENDIBO CSC",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 137,
+    "csc_code": "BE05",
+    "csc_name": "JIMMA DST LEMU CSC",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 138,
+    "csc_code": "BE06",
+    "csc_name": "JIMMA DST TOBA CSC",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 139,
+    "csc_code": "BE08",
+    "csc_name": "JIMMA DST SOKORO CSC",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 140,
+    "csc_code": "BE09",
+    "csc_name": "JIMMA DST AGARO CSC",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 141,
+    "csc_code": "BE10",
+    "csc_name": "JIMMA DST DUMTU CSC",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 142,
+    "csc_code": "BE11",
+    "csc_name": "JIMMA DST GATIRA CSC",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 143,
+    "csc_code": "BE12",
+    "csc_name": "JIMMA DST GERA CSC",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 144,
+    "csc_code": "BE14",
+    "csc_name": "JIMMA DST DEDO CSC",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 145,
+    "csc_code": "BE15",
+    "csc_name": "JIMMA DST SHEBI CSC",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 146,
+    "csc_code": "BE16",
+    "csc_name": "AGRO CSC 2",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 147,
+    "csc_code": "BE17",
+    "csc_name": "DEMBI CSC",
+    "region": "BE",
+    "region_id": 17
+  },
+  {
+    "id": 148,
+    "csc_code": "BF01",
+    "csc_name": "NEKEMT 1",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 149,
+    "csc_code": "BF02",
+    "csc_name": "FINCHA",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 150,
+    "csc_code": "BF03",
+    "csc_name": "SHAMBU",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 151,
+    "csc_code": "BF04",
+    "csc_name": "ALIBO",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 152,
+    "csc_code": "BF05",
+    "csc_name": "MECHARA",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 153,
+    "csc_code": "BF06",
+    "csc_name": "MUGI",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 154,
+    "csc_code": "BF07",
+    "csc_name": "ROBGEBEYA",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 155,
+    "csc_code": "BF08",
+    "csc_name": "DAMBIDOLO",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 156,
+    "csc_code": "BF09",
+    "csc_name": "BEGI",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 157,
+    "csc_code": "BF10",
+    "csc_name": "GULISO",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 158,
+    "csc_code": "BF11",
+    "csc_name": "MENDI",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 159,
+    "csc_code": "BF12",
+    "csc_name": "NEDJO",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 160,
+    "csc_code": "BF13",
+    "csc_name": "GHIMBI",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 161,
+    "csc_code": "BF14",
+    "csc_name": "HAROSEBU",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 162,
+    "csc_code": "BF15",
+    "csc_name": "NOLEKABA",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 163,
+    "csc_code": "BF16",
+    "csc_name": "GIDA AYANA",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 164,
+    "csc_code": "BF17",
+    "csc_name": "SIRE",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 165,
+    "csc_code": "BF18",
+    "csc_name": "ANGER GUTIN",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 166,
+    "csc_code": "BF19",
+    "csc_name": "KIREMU",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 167,
+    "csc_code": "BF20",
+    "csc_name": "ARJO AWURAJA",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 168,
+    "csc_code": "BF21",
+    "csc_name": "DEDU",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 169,
+    "csc_code": "BF22",
+    "csc_name": "SASIGA",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 170,
+    "csc_code": "BF23",
+    "csc_name": "UKE",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 171,
+    "csc_code": "BF24",
+    "csc_name": "ARJO GUDETU",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 172,
+    "csc_code": "BF25",
+    "csc_name": "NUNU KUMBA",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 173,
+    "csc_code": "BF26",
+    "csc_name": "OBERA",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 174,
+    "csc_code": "BF27",
+    "csc_name": "NEKEMT 2",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 175,
+    "csc_code": "BF28",
+    "csc_name": "GENJI",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 176,
+    "csc_code": "BF29",
+    "csc_name": "HARO LIMU ",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 177,
+    "csc_code": "BF30",
+    "csc_name": "KAKE ",
+    "region": "BF",
+    "region_id": 20
+  },
+  {
+    "id": 178,
+    "csc_code": "BG01",
+    "csc_name": "AMBO CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 179,
+    "csc_code": "BG02",
+    "csc_name": " TULU BOLO CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 180,
+    "csc_code": "BG03",
+    "csc_name": " WOLISO CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 181,
+    "csc_code": "BG04",
+    "csc_name": " BANTU CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 182,
+    "csc_code": "BG05",
+    "csc_name": "AMEYA CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 183,
+    "csc_code": "BG06",
+    "csc_name": " ADDIS ALEM CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 184,
+    "csc_code": "BG07",
+    "csc_name": "GINCHI CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 185,
+    "csc_code": "BG08",
+    "csc_name": " KACHESE CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 186,
+    "csc_code": "BG09",
+    "csc_name": " GUDER CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 187,
+    "csc_code": "BG10",
+    "csc_name": " HORMATE CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 188,
+    "csc_code": "BG11",
+    "csc_name": " GEDO CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 189,
+    "csc_code": "BG12",
+    "csc_name": "AJIJO CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 190,
+    "csc_code": "BG13",
+    "csc_name": " BAKO CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 191,
+    "csc_code": "BG14",
+    "csc_name": "WAYO CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 192,
+    "csc_code": "BG15",
+    "csc_name": " JELDU CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 193,
+    "csc_code": "BG16",
+    "csc_name": " SEYO CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 194,
+    "csc_code": "BG17",
+    "csc_name": " SADANSODE CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 195,
+    "csc_code": "BG18",
+    "csc_name": "ABUNA CSC ",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 196,
+    "csc_code": "BG19",
+    "csc_name": "SHENEN  CSC",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 197,
+    "csc_code": "BG20",
+    "csc_name": "BILO  CSC ",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 198,
+    "csc_code": "BG21",
+    "csc_name": "dire enchini",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 199,
+    "csc_code": "BG22",
+    "csc_name": "busa",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 200,
+    "csc_code": "BG23",
+    "csc_name": "silkamba",
+    "region": "BG",
+    "region_id": 3
+  },
+  {
+    "id": 201,
+    "csc_code": "BH01",
+    "csc_name": "Robe csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 202,
+    "csc_code": "BH02",
+    "csc_name": "Goba csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 203,
+    "csc_code": "BH03",
+    "csc_name": "Dodola csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 204,
+    "csc_code": "BH04",
+    "csc_name": "Giner csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 205,
+    "csc_code": "BH05",
+    "csc_name": "Adaba csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 206,
+    "csc_code": "BH06",
+    "csc_name": "Agarfa csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 207,
+    "csc_code": "BH07",
+    "csc_name": "Gasera csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 208,
+    "csc_code": "BH08",
+    "csc_name": "Goro csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 209,
+    "csc_code": "BH10",
+    "csc_name": "Delomena csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 210,
+    "csc_code": "BH11",
+    "csc_name": "Harodumel csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 211,
+    "csc_code": "BH12",
+    "csc_name": "Raytu csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 212,
+    "csc_code": "BH13",
+    "csc_name": "Dinsho csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 213,
+    "csc_code": "BH14",
+    "csc_name": "Woreqa csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 214,
+    "csc_code": "BH15",
+    "csc_name": "Jara csc",
+    "region": "BH",
+    "region_id": 6
+  },
+  {
+    "id": 215,
+    "csc_code": "BI01",
+    "csc_name": "METTU",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 216,
+    "csc_code": "BI02",
+    "csc_name": "GORE",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 217,
+    "csc_code": "BI03",
+    "csc_name": "SUPHE",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 218,
+    "csc_code": "BI04",
+    "csc_name": "YAYO",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 219,
+    "csc_code": "BI05",
+    "csc_name": "BURE",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 220,
+    "csc_code": "BI06",
+    "csc_name": "DORENI",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 221,
+    "csc_code": "BI07",
+    "csc_name": "METU DST DIREMU CSC",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 222,
+    "csc_code": "BI08",
+    "csc_name": "METU DST DEGA CSC",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 223,
+    "csc_code": "BI10",
+    "csc_name": "CHORA",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 224,
+    "csc_code": "BI11",
+    "csc_name": "BEDELE ",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 225,
+    "csc_code": "BI12",
+    "csc_name": "CHEWAKA",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 226,
+    "csc_code": "BI13",
+    "csc_name": "HURMU CSC",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 227,
+    "csc_code": "BI14",
+    "csc_name": "NOPHA",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 228,
+    "csc_code": "BI15",
+    "csc_name": "BECHO",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 229,
+    "csc_code": "BI16",
+    "csc_name": "SELE NONO CSC",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 230,
+    "csc_code": "BI17",
+    "csc_name": "LALO",
+    "region": "BI",
+    "region_id": 19
+  },
+  {
+    "id": 231,
+    "csc_code": "CA01",
+    "csc_name": "BAHIRDARDST BAHIR DAR 1 CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 232,
+    "csc_code": "CA02",
+    "csc_name": "BAHIRDARDST BAHIR DAR 2 CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 233,
+    "csc_code": "CA03",
+    "csc_name": "BAHERDAR NO.3(ABAYEMADO)CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 234,
+    "csc_code": "CA04",
+    "csc_name": "BAHIRDAR DST ADET CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 235,
+    "csc_code": "CA06",
+    "csc_name": "BAHIRDAR DST CHAGNI CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 236,
+    "csc_code": "CA07",
+    "csc_name": "BAHIRDAR DST DURBETIE CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 237,
+    "csc_code": "CA09",
+    "csc_name": "BAHIRDAR DST KOSSOBER CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 238,
+    "csc_code": "CA10",
+    "csc_name": "BAHIRDAR DST MERAWI CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 239,
+    "csc_code": "CA11",
+    "csc_name": "BAHIRDAR DST WORETA CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 240,
+    "csc_code": "CA12",
+    "csc_name": "BAHIRDAR DST DANGLIA CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 241,
+    "csc_code": "CA13",
+    "csc_name": "BAHIRDAR DST DEBERE TABOR",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 242,
+    "csc_code": "CA14",
+    "csc_name": "BAHIRDAR DST EBNAT CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 243,
+    "csc_code": "CA15",
+    "csc_name": "BAHIRDAR DST JAWI CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 244,
+    "csc_code": "CA17",
+    "csc_name": "BAHIRDAR DST ESTIE CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 245,
+    "csc_code": "CA19",
+    "csc_name": "BAHIRDARDST ADDIS ZEMEN CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 246,
+    "csc_code": "CA20",
+    "csc_name": "BAHIRDAR DST WEGEDA CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 247,
+    "csc_code": "CA22",
+    "csc_name": "BAHIRDAR DST GEMEJABET CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 248,
+    "csc_code": "CA23",
+    "csc_name": "BAHIRDAR DST GISHABAY CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 249,
+    "csc_code": "CA24",
+    "csc_name": "BAHIRDAR DST ADDISKEDAM CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 250,
+    "csc_code": "CA25",
+    "csc_name": "BAHIRDAR DST LIBEN CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 251,
+    "csc_code": "CA26",
+    "csc_name": "Bahirdar DST Kilaj",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 252,
+    "csc_code": "CA27",
+    "csc_name": "BAHIRDAR DST AMBESAME CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 253,
+    "csc_code": "CA28",
+    "csc_name": "BAHIRDAR DST NEFAS MEWUCHA CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 254,
+    "csc_code": "CA29",
+    "csc_name": " BAHIRDAR DISTRICT DEBRETABOR 2",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 255,
+    "csc_code": "CA30",
+    "csc_name": " BAHIRDAR DISTRICT KIMIRDINGAY",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 256,
+    "csc_code": "CA31",
+    "csc_name": " BAHIRDAR DISTRICT GONJI",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 257,
+    "csc_code": "CA32",
+    "csc_name": "BAHIRDAR D-TACH GAYINT (ARB GEBEYA) CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 258,
+    "csc_code": "CA33",
+    "csc_name": "BAHIRDAR D-ANDABET CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 259,
+    "csc_code": "CA34",
+    "csc_name": "BAHIRDAR D-TILILI CSC",
+    "region": "CA",
+    "region_id": 5
+  },
+  {
+    "id": 260,
+    "csc_code": "CB01",
+    "csc_name": " DESSIE 1 CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 261,
+    "csc_code": "CB02",
+    "csc_name": " DESSIE 2 CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 262,
+    "csc_code": "CB03",
+    "csc_name": " BATI CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 263,
+    "csc_code": "CB04",
+    "csc_name": " AKESTA CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 264,
+    "csc_code": "CB05",
+    "csc_name": " HAIK CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 265,
+    "csc_code": "CB06",
+    "csc_name": " MEKANESELAM ",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 266,
+    "csc_code": "CB07",
+    "csc_name": " TENTA CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 267,
+    "csc_code": "CB08",
+    "csc_name": " WERILU CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 268,
+    "csc_code": "CB09",
+    "csc_name": " KEMISSE CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 269,
+    "csc_code": "CB10",
+    "csc_name": " KOMBOLCHANO.1 ",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 270,
+    "csc_code": "CB11",
+    "csc_name": " KOMBOLCHANO.2 ",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 271,
+    "csc_code": "CB12",
+    "csc_name": " SAINT AJIBAR CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 272,
+    "csc_code": "CB13",
+    "csc_name": " KUTABER CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 273,
+    "csc_code": "CB14",
+    "csc_name": " WEGDI CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 274,
+    "csc_code": "CB15",
+    "csc_name": " WUCHALE CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 275,
+    "csc_code": "CB16",
+    "csc_name": " KELALA CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 276,
+    "csc_code": "CB17",
+    "csc_name": " WEGL TENA CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 277,
+    "csc_code": "CB18",
+    "csc_name": " ALBKO CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 278,
+    "csc_code": "CB19",
+    "csc_name": " BISTIMA CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 279,
+    "csc_code": "CB20",
+    "csc_name": " CHEFA ROBIT CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 280,
+    "csc_code": "CB21",
+    "csc_name": " HARBU CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 281,
+    "csc_code": "CB22",
+    "csc_name": " JAMMA CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 282,
+    "csc_code": "CB23",
+    "csc_name": " MASHA CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 283,
+    "csc_code": "CB24",
+    "csc_name": " DENSA CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 284,
+    "csc_code": "CB25",
+    "csc_name": " MEKOY CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 285,
+    "csc_code": "CB26",
+    "csc_name": " LEGEHIDA CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 286,
+    "csc_code": "CB27",
+    "csc_name": " DESSIE 3 CSC",
+    "region": "CB",
+    "region_id": 11
+  },
+  {
+    "id": 287,
+    "csc_code": "CC01",
+    "csc_name": "GONDER DST GONDER 1 CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 288,
+    "csc_code": "CC02",
+    "csc_name": "GONDER DST GONDER 2 CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 289,
+    "csc_code": "CC03",
+    "csc_name": "GONDER DST GONDER NO.3 CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 290,
+    "csc_code": "CC04",
+    "csc_name": "GONDER DST CHILGA CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 291,
+    "csc_code": "CC05",
+    "csc_name": "GONDER DST DABAT CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 292,
+    "csc_code": "CC06",
+    "csc_name": "GONDER DST DEBARK CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 293,
+    "csc_code": "CC07",
+    "csc_name": "GONDER DST KOLLADIBA CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 294,
+    "csc_code": "CC08",
+    "csc_name": "GONDER DST METEMA CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 295,
+    "csc_code": "CC09",
+    "csc_name": "GONDER DST SANJA CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 296,
+    "csc_code": "CC10",
+    "csc_name": "GONDER DST MAKSEGNET CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 297,
+    "csc_code": "CC11",
+    "csc_name": "GONDER DST DELGI CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 298,
+    "csc_code": "CC12",
+    "csc_name": "GONDER DST ADARIKAYE CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 299,
+    "csc_code": "CC13",
+    "csc_name": "GONDER DST AREBAYA CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 300,
+    "csc_code": "CC14",
+    "csc_name": "GONDER DST GELAJO CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 301,
+    "csc_code": "CC15",
+    "csc_name": "GONDER DST GUHASSA CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 302,
+    "csc_code": "CC16",
+    "csc_name": "GONDERDST MEKANE BIRHAN CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 303,
+    "csc_code": "CC17",
+    "csc_name": "GONDER DST SHAWERA CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 304,
+    "csc_code": "CC18",
+    "csc_name": "GONDER DST TEKELDINGAYE CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 305,
+    "csc_code": "CC19",
+    "csc_name": "GONDER DST ABIDRAFI CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 306,
+    "csc_code": "CC21",
+    "csc_name": "AMBA GIORGIES CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 307,
+    "csc_code": "CC22",
+    "csc_name": "METEMA YOHANS CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 308,
+    "csc_code": "CC23",
+    "csc_name": "GONDER D-CHUAHIT CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 309,
+    "csc_code": "CC24",
+    "csc_name": "Kirakir CSC",
+    "region": "CC",
+    "region_id": 14
+  },
+  {
+    "id": 310,
+    "csc_code": "CD01",
+    "csc_name": "DEBERE BIRHAN NO 1 CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 311,
+    "csc_code": "CD02",
+    "csc_name": "DEBERE BIRHAN NO 2 CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 312,
+    "csc_code": "CD03",
+    "csc_name": "DEBREBIRHAN DST ENEWARI CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 313,
+    "csc_code": "CD04",
+    "csc_name": "DEBREBIRHAN DST ANKOBER CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 314,
+    "csc_code": "CD05",
+    "csc_name": "DEBREBRHNDST ALEMKETEMA CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 315,
+    "csc_code": "CD06",
+    "csc_name": "DEBREBRHNDST LEMI CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 316,
+    "csc_code": "CD07",
+    "csc_name": "DEBREBRHNDST HAGEREMARIMCSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 317,
+    "csc_code": "CD08",
+    "csc_name": "DEBREBIRHAN DST ARERTI CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 318,
+    "csc_code": "CD09",
+    "csc_name": "DEBREBIRHAN DST ATAYE CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 319,
+    "csc_code": "CD10",
+    "csc_name": "DEBREBIRHAN DST DEBRESINA CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 320,
+    "csc_code": "CD11",
+    "csc_name": "DEBREBIRHANDST MEHALMEDACSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 321,
+    "csc_code": "CD12",
+    "csc_name": "DEBREBIRHAN DST MOLALLE CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 322,
+    "csc_code": "CD13",
+    "csc_name": "DEBREBIRHANDST SHOAROBITCSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 323,
+    "csc_code": "CD14",
+    "csc_name": "DEBREBIRHANDST GISHERABLCSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 324,
+    "csc_code": "CD15",
+    "csc_name": "DEBREBRHNDST METIHIBILA CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 325,
+    "csc_code": "CD16",
+    "csc_name": "DEBREBRHNDST SELADNGAY CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 326,
+    "csc_code": "CD17",
+    "csc_name": "DEBREBIRHAN DST GINAGER CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 327,
+    "csc_code": "CD18",
+    "csc_name": "DEBREBIRHAN DST DENBA CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 328,
+    "csc_code": "CD19",
+    "csc_name": "DEBREBIRHAN DST CHACHA CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 329,
+    "csc_code": "CD20",
+    "csc_name": "Mida CSC",
+    "region": "CD",
+    "region_id": 9
+  },
+  {
+    "id": 330,
+    "csc_code": "CE01",
+    "csc_name": "Debre Markos 01",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 331,
+    "csc_code": "CE02",
+    "csc_name": "Debre Markos 02",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 332,
+    "csc_code": "CE03",
+    "csc_name": "Amanuel",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 333,
+    "csc_code": "CE04",
+    "csc_name": "Bichena",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 334,
+    "csc_code": "CE05",
+    "csc_name": "Dejen",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 335,
+    "csc_code": "CE06",
+    "csc_name": "Gindewein",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 336,
+    "csc_code": "CE07",
+    "csc_name": "Kuy",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 337,
+    "csc_code": "CE08",
+    "csc_name": "Motta",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 338,
+    "csc_code": "CE09",
+    "csc_name": "Digo Tsion",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 339,
+    "csc_code": "CE10",
+    "csc_name": "Lumamie",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 340,
+    "csc_code": "CE11",
+    "csc_name": "Merto Lemariam",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 341,
+    "csc_code": "CE12",
+    "csc_name": "Yejubie",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 342,
+    "csc_code": "CE13",
+    "csc_name": "Burie",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 343,
+    "csc_code": "CE14",
+    "csc_name": "Finote Selam",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 344,
+    "csc_code": "CE15",
+    "csc_name": "Shindi",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 345,
+    "csc_code": "CE16",
+    "csc_name": "Denbecha",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 346,
+    "csc_code": "CE17",
+    "csc_name": "Feres Bet",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 347,
+    "csc_code": "CE18",
+    "csc_name": "Debre Elias",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 348,
+    "csc_code": "CE19",
+    "csc_name": "Gebeze Mariam",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 349,
+    "csc_code": "CE20",
+    "csc_name": "Debre Work",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 350,
+    "csc_code": "CE21",
+    "csc_name": "Yediwuha ",
+    "region": "CE",
+    "region_id": 10
+  },
+  {
+    "id": 351,
+    "csc_code": "CF01",
+    "csc_name": "WOLEDIYA DST WOLEDIYA CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 352,
+    "csc_code": "CF02",
+    "csc_name": "WOLEDIYA DST AMEDEWORK CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 353,
+    "csc_code": "CF03",
+    "csc_name": "WOLEDIYA DST GASHENA CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 354,
+    "csc_code": "CF04",
+    "csc_name": "WOLEDIYA DST LALIBELA CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 355,
+    "csc_code": "CF05",
+    "csc_name": "WOLEDIYA DST KOBO CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 356,
+    "csc_code": "CF06",
+    "csc_name": "WOLEDIYA DST MERSA CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 357,
+    "csc_code": "CF07",
+    "csc_name": "WOLEDIYA DST SEKOTA CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 358,
+    "csc_code": "CF08",
+    "csc_name": "WOLEDIYA DST NURAK CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 359,
+    "csc_code": "CF09",
+    "csc_name": "WOLEDIYADST AYENABUGUNA CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 360,
+    "csc_code": "CF10",
+    "csc_name": "WOLEDIYA DST DAWENT CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 361,
+    "csc_code": "CF11",
+    "csc_name": "WOLEDIYA DST ZEQUALA CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 362,
+    "csc_code": "CF12",
+    "csc_name": "WOLEDIYA DST ROBIT CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 363,
+    "csc_code": "CF13",
+    "csc_name": "WOLDYA DISTRICT FILAQIT",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 364,
+    "csc_code": "CF14",
+    "csc_name": "WOLDIYA D-MUJA CSC",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 365,
+    "csc_code": "CF15",
+    "csc_name": "WOLDIYA D-WOLDIYA CSC 2",
+    "region": "CF",
+    "region_id": 27
+  },
+  {
+    "id": 366,
+    "csc_code": "DB01",
+    "csc_name": "ARBAMINCH NO. 1 CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 367,
+    "csc_code": "DB02",
+    "csc_name": "ARBAMINCH NO. 2 CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 368,
+    "csc_code": "DB03",
+    "csc_name": "SAWELA CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 369,
+    "csc_code": "DB04",
+    "csc_name": " CHENCHA CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 370,
+    "csc_code": "DB05",
+    "csc_name": "GRESEBONKECSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 371,
+    "csc_code": "DB06",
+    "csc_name": "BASKITO CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 372,
+    "csc_code": "DB07",
+    "csc_name": "SEGEN CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 373,
+    "csc_code": "DB08",
+    "csc_name": " JINKA CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 374,
+    "csc_code": "DB09",
+    "csc_name": " DIMEKA CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 375,
+    "csc_code": "DB10",
+    "csc_name": "CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 376,
+    "csc_code": "DB11",
+    "csc_name": "MIERABABAYCSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 377,
+    "csc_code": "DB12",
+    "csc_name": "BETO CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 378,
+    "csc_code": "DB13",
+    "csc_name": "KONSSO",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 379,
+    "csc_code": "DB14",
+    "csc_name": "SELAMBER",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 380,
+    "csc_code": "DB15",
+    "csc_name": "AMAROKELE CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 381,
+    "csc_code": "DB16",
+    "csc_name": "BURJI CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 382,
+    "csc_code": "DB17",
+    "csc_name": "KENBA CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 383,
+    "csc_code": "DB18",
+    "csc_name": "DITA CSC",
+    "region": "DB",
+    "region_id": 4
+  },
+  {
+    "id": 384,
+    "csc_code": "DC01",
+    "csc_name": "HOSSANA DST HOSSHENA No 1",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 385,
+    "csc_code": "DC02",
+    "csc_name": "HOSSANA DST WELKITE CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 386,
+    "csc_code": "DC03",
+    "csc_name": "HOSSANA DST BUTAJIRA CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 387,
+    "csc_code": "DC04",
+    "csc_name": "HOSSANA DST WERABE CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 388,
+    "csc_code": "DC05",
+    "csc_name": "HOSSANA DST BUEE CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 389,
+    "csc_code": "DC06",
+    "csc_name": "HOSSANA DST ENDIBER CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 390,
+    "csc_code": "DC07",
+    "csc_name": "HOSSANA DST GONCHIRE CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 391,
+    "csc_code": "DC08",
+    "csc_name": "HOSSANA DST AGENA CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 392,
+    "csc_code": "DC09",
+    "csc_name": "HOSSANA DST DARGAYE CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 393,
+    "csc_code": "DC10",
+    "csc_name": "HOSSANA DST DALOCHA CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 394,
+    "csc_code": "DC11",
+    "csc_name": "HOSSANA DST TORA CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 395,
+    "csc_code": "DC12",
+    "csc_name": "HOSSANA DST DURAME CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 396,
+    "csc_code": "DC13",
+    "csc_name": "HOSSANA DST GIMBICHU CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 397,
+    "csc_code": "DC14",
+    "csc_name": "HOSSANA DST MUDULA CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 398,
+    "csc_code": "DC15",
+    "csc_name": "HOSSANA DST DOYOGENA CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 399,
+    "csc_code": "DC16",
+    "csc_name": "HOSSANA DST ANGACHA CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 400,
+    "csc_code": "DC17",
+    "csc_name": "HOSSANA DST LERA CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 401,
+    "csc_code": "DC18",
+    "csc_name": "HOSSANA DST MORSITO CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 402,
+    "csc_code": "DC19",
+    "csc_name": "HOSSANA DST SAJA CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 403,
+    "csc_code": "DC20",
+    "csc_name": "HOSSANA DIST ALEMGEBYA CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 404,
+    "csc_code": "DC21",
+    "csc_name": "HOSSANA DIST SHINSICHO CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 405,
+    "csc_code": "DC22",
+    "csc_name": "HOSSANA No  2",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 406,
+    "csc_code": "DC23",
+    "csc_name": "HAWARIAT",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 407,
+    "csc_code": "DC24",
+    "csc_name": "GOMBORA",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 408,
+    "csc_code": "DC25",
+    "csc_name": "AREKIT",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 409,
+    "csc_code": "DC26",
+    "csc_name": "FONKO",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 410,
+    "csc_code": "DC27",
+    "csc_name": "HOSAENA D-DINQULA CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 411,
+    "csc_code": "DC28",
+    "csc_name": "HOSAENA D-KOSHE CSC",
+    "region": "DC",
+    "region_id": 16
+  },
+  {
+    "id": 412,
+    "csc_code": "DE01",
+    "csc_name": "Welayita Sodo No.1",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 413,
+    "csc_code": "DE02",
+    "csc_name": "Welayita Sodo No.2",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 414,
+    "csc_code": "DE03",
+    "csc_name": "Areka",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 415,
+    "csc_code": "DE04",
+    "csc_name": "Bedesa",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 416,
+    "csc_code": "DE05",
+    "csc_name": "Bele Gunino",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 417,
+    "csc_code": "DE06",
+    "csc_name": "Boditi",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 418,
+    "csc_code": "DE08",
+    "csc_name": "Gesupa",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 419,
+    "csc_code": "DE09",
+    "csc_name": "Hadero",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 420,
+    "csc_code": "DE10",
+    "csc_name": "Humbo",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 421,
+    "csc_code": "DE11",
+    "csc_name": "Shone",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 422,
+    "csc_code": "DE14",
+    "csc_name": "Alaba",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 423,
+    "csc_code": "DE15",
+    "csc_name": "Bule",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 424,
+    "csc_code": "DE16",
+    "csc_name": "Wenago",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 425,
+    "csc_code": "DE17",
+    "csc_name": "Yirgachefe",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 426,
+    "csc_code": "DE18",
+    "csc_name": "Dilla",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 427,
+    "csc_code": "DE19",
+    "csc_name": "Chelelektu",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 428,
+    "csc_code": "DE20",
+    "csc_name": "Gedeb",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 429,
+    "csc_code": "DE21",
+    "csc_name": "Boreda",
+    "region": "DE",
+    "region_id": 28
+  },
+  {
+    "id": 430,
+    "csc_code": "EA01",
+    "csc_name": "Mekelle S.C.1",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 431,
+    "csc_code": "EA02",
+    "csc_name": "Mekelle S.C.2",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 432,
+    "csc_code": "EA03",
+    "csc_name": "Mekelle S.C.3",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 433,
+    "csc_code": "EA04",
+    "csc_name": "Mekelle S.C.4 (Industry Park)",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 434,
+    "csc_code": "EA05",
+    "csc_name": "Adigudom",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 435,
+    "csc_code": "EA06",
+    "csc_name": "Adishihu",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 436,
+    "csc_code": "EA07",
+    "csc_name": "Atsibi",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 437,
+    "csc_code": "EA08",
+    "csc_name": "Fireweini",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 438,
+    "csc_code": "EA09",
+    "csc_name": "Hawzen",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 439,
+    "csc_code": "EA10",
+    "csc_name": "Korem",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 440,
+    "csc_code": "EA11",
+    "csc_name": "Mekoni",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 441,
+    "csc_code": "EA12",
+    "csc_name": "Yechila",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 442,
+    "csc_code": "EA13",
+    "csc_name": "Zalanbesa",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 443,
+    "csc_code": "EA14",
+    "csc_name": "Abi-Adi",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 444,
+    "csc_code": "EA15",
+    "csc_name": "Alamata",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 445,
+    "csc_code": "EA16",
+    "csc_name": "Maichew",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 446,
+    "csc_code": "EA17",
+    "csc_name": "Kuiha",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 447,
+    "csc_code": "EA18",
+    "csc_name": "Wukro",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 448,
+    "csc_code": "EA19",
+    "csc_name": "Adigrat",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 449,
+    "csc_code": "EA20",
+    "csc_name": "Edaga Hamus",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 450,
+    "csc_code": "EA21",
+    "csc_name": "Samre",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 451,
+    "csc_code": "EA22",
+    "csc_name": "Hagereselam",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 452,
+    "csc_code": "EA23",
+    "csc_name": "Dohan",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 453,
+    "csc_code": "EA24",
+    "csc_name": "Bizet",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 454,
+    "csc_code": "EA25",
+    "csc_name": "Waja",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 455,
+    "csc_code": "EA26",
+    "csc_name": "Agulae",
+    "region": "EA",
+    "region_id": 18
+  },
+  {
+    "id": 456,
+    "csc_code": "EB01",
+    "csc_name": "SHIRE",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 457,
+    "csc_code": "EB02",
+    "csc_name": "ENDABAGUNA",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 458,
+    "csc_code": "EB03",
+    "csc_name": "ENTICHO",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 459,
+    "csc_code": "EB04",
+    "csc_name": "May-tsebri",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 460,
+    "csc_code": "EB05",
+    "csc_name": "RAMA",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 461,
+    "csc_code": "EB06",
+    "csc_name": "SELEKLEKA",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 462,
+    "csc_code": "EB07",
+    "csc_name": "SHERARO",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 463,
+    "csc_code": "EB08",
+    "csc_name": "WUKROMARAY",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 464,
+    "csc_code": "EB09",
+    "csc_name": "Humera",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 465,
+    "csc_code": "EB10",
+    "csc_name": "ADWA",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 466,
+    "csc_code": "EB11",
+    "csc_name": "AXUM",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 467,
+    "csc_code": "EB12",
+    "csc_name": "E.ARBI",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 468,
+    "csc_code": "EB13",
+    "csc_name": "Dansha",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 469,
+    "csc_code": "EB14",
+    "csc_name": "ADIDAERO",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 470,
+    "csc_code": "EB15",
+    "csc_name": "SEMEMA",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 471,
+    "csc_code": "EB16",
+    "csc_name": "MAYHANSE",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 472,
+    "csc_code": "EB17",
+    "csc_name": "NEBELET",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 473,
+    "csc_code": "EB18",
+    "csc_name": "Baeker ",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 474,
+    "csc_code": "EB19",
+    "csc_name": "Adi-remets",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 475,
+    "csc_code": "EB20",
+    "csc_name": "May-gaba ",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 476,
+    "csc_code": "EB21",
+    "csc_name": "ADIHAGERAY",
+    "region": "EB",
+    "region_id": 23
+  },
+  {
+    "id": 477,
+    "csc_code": "FA01",
+    "csc_name": "ሠመራ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 478,
+    "csc_code": "FA02",
+    "csc_name": "መልካወረር",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 479,
+    "csc_code": "FA03",
+    "csc_name": "አዋሽ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 480,
+    "csc_code": "FA04",
+    "csc_name": "ተላላክ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 481,
+    "csc_code": "FA05",
+    "csc_name": "ገዋኔ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 482,
+    "csc_code": "FA06",
+    "csc_name": "ሱኑልታ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 483,
+    "csc_code": "FA07",
+    "csc_name": "ዲችኦቶ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 484,
+    "csc_code": "FA08",
+    "csc_name": "ሎግያ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 485,
+    "csc_code": "FA09",
+    "csc_name": "አሣይታ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 486,
+    "csc_code": "FA10",
+    "csc_name": "ዱብቲ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 487,
+    "csc_code": "FA11",
+    "csc_name": "ከለዋን",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 488,
+    "csc_code": "FA12",
+    "csc_name": "ሚሌ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 489,
+    "csc_code": "FA13",
+    "csc_name": "አፍዴራ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 490,
+    "csc_code": "FA14",
+    "csc_name": "በርሃሌ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 491,
+    "csc_code": "FA15",
+    "csc_name": "ጭፍራ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 492,
+    "csc_code": "FA16",
+    "csc_name": "አብአላ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 493,
+    "csc_code": "FA19",
+    "csc_name": "ኩነባ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 494,
+    "csc_code": "FA20",
+    "csc_name": "ኤሊዉሃ",
+    "region": "FA",
+    "region_id": 2
+  },
+  {
+    "id": 495,
+    "csc_code": "GA01",
+    "csc_name": "GAMBELA REGION GAMBELLA CSC",
+    "region": "GA",
+    "region_id": 13
+  },
+  {
+    "id": 496,
+    "csc_code": "GA02",
+    "csc_name": "GAMBELA REGION ETANG CSC",
+    "region": "GA",
+    "region_id": 13
+  },
+  {
+    "id": 497,
+    "csc_code": "GA03",
+    "csc_name": "GAMBELA REGION ABOBO CSC",
+    "region": "GA",
+    "region_id": 13
+  },
+  {
+    "id": 498,
+    "csc_code": "GA04",
+    "csc_name": "GAMBELA REGION FUGNIDO CSC",
+    "region": "GA",
+    "region_id": 13
+  },
+  {
+    "id": 499,
+    "csc_code": "GA05",
+    "csc_name": "GAMBELARGN DIMMA CSC",
+    "region": "GA",
+    "region_id": 13
+  },
+  {
+    "id": 500,
+    "csc_code": "GA06",
+    "csc_name": "BARO MADO CSC",
+    "region": "GA",
+    "region_id": 13
+  },
+  {
+    "id": 501,
+    "csc_code": "GA07",
+    "csc_name": "LARE CSC",
+    "region": "GA",
+    "region_id": 13
+  },
+  {
+    "id": 502,
+    "csc_code": "GA08",
+    "csc_name": "KUMI CSC",
+    "region": "GA",
+    "region_id": 13
+  },
+  {
+    "id": 503,
+    "csc_code": "GA09",
+    "csc_name": "METTI CSC",
+    "region": "GA",
+    "region_id": 13
+  },
+  {
+    "id": 504,
+    "csc_code": "HA01",
+    "csc_name": "JIGJIGA DISTRICT AYESHA CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 505,
+    "csc_code": "HA02",
+    "csc_name": "JIGJIGA DISTRICT ERER CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 506,
+    "csc_code": "HA03",
+    "csc_name": "JIGJIGA DISTRICT KULEN CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 507,
+    "csc_code": "HA04",
+    "csc_name": "JIGJIGA DISTRICT AWARE CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 508,
+    "csc_code": "HA05",
+    "csc_name": "JIGJIGA DISTRICT SHEKOSH CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 509,
+    "csc_code": "HA06",
+    "csc_name": "JIGJIGA DISTRICT FIKE CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 510,
+    "csc_code": "HA07",
+    "csc_name": "JIGJIGA DISTRICT AWBERE CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 511,
+    "csc_code": "HA08",
+    "csc_name": "JIGJIGA DIST KEBRIBEYAHI CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 512,
+    "csc_code": "HA09",
+    "csc_name": "JIGJIGA DIST DEGEHABUR CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 513,
+    "csc_code": "HA10",
+    "csc_name": "JIGJIGA DIST JIJIGA CSCNO.1",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 514,
+    "csc_code": "HA11",
+    "csc_name": "JIGJIGA DIST JIJIGA CSCNO.2",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 515,
+    "csc_code": "HA12",
+    "csc_name": "FILETU SCS",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 516,
+    "csc_code": "HA13",
+    "csc_name": "JIGJIGA DISTRICT FAFEN CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 517,
+    "csc_code": "HA14",
+    "csc_name": "JIGJIGA DISTRICT TOGOWUCHALE CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 518,
+    "csc_code": "HB01",
+    "csc_name": "GODE DISTRICT GODE BR CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 519,
+    "csc_code": "HB03",
+    "csc_name": "GODE DISTRICT DOLOODO CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 520,
+    "csc_code": "HB04",
+    "csc_name": "GODE DISTRICT HARGELE CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 521,
+    "csc_code": "HB05",
+    "csc_name": "GODE DISTRICT SHILABO CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 522,
+    "csc_code": "HB06",
+    "csc_name": "GODE DISTRICT GASHAMO CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 523,
+    "csc_code": "HB08",
+    "csc_name": "GODE DISTRICT BOHE CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 524,
+    "csc_code": "HB09",
+    "csc_name": "GODE DISTRICT WARDER CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 525,
+    "csc_code": "HB10",
+    "csc_name": "GODE DISTRICT KEBRIDEHAR CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 526,
+    "csc_code": "HB11",
+    "csc_name": "GODE DISTRICT DENEN CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 527,
+    "csc_code": "HB13",
+    "csc_name": "GODE DISTRICT EMI CSC",
+    "region": "HA",
+    "region_id": 25
+  },
+  {
+    "id": 528,
+    "csc_code": "IA01",
+    "csc_name": "Dire Dawa 1",
+    "region": "IA",
+    "region_id": 12
+  },
+  {
+    "id": 529,
+    "csc_code": "IA02",
+    "csc_name": "Dire Dawa 2",
+    "region": "IA",
+    "region_id": 12
+  },
+  {
+    "id": 530,
+    "csc_code": "IA04",
+    "csc_name": "Melka CSC",
+    "region": "IA",
+    "region_id": 12
+  },
+  {
+    "id": 531,
+    "csc_code": "IA07",
+    "csc_name": "G.M CSC",
+    "region": "IA",
+    "region_id": 12
+  },
+  {
+    "id": 532,
+    "csc_code": "IA06",
+    "csc_name": "Industry CSC ",
+    "region": "IA",
+    "region_id": 12
+  },
+  {
+    "id": 533,
+    "csc_code": "JA01",
+    "csc_name": "HARERE RGN HARARE NO.1 CSC",
+    "region": "JA",
+    "region_id": 15
+  },
+  {
+    "id": 534,
+    "csc_code": "JA02",
+    "csc_name": "HARERE RGN HARARE NO.2 CSC",
+    "region": "JA",
+    "region_id": 15
+  },
+  {
+    "id": 535,
+    "csc_code": "JA03",
+    "csc_name": "HARERE RGN DERETEYARA CSC",
+    "region": "JA",
+    "region_id": 15
+  },
+  {
+    "id": 536,
+    "csc_code": "JA04",
+    "csc_name": "Errer",
+    "region": "JA",
+    "region_id": 15
+  },
+  {
+    "id": 537,
+    "csc_code": "JA05",
+    "csc_name": "SOFI CSC",
+    "region": "JA",
+    "region_id": 15
+  },
+  {
+    "id": 538,
+    "csc_code": "KA01",
+    "csc_name": "Assosa",
+    "region": "KA",
+    "region_id": 7
+  },
+  {
+    "id": 539,
+    "csc_code": "KA08",
+    "csc_name": "pawi",
+    "region": "KA",
+    "region_id": 7
+  },
+  {
+    "id": 540,
+    "csc_code": "KA05",
+    "csc_name": "Bambasi",
+    "region": "KA",
+    "region_id": 7
+  },
+  {
+    "id": 541,
+    "csc_code": "KA02",
+    "csc_name": "Menge",
+    "region": "KA",
+    "region_id": 7
+  },
+  {
+    "id": 542,
+    "csc_code": "KA06",
+    "csc_name": "Kumuruk",
+    "region": "KA",
+    "region_id": 7
+  },
+  {
+    "id": 543,
+    "csc_code": "KA07",
+    "csc_name": "Tongo",
+    "region": "KA",
+    "region_id": 7
+  },
+  {
+    "id": 544,
+    "csc_code": "KA11",
+    "csc_name": "Mankush",
+    "region": "KA",
+    "region_id": 7
+  },
+  {
+    "id": 545,
+    "csc_code": "KA03",
+    "csc_name": "kamash",
+    "region": "KA",
+    "region_id": 7
+  },
+  {
+    "id": 546,
+    "csc_code": "KA04",
+    "csc_name": "Odda",
+    "region": "KA",
+    "region_id": 7
+  },
+  {
+    "id": 547,
+    "csc_code": "KA10",
+    "csc_name": "D/Zeyit",
+    "region": "KA",
+    "region_id": 7
+  },
+  {
+    "id": 548,
+    "csc_code": "KA09",
+    "csc_name": "Soge",
+    "region": "KA",
+    "region_id": 7
+  },
+  {
+    "id": 549,
+    "csc_code": "KA12",
+    "csc_name": "Bullen",
+    "region": "KA",
+    "region_id": 7
+  },
+  {
+    "id": 550,
+    "csc_code": "LA01",
+    "csc_name": "ሀዋሳ ቁ.1",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 551,
+    "csc_code": "LA02",
+    "csc_name": "ሀዋሳ ቁ.2",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 552,
+    "csc_code": "LA03",
+    "csc_name": "ሀዋሳ ቁ.3",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 553,
+    "csc_code": "LA04",
+    "csc_name": "ሀዋሳ ቁ.4",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 554,
+    "csc_code": "LA05",
+    "csc_name": "አለታ ወንዶ",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 555,
+    "csc_code": "LA06",
+    "csc_name": "ዳዮ",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 556,
+    "csc_code": "LA07",
+    "csc_name": "ሀ/ሰላም",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 557,
+    "csc_code": "LA08",
+    "csc_name": "ይ/ዓለም",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 558,
+    "csc_code": "LA09",
+    "csc_name": "ይርባ",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 559,
+    "csc_code": "LA10",
+    "csc_name": "ለኩ",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 560,
+    "csc_code": "LA11",
+    "csc_name": "አርቤጎና",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 561,
+    "csc_code": "LA12",
+    "csc_name": "ጩኮ",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 562,
+    "csc_code": "LA13",
+    "csc_name": "ግርጃ",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 563,
+    "csc_code": "LA14",
+    "csc_name": "ቀባዶ",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 564,
+    "csc_code": "LA15",
+    "csc_name": "ወንዶ ገነት",
+    "region": "LA",
+    "region_id": 24
+  },
+  {
+    "id": 565,
+    "csc_code": "MA01",
+    "csc_name": "Bonga",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 566,
+    "csc_code": "MA02",
+    "csc_name": "Masha",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 567,
+    "csc_code": "MA03",
+    "csc_name": "Mizan",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 568,
+    "csc_code": "MA04",
+    "csc_name": "Teppi",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 569,
+    "csc_code": "MA05",
+    "csc_name": "Daka",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 570,
+    "csc_code": "MA06",
+    "csc_name": "Oda",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 571,
+    "csc_code": "MA07",
+    "csc_name": "Chena",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 572,
+    "csc_code": "MA08",
+    "csc_name": "Biftu",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 573,
+    "csc_code": "MA09",
+    "csc_name": "Debrework",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 574,
+    "csc_code": "MA10",
+    "csc_name": "Sheybench",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 575,
+    "csc_code": "MA11",
+    "csc_name": "Konta-Ameya",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 576,
+    "csc_code": "MA12",
+    "csc_name": "Chiri",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 577,
+    "csc_code": "MA13",
+    "csc_name": "Adiyo",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 578,
+    "csc_code": "MA14",
+    "csc_name": "Gimbo",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 579,
+    "csc_code": "MA15",
+    "csc_name": "Jemu",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 580,
+    "csc_code": "MA16",
+    "csc_name": "Gessa",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 581,
+    "csc_code": "MA17",
+    "csc_name": "Tercha",
+    "region": "MA",
+    "region_id": 26
+  },
+  {
+    "id": 582,
+    "csc_code": "MA18",
+    "csc_name": "Tocha",
+    "region": "MA",
+    "region_id": 26
+  }
+]

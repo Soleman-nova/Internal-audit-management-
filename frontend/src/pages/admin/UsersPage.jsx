@@ -7,6 +7,7 @@ import Modal from '../../components/ui/Modal';
 import DataTable from '../../components/ui/DataTable';
 import Badge from '../../components/ui/Badge';
 import FormField from '../../components/ui/FormField';
+import OrgUnitSelect from '../../components/ui/OrgUnitSelect';
 import { UserPlus, Shield, Activity, UserCheck, Edit2, Key, X } from 'lucide-react';
 
 function UsersPage() {
@@ -15,7 +16,6 @@ function UsersPage() {
   const [users, setUsers] = useState([]);
   const [formErrors, setFormErrors] = useState({});
   const [auditTrail, setAuditTrail] = useState([]);
-  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Add User State
@@ -38,14 +38,14 @@ function UsersPage() {
   const fetchUsersAndTrail = async () => {
     setLoading(true);
     try {
-      const [usersRes, trailRes, deptsRes] = await Promise.all([
+      // Departments are no longer fetched here — OrgUnitSelect loads the org
+      // tree itself through useOrgUnits and shares one request across forms.
+      const [usersRes, trailRes] = await Promise.all([
         usersApi.getUsers(),
-        usersApi.getAuditTrail(),
-        usersApi.getDepartments()
+        usersApi.getAuditTrail()
       ]);
       setUsers(usersRes || []);
       setAuditTrail(trailRes?.results || trailRes || []);
-      setDepartments(deptsRes || []);
     } catch (err) {
       toast.error('Failed to load user management data');
     } finally {
@@ -109,7 +109,10 @@ function UsersPage() {
     }
     setFormErrors({});
     try {
+      // department_name is display-only (read-only on the serializer) and only
+      // carried so the picker can label a retired unit — don't send it back.
       const { id, ...dataToUpdate } = editingUser;
+      delete dataToUpdate.department_name;
       if (dataToUpdate.department === '') {
         dataToUpdate.department = null;
       }
@@ -200,6 +203,9 @@ function UsersPage() {
                               employee_id: u.employee_id || '',
                               phone: u.phone || '',
                               department: u.department || '',
+                              // Carried so OrgUnitSelect can still name a
+                              // retired unit, which the org tree omits.
+                              department_name: u.department_name || '',
                               is_active: u.is_active
                             });
                             setResetPasswordVal('');
@@ -375,19 +381,11 @@ function UsersPage() {
                       <option value="auditee">Auditee Representative</option>
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Department / Unit</label>
-                    <select
-                      className="form-control"
-                      value={newUser.department}
-                      onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
-                    >
-                      <option value="">Select Department (Optional)</option>
-                      {departments.map(d => (
-                        <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
-                      ))}
-                    </select>
-                  </div>
+                  <OrgUnitSelect
+                    label="Department / Unit"
+                    value={newUser.department}
+                    onChange={(id) => setNewUser({ ...newUser, department: id })}
+                  />
                 </div>
 
                 <div className="form-group">
@@ -536,19 +534,12 @@ function UsersPage() {
                 </div>
 
                 <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label">Department / Unit</label>
-                    <select
-                      className="form-control"
-                      value={editingUser.department || ''}
-                      onChange={(e) => setEditingUser({ ...editingUser, department: e.target.value })}
-                    >
-                      <option value="">Select Department (Optional)</option>
-                      {departments.map(d => (
-                        <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
-                      ))}
-                    </select>
-                  </div>
+                  <OrgUnitSelect
+                    label="Department / Unit"
+                    value={editingUser.department || ''}
+                    onChange={(id) => setEditingUser({ ...editingUser, department: id })}
+                    valueLabel={editingUser.department_name}
+                  />
                   <div className="form-group">
                     <label className="form-label">Security Role</label>
                     <select

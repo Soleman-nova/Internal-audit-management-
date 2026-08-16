@@ -87,8 +87,10 @@ function DashboardPage() {
       })
       .catch(() => {/* keep defaults */ });
 
-    // Load directorates for the filter switcher
-    usersApi.getDepartments()
+    // Load directorates for the filter switcher. Filtered server-side: the
+    // department table is 600+ units deep, so the default first page would not
+    // reach the audit directorates.
+    usersApi.getDepartments({ unit_type: 'AUDIT' })
       .then(depts => {
         const directorateList = (Array.isArray(depts) ? depts : (depts?.results || []))
           .filter(d => ['FPA', 'TA', 'ITA', 'PP'].includes(d.directorate_type));

@@ -2976,6 +2976,26 @@ textarea.form-control {
   min-height: 80px;
 }
 
+/* Cascading department -> region -> service center picker (OrgUnitSelect).
+   The three steps stack inside one .form-group so the field occupies a single
+   cell of .form-group-row like the plain <select> it replaced. */
+.org-unit-select {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.org-unit-select .form-control:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.org-unit-select-error {
+  font-size: 12px;
+  color: var(--danger, #f43f5e);
+  margin: 0;
+}
+
 .input-group {
   position: relative;
   display: flex;

@@ -19,8 +19,15 @@ export const usersApi = {
     });
     return res.data;
   },
-  getDepartments: async () => {
-    const res = await apiClient.get('/auth/departments/');
+  getDepartments: async (params = {}) => {
+    const res = await apiClient.get('/auth/departments/', { params });
+    return res.data?.results ?? res.data;
+  },
+  // Compact, unpaginated org tree for the cascading department picker. The full
+  // department list is paginated and 600+ rows deep once service centers exist,
+  // so the picker needs this instead.
+  getDepartmentTree: async () => {
+    const res = await apiClient.get('/auth/departments/tree/');
     return res.data?.results ?? res.data;
   },
   getAuditTrail: async (params = {}) => {

@@ -29,7 +29,10 @@ function EEUOrgChart({ onSelectDirectorate }) {
 
         async function loadOrgData() {
             try {
-                const departments = await usersApi.getDepartments();
+                // Ask the API for the IAEO node directly. Scanning a page of
+                // departments used to work, but the table is now 600+ units
+                // deep and IAEO falls well past the first page.
+                const departments = await usersApi.getDepartments({ directorate_type: 'IAEO' });
                 const iaeo = departments.find(d => d.directorate_type === 'IAEO') || departments.find(d => d.code === 'IAEO');
 
                 if (!iaeo) {
