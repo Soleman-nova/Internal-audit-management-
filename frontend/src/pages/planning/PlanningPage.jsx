@@ -9,6 +9,7 @@ import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
+import OrgUnitSelect from '../../components/ui/OrgUnitSelect';
 import { Calendar, Plus, Users, Shield, Clock, Pencil, X } from 'lucide-react';
 
 function PlanningPage() {
@@ -21,7 +22,6 @@ function PlanningPage() {
   const [plans, setPlans] = useState([]);
   const [engagements, setEngagements] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [departments, setDepartments] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [dueForAudit, setDueForAudit] = useState([]);
 
@@ -37,6 +37,7 @@ function PlanningPage() {
 
   const [showUniverseModal, setShowUniverseModal] = useState(false);
   const [editingUniverseId, setEditingUniverseId] = useState(null);
+  const [editingUniverseDeptName, setEditingUniverseDeptName] = useState('');
   const [newUniverse, setNewUniverse] = useState(emptyUniverse);
 
   const [showPlanModal, setShowPlanModal] = useState(false);
@@ -45,6 +46,7 @@ function PlanningPage() {
 
   const [showEngagementModal, setShowEngagementModal] = useState(false);
   const [editingEngagementId, setEditingEngagementId] = useState(null);
+  const [editingEngagementDeptName, setEditingEngagementDeptName] = useState('');
   const [newEngagement, setNewEngagement] = useState(emptyEngagement);
 
   // Team Member Assignment State
@@ -60,18 +62,18 @@ function PlanningPage() {
   const fetchPlanningData = async () => {
     setLoading(true);
     try {
-      const [univRes, plansRes, engRes, depRes, usersRes, dueRes] = await Promise.all([
+      // Departments are not fetched here — OrgUnitSelect loads the org tree
+      // itself through useOrgUnits and shares one request across forms.
+      const [univRes, plansRes, engRes, usersRes, dueRes] = await Promise.all([
         planningApi.getUniverse(),
         planningApi.getPlans(),
         planningApi.getEngagements(),
-        usersApi.getDepartments(),
         usersApi.getUsers(),
         planningApi.getDueForReAudit(),
       ]);
       setUniverse(univRes || []);
       setPlans(plansRes || []);
       setEngagements(engRes || []);
-      setDepartments(depRes || []);
       setAllUsers(usersRes || []);
       setDueForAudit(dueRes || []);
     } catch (err) {
@@ -92,6 +94,9 @@ function PlanningPage() {
 
   const openEditUniverse = (item) => {
     setEditingUniverseId(item.id);
+    // department_name is tracked separately from the form payload so the picker
+    // can still name a retired unit, which the org tree omits.
+    setEditingUniverseDeptName(item.department_name || '');
     setNewUniverse({
       name: item.name || '', code: item.code || '', category: item.category || 'system',
       risk_score: item.risk_score ?? 3.5, audit_frequency: item.audit_frequency || 'Annually',
@@ -103,6 +108,7 @@ function PlanningPage() {
   const closeUniverseModal = () => {
     setShowUniverseModal(false);
     setEditingUniverseId(null);
+    setEditingUniverseDeptName('');
     setNewUniverse(emptyUniverse);
   };
 
@@ -210,6 +216,7 @@ function PlanningPage() {
 
   const openEditEngagement = (eng) => {
     setEditingEngagementId(eng.id);
+    setEditingEngagementDeptName(eng.department_name || '');
     setNewEngagement({
       title: eng.title || '', plan: eng.plan || '', audit_universe: eng.audit_universe || '',
       department: eng.department || '', engagement_type: eng.engagement_type || 'operational',
@@ -223,6 +230,7 @@ function PlanningPage() {
   const closeEngagementModal = () => {
     setShowEngagementModal(false);
     setEditingEngagementId(null);
+    setEditingEngagementDeptName('');
     setNewEngagement(emptyEngagement);
   };
 
@@ -618,13 +626,12 @@ function PlanningPage() {
                   </div>
                 </div>
                 <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label">Associated Department</label>
-                    <select className="form-control" value={newUniverse.department} onChange={(e) => setNewUniverse({ ...newUniverse, department: e.target.value })}>
-                      <option value="">Select Department...</option>
-                      {departments.map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}
-                    </select>
-                  </div>
+                  <OrgUnitSelect
+                    label="Associated Department"
+                    value={newUniverse.department}
+                    onChange={(id) => setNewUniverse({ ...newUniverse, department: id })}
+                    valueLabel={editingUniverseDeptName}
+                  />
                   <div className="form-group">
                     <label className="form-label">Initial Risk Score (1-5)</label>
                     <input type="number" step="0.05" min="1" max="5" className="form-control"
@@ -828,14 +835,12 @@ function PlanningPage() {
                       {universe.map(u => (<option key={u.id} value={u.id}>{u.code} - {u.name}</option>))}
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Department</label>
-                    <select className="form-control" value={newEngagement.department}
-                      onChange={(e) => setNewEngagement({ ...newEngagement, department: e.target.value })}>
-                      <option value="">Select Department...</option>
-                      {departments.map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}
-                    </select>
-                  </div>
+                  <OrgUnitSelect
+                    label="Department"
+                    value={newEngagement.department}
+                    onChange={(id) => setNewEngagement({ ...newEngagement, department: id })}
+                    valueLabel={editingEngagementDeptName}
+                  />
                 </div>
                 <div className="form-group-row">
                   <div className="form-group">

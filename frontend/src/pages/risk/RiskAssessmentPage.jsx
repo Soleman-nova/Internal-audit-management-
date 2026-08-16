@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { riskApi, usersApi, planningApi } from '../../api';
+import { riskApi, planningApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -10,6 +10,7 @@ import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
+import OrgUnitSelect from '../../components/ui/OrgUnitSelect';
 import { TrendingUp, Sliders, Plus, RefreshCw, AlertOctagon, ClipboardList, CheckCircle2, Star, X } from 'lucide-react';
 
 function RiskAssessmentPage() {
@@ -21,7 +22,6 @@ function RiskAssessmentPage() {
   const [formErrors, setFormErrors] = useState({});
   const [parameters, setParameters] = useState([]);
   const [assessments, setAssessments] = useState([]);
-  const [departments, setDepartments] = useState([]);
   const [universe, setUniverse] = useState([]);
   const [heatmapData, setHeatmapData] = useState([]);
   const [selectedCell, setSelectedCell] = useState(null);
@@ -66,10 +66,9 @@ function RiskAssessmentPage() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [paramRes, assessRes, deptRes, uniRes, heatRes, sumRes, selfRes] = await Promise.all([
+      const [paramRes, assessRes, uniRes, heatRes, sumRes, selfRes] = await Promise.all([
         riskApi.getParameters(),
         riskApi.getAssessments(),
-        usersApi.getDepartments(),
         planningApi.getUniverse(),
         riskApi.getHeatmap(),
         riskApi.getSummary(),
@@ -77,7 +76,6 @@ function RiskAssessmentPage() {
       ]);
       setParameters(paramRes || []);
       setAssessments(assessRes || []);
-      setDepartments(deptRes || []);
       setUniverse(uniRes || []);
       setHeatmapData(heatRes || []);
       setSummary(sumRes || {});
@@ -593,20 +591,12 @@ function RiskAssessmentPage() {
             <form onSubmit={handleCreateAssessment}>
               <div className="modal-body">
                 <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label">Department</label>
-                    <select
-                      className="form-control"
-                      value={newAssessment.department}
-                      onChange={e => setNewAssessment({ ...newAssessment, department: e.target.value })}
-                      required
-                    >
-                      <option value="">Select Department...</option>
-                      {departments.map(d => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <OrgUnitSelect
+                    label="Department"
+                    value={newAssessment.department}
+                    onChange={(id) => setNewAssessment({ ...newAssessment, department: id })}
+                    required
+                  />
                   <div className="form-group">
                     <label className="form-label">Audit Universe Entry</label>
                     <select

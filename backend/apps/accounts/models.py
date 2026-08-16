@@ -30,15 +30,27 @@ class Role(models.Model):
 
 
 class Department(models.Model):
-    """Department / Directorate within EEU.
+    """Organizational unit within EEU — chief office, audit directorate, region, or service center.
 
-    Supports the official EEU Internal Audit Executive Office structure:
-    the Internal Audit Executive Office (IAEO) is the parent node that
-    oversees four core directorates:
-      - Financial & Performance Audit (FPA)
-      - Technical Audit (TA)
-      - Information Technology Audit (ITA)
-      - Planning & Performance (PP)
+    Two structures share this model, distinguished by ``unit_type``:
+
+    1. The corporate structure (``EXECUTIVE`` / ``CORPORATE`` / ``REGION`` /
+       ``SERVICE_CENTER``): the Chief Executive Officer office at the root, the
+       chief offices reporting to it, the 32 EEU regions under Region
+       Coordination, and the customer service centers under each region.
+    2. The Internal Audit Executive Office structure (``AUDIT``): the IAEO
+       node and the four core directorates it oversees:
+         - Financial & Performance Audit (FPA)
+         - Technical Audit (TA)
+         - Information Technology Audit (ITA)
+         - Planning & Performance (PP)
+
+    Regions and service centers are modelled as departments rather than
+    separate tables so that users, audit universe entries, engagements, and
+    risk assessments can point at any level of the organisation through the
+    department foreign keys they already have. The forms present the three
+    corporate levels as a cascading picker (department → region → service
+    center) and store whichever node the user drilled down to.
     """
 
     DIRECTORATE_CHOICES = [
@@ -50,10 +62,45 @@ class Department(models.Model):
         ('OTHER', 'Other / Non-Directorate'),
     ]
 
+    EXECUTIVE = 'EXECUTIVE'
+    CORPORATE = 'CORPORATE'
+    AUDIT = 'AUDIT'
+    REGION = 'REGION'
+    SERVICE_CENTER = 'SERVICE_CENTER'
+
+    UNIT_TYPE_CHOICES = [
+        (EXECUTIVE, 'Executive Office'),
+        (CORPORATE, 'Corporate Department / Chief Office'),
+        (AUDIT, 'Internal Audit Directorate'),
+        (REGION, 'Region'),
+        (SERVICE_CENTER, 'Customer Service Center'),
+    ]
+
     name = models.CharField(max_length=200)
+    name_am = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text='Amharic name, shown when the interface language is Amharic.',
+    )
     code = models.CharField(max_length=20, unique=True)
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='children')
     head = models.CharField(max_length=200, blank=True)
+    head_title = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text='Title of the officer leading this unit, e.g. "Chief Finance officer".',
+    )
+    head_title_am = models.CharField(max_length=200, blank=True, help_text='Amharic officer title.')
+    unit_type = models.CharField(
+        max_length=20,
+        choices=UNIT_TYPE_CHOICES,
+        default=CORPORATE,
+        help_text=(
+            'Where this unit sits in the EEU organizational structure. The '
+            'corporate side nests three deep: chief office -> region -> '
+            'customer service center.'
+        ),
+    )
     directorate_type = models.CharField(
         max_length=20,
         choices=DIRECTORATE_CHOICES,

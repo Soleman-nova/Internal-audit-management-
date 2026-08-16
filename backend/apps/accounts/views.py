@@ -139,8 +139,23 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
     permission_classes = [CanWriteAudit]  # reads open to any authenticated user
-    filter_backends = [SearchFilter, OrderingFilter]
-    search_fields = ['name', 'code']
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['unit_type', 'directorate_type', 'parent', 'is_active']
+    search_fields = ['name', 'name_am', 'code']
+
+    def get_queryset(self):
+        """Hide retired departments from the default list.
+
+        Retired units (is_active=False) must stay reachable by ID so they can be
+        reactivated and so historical engagements, universe entries, and risk
+        assessments still resolve their department. So the active-only filter
+        applies to the list action only, and an explicit ?is_active= query
+        param always wins — pass ?is_active=false to review retired units.
+        """
+        queryset = Department.objects.all()
+        if self.action == 'list' and 'is_active' not in self.request.query_params:
+            queryset = queryset.filter(is_active=True)
+        return queryset
 
     def perform_create(self, serializer):
         dept = serializer.save()
@@ -157,6 +172,23 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         log_audit(self.request, 'DELETE', instance)
         instance.delete()
+
+    @action(detail=False, methods=['get'], url_path='tree')
+    def tree(self, request):
+        """Every active unit, flat and unpaginated, for the cascading picker.
+
+        The department → region → service center picker needs the whole tree at
+        once: it derives all three levels client-side and, when editing, walks
+        parents upward to rehydrate the steps from a stored department id.
+
+        Deliberately not DepartmentSerializer — its get_children() method field
+        would fire one query per row across 600+ units, and the picker only
+        needs enough to build the parent/child map. One query, ~60 KB.
+        """
+        units = Department.objects.filter(is_active=True).order_by('name').values(
+            'id', 'code', 'name', 'name_am', 'unit_type', 'parent',
+        )
+        return Response(list(units))
 
 
 class AuditTrailViewSet(viewsets.ReadOnlyModelViewSet):
