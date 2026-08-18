@@ -1,6 +1,7 @@
-"""Tests for the organisational-unit tree: pagination, the picker endpoint, and
-the service-center seed.
+"""Tests for the organisational-unit tree (pagination, the picker endpoint, the
+service-center seed) and the directorate-scoped dashboard statistics.
 """
+import datetime
 import json
 import tempfile
 from io import StringIO
@@ -10,6 +11,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Department, Role
@@ -17,6 +19,9 @@ from apps.accounts.management.commands.seed_service_centers import (
     CSC_CODE_PREFIX, is_amharic, repair_mojibake,
 )
 from apps.accounts.management.commands.seed_org_structure import REGION_CODE_PREFIX
+from apps.audit_planning.models import AuditEngagement, AuditPlan
+from apps.corrective_actions.models import CorrectiveAction
+from apps.findings.models import AuditFinding
 
 User = get_user_model()
 
@@ -274,3 +279,307 @@ class ShippedServiceCenterDataTest(TestCase):
 
     def test_no_blank_names(self):
         self.assertEqual([r['csc_code'] for r in self.rows if not r['csc_name'].strip()], [])
+
+
+class DashboardStatsDirectorateTest(TestCase):
+    """?directorate= must rescope every KPI and chart series.
+
+    Before this existed, picking a directorate on the dashboard changed a label
+    and nothing else — the numbers were enterprise-wide (or hardcoded) regardless
+    of the selection.
+    """
+
+    URL = '/api/auth/dashboard/stats/'
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='dash', employee_id='D001', email='dash@test.com',
+            password='pass', role=Role.AUDITEE,
+        )
+        self.client.force_authenticate(user=self.user)
+
+        self.today = timezone.now().date()
+        self.fpa = Department.objects.create(
+            name='Financial & Performance Audit', code='FPA',
+            unit_type=Department.AUDIT, directorate_type='FPA',
+            head='Abebe Kebede', staff_count=12,
+        )
+        self.ita = Department.objects.create(
+            name='Information Technology Audit', code='ITA',
+            unit_type=Department.AUDIT, directorate_type='ITA',
+        )
+        self.empty = Department.objects.create(
+            name='Planning & Performance', code='PP',
+            unit_type=Department.AUDIT, directorate_type='PP',
+        )
+        self.plan = AuditPlan.objects.create(
+            title='Annual Plan', year=self.today.year, status='active',
+            directorate=self.fpa,
+        )
+
+        # FPA: 1 in-progress engagement, 4 findings (1 closed, 1 resolved but not
+        # yet verified, 1 open critical, 1 open medium) -> verified closure 25.0%.
+        fpa_engagement = self._engagement(self.fpa, 'FPA-01', status='in_progress')
+        self._finding(fpa_engagement, 'F-1', severity='critical', status='open')
+        self._finding(fpa_engagement, 'F-2', severity='medium', status='open')
+        self._finding(fpa_engagement, 'F-3', severity='high', status='closed')
+        self._finding(fpa_engagement, 'F-4', severity='low', status='resolved')
+
+        # ITA: 1 completed engagement, 1 open finding with an overdue CAPA.
+        ita_engagement = self._engagement(self.ita, 'ITA-01', status='completed')
+        ita_finding = self._finding(ita_engagement, 'F-5', severity='high', status='open')
+        CorrectiveAction.objects.create(
+            finding=ita_finding, action_number='CA-1', title='Patch',
+            description='d', recommendation='r', status='open',
+            due_date=self.today - datetime.timedelta(days=10),
+        )
+
+    def _engagement(self, directorate, number, status):
+        return AuditEngagement.objects.create(
+            plan=self.plan, title=f'Engagement {number}', engagement_number=number,
+            status=status, directorate=directorate,
+            planned_start=self.today - datetime.timedelta(days=60),
+            actual_end=self.today if status == 'completed' else None,
+        )
+
+    def _finding(self, engagement, number, severity, status):
+        return AuditFinding.objects.create(
+            engagement=engagement, finding_number=number, title=number,
+            description='d', severity=severity, status=status,
+        )
+
+    def test_unscoped_returns_enterprise_totals(self):
+        data = self.client.get(self.URL).data
+        self.assertIsNone(data['directorate'])
+        self.assertEqual(data['total_engagements'], 2)
+        self.assertEqual(data['total_findings'], 5)
+        self.assertEqual(data['open_findings'], 3)
+        self.assertEqual(data['overdue_actions'], 1)
+
+    def test_scoped_counts_only_that_directorate(self):
+        data = self.client.get(self.URL, {'directorate': self.fpa.id}).data
+        self.assertEqual(data['total_engagements'], 1)
+        self.assertEqual(data['active_engagements'], 1)
+        self.assertEqual(data['total_findings'], 4)
+        self.assertEqual(data['open_findings'], 2)
+        self.assertEqual(data['critical_findings'], 1)
+        self.assertEqual(data['active_plans'], 1)
+        # The overdue CAPA belongs to ITA, so it must not leak into FPA.
+        self.assertEqual(data['overdue_actions'], 0)
+
+    def test_capas_are_scoped_through_finding_and_engagement(self):
+        data = self.client.get(self.URL, {'directorate': self.ita.id}).data
+        self.assertEqual(data['overdue_actions'], 1)
+        self.assertEqual(data['open_actions'], 1)
+
+    def test_echoes_the_directorate_it_scoped_to(self):
+        data = self.client.get(self.URL, {'directorate': self.fpa.id}).data
+        self.assertEqual(data['directorate'], {
+            'id': self.fpa.id,
+            'name': 'Financial & Performance Audit',
+            'code': 'FPA',
+            'head': 'Abebe Kebede',
+            'staff_count': 12,
+        })
+
+    def test_compliance_score_counts_only_verified_closures(self):
+        data = self.client.get(self.URL, {'directorate': self.fpa.id}).data
+        # 4 FPA findings, but only F-3 is closed. F-4 sits at 'resolved' — a
+        # claim of remediation nobody has verified — so it scores nothing.
+        self.assertEqual(data['compliance_score'], 25.0)
+
+    def test_resolving_a_finding_does_not_move_the_score_but_closing_does(self):
+        resolved = AuditFinding.objects.get(finding_number='F-4')
+        self.assertEqual(resolved.status, 'resolved')
+        before = self.client.get(self.URL, {'directorate': self.fpa.id}).data
+        resolved.status = 'closed'
+        resolved.save(update_fields=['status'])
+        after = self.client.get(self.URL, {'directorate': self.fpa.id}).data
+        self.assertEqual(before['compliance_score'], 25.0)
+        self.assertEqual(after['compliance_score'], 50.0)
+
+    def test_compliance_trend_uses_the_same_verified_rule_as_the_kpi(self):
+        """The line and the number above it must not disagree."""
+        data = self.client.get(self.URL, {'directorate': self.fpa.id}).data
+        # Every FPA finding was raised in the current quarter, and the trend is
+        # cumulative, so its last point is the KPI.
+        self.assertEqual(data['compliance_trend'][-1]['score'], data['compliance_score'])
+
+    def test_directorate_with_no_work_reads_as_zero_and_fully_compliant(self):
+        data = self.client.get(self.URL, {'directorate': self.empty.id}).data
+        self.assertEqual(data['total_engagements'], 0)
+        self.assertEqual(data['open_findings'], 0)
+        self.assertEqual(data['overdue_actions'], 0)
+        # Nothing outstanding is 100%, not 0% — a zero would read as total failure.
+        self.assertEqual(data['compliance_score'], 100.0)
+        self.assertEqual(data['open_findings_by_severity'], [])
+
+    def test_open_findings_by_severity_excludes_settled_findings(self):
+        data = self.client.get(self.URL, {'directorate': self.fpa.id}).data
+        by_severity = {row['severity']: row['count'] for row in data['open_findings_by_severity']}
+        self.assertEqual(by_severity, {'critical': 1, 'medium': 1})
+        # The full breakdown still carries every finding.
+        self.assertEqual(sum(r['count'] for r in data['findings_by_severity']), 4)
+
+    def test_monthly_engagements_walks_six_calendar_months(self):
+        data = self.client.get(self.URL).data
+        months = data['monthly_engagements']
+        self.assertEqual(len(months), 6)
+        # Oldest first, ending on the current month.
+        self.assertEqual(months[-1]['month'], self.today.strftime('%b %Y'))
+        labels = [m['month'] for m in months]
+        self.assertEqual(len(set(labels)), 6, 'calendar months must not repeat')
+        self.assertEqual(set(months[0]), {'month', 'Completed', 'InProgress'})
+
+    def test_monthly_engagements_counts_completed_in_its_month(self):
+        data = self.client.get(self.URL, {'directorate': self.ita.id}).data
+        current = data['monthly_engagements'][-1]
+        self.assertEqual(current['Completed'], 1)
+
+    def test_monthly_engagements_counts_in_flight_work_as_active(self):
+        data = self.client.get(self.URL, {'directorate': self.fpa.id}).data
+        # The FPA engagement started 60 days ago and has not finished, so it is
+        # active in the current month.
+        self.assertEqual(data['monthly_engagements'][-1]['InProgress'], 1)
+
+    def test_compliance_trend_has_five_quarters_oldest_first(self):
+        data = self.client.get(self.URL).data
+        trend = data['compliance_trend']
+        self.assertEqual(len(trend), 5)
+        current_quarter = (self.today.month - 1) // 3 + 1
+        self.assertEqual(trend[-1]['name'], f'Q{current_quarter} {self.today.year}')
+        self.assertEqual(set(trend[0]), {'name', 'score'})
+
+    def test_unknown_directorate_is_a_404_not_a_500(self):
+        response = self.client.get(self.URL, {'directorate': 999999})
+        self.assertEqual(response.status_code, 404)
+
+    def test_non_numeric_directorate_is_a_400_not_a_500(self):
+        response = self.client.get(self.URL, {'directorate': 'FPA'})
+        self.assertEqual(response.status_code, 400)
+
+    def test_all_is_treated_as_unscoped(self):
+        """The frontend's 'all' sentinel must not 400."""
+        response = self.client.get(self.URL, {'directorate': 'all'})
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data['directorate'])
+        self.assertEqual(response.data['total_engagements'], 2)
+
+    def test_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+        self.assertEqual(self.client.get(self.URL).status_code, 401)
+
+
+class ProfileViewTest(TestCase):
+    """Self-service profile edits.
+
+    The Settings -> Profile tab PATCHed a route that did not exist, so saving
+    your own name was a 404 for every role. This is the route that fixed it, and
+    the risk it carries is that a self-service endpoint on the user model is one
+    careless writable field away from self-promotion.
+    """
+
+    URL = '/api/auth/profile/'
+
+    def setUp(self):
+        self.client = APIClient()
+        self.department = Department.objects.create(name='Finance', code='FIN')
+        self.other_department = Department.objects.create(name='Operations', code='OPS')
+        self.auditee = User.objects.create_user(
+            username='profile-auditee', employee_id='P001', email='auditee@test.com',
+            password='pass', first_name='Selam', last_name='Tesfaye',
+            role=Role.AUDITEE, department=self.department,
+        )
+        self.admin = User.objects.create_user(
+            username='profile-admin', employee_id='P002', email='admin@test.com',
+            password='pass', role=Role.ADMIN, department=self.department,
+        )
+        self.client.force_authenticate(user=self.auditee)
+
+    def test_get_returns_the_callers_own_profile(self):
+        response = self.client.get(self.URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['id'], self.auditee.id)
+        self.assertEqual(response.data['employee_id'], 'P001')
+        # The full user payload, so the client can replace its stored user object
+        # wholesale — it needs `role` to keep rendering the right navigation.
+        self.assertEqual(response.data['role'], Role.AUDITEE)
+
+    def test_a_user_can_edit_their_own_name_and_phone(self):
+        response = self.client.patch(self.URL, {
+            'first_name': 'Selamawit', 'last_name': 'Tesfaye G.', 'phone': '+251911000111',
+        }, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.auditee.refresh_from_db()
+        self.assertEqual(self.auditee.first_name, 'Selamawit')
+        self.assertEqual(self.auditee.phone, '+251911000111')
+        self.assertEqual(response.data['full_name'], 'Selamawit Tesfaye G.')
+
+    def test_the_endpoint_takes_no_id_so_no_one_elses_record_is_reachable(self):
+        """There is nothing to scope: ``get_object`` returns ``request.user``, so
+        the collection-style URL is the whole surface area."""
+        self.assertEqual(self.client.patch(
+            f'{self.URL}{self.admin.id}/', {'first_name': 'Hijacked'}, format='json',
+        ).status_code, 404)
+        self.admin.refresh_from_db()
+        self.assertNotEqual(self.admin.first_name, 'Hijacked')
+
+    def test_role_cannot_be_changed_through_a_profile_edit(self):
+        """The escalation this serializer's read_only_fields exists to stop."""
+        response = self.client.patch(
+            self.URL, {'role': Role.ADMIN, 'first_name': 'Selam'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.auditee.refresh_from_db()
+        self.assertEqual(self.auditee.role, Role.AUDITEE)
+
+    def test_department_employee_id_and_email_are_pinned(self):
+        self.client.patch(self.URL, {
+            'department': self.other_department.id,
+            'employee_id': 'EEU-00001',
+            'email': 'someone.else@test.com',
+            'is_active': False,
+        }, format='json')
+        self.auditee.refresh_from_db()
+        self.assertEqual(self.auditee.department, self.department)
+        self.assertEqual(self.auditee.employee_id, 'P001')
+        self.assertEqual(self.auditee.email, 'auditee@test.com')
+        self.assertTrue(self.auditee.is_active)
+
+    def test_the_edit_is_audit_logged(self):
+        from apps.accounts.models import AuditTrail
+
+        self.client.patch(self.URL, {'phone': '+251911222333'}, format='json')
+        entry = AuditTrail.objects.filter(
+            model_name='User', object_id=str(self.auditee.id), action='UPDATE',
+        ).first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.user, self.auditee)
+        self.assertIn('Profile updated', entry.object_repr)
+
+    def test_every_role_can_edit_their_own_profile(self):
+        """Deliberately not on UserViewSet: that viewset is gated by
+        CanManageUsers, so routing profile edits through it would lock every
+        non-admin out of changing their own name."""
+        for index, role in enumerate(
+            [Role.ADMIN, Role.AUDIT_MANAGER, Role.SUPERVISOR, Role.AUDITOR, Role.AUDITEE],
+            start=10,
+        ):
+            with self.subTest(role=role):
+                user = User.objects.create_user(
+                    username=f'role-{role}', employee_id=f'P0{index}',
+                    email=f'role-{role}@test.com', password='pass', role=role,
+                )
+                self.client.force_authenticate(user=user)
+                response = self.client.patch(
+                    self.URL, {'first_name': 'Renamed'}, format='json',
+                )
+                self.assertEqual(response.status_code, 200, response.data)
+
+    def test_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+        self.assertEqual(self.client.get(self.URL).status_code, 401)
+        self.assertEqual(
+            self.client.patch(self.URL, {'first_name': 'X'}, format='json').status_code, 401,
+        )

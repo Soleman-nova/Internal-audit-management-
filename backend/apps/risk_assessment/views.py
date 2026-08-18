@@ -1,7 +1,8 @@
-from rest_framework import viewsets, status, generics
+from rest_framework import viewsets, status, generics, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db.models import Count, Avg
@@ -9,7 +10,9 @@ from django.utils import timezone
 
 from .models import RiskParameter, RiskAssessment, SelfAssessment
 from .serializers import RiskParameterSerializer, RiskAssessmentSerializer, SelfAssessmentSerializer
-from apps.common.permissions import CanManageSettings, CanWriteAudit, RequiresCapability, APPROVE_PLANS
+from apps.common.permissions import (
+    CanManageSettings, CanWriteAudit, RequiresCapability, APPROVE_PLANS, has_capability,
+)
 from apps.common.audit_utils import log_audit
 from apps.notifications.services import notify, notify_roles
 
@@ -88,26 +91,81 @@ class RiskAssessmentViewSet(viewsets.ModelViewSet):
 
 
 class SelfAssessmentViewSet(viewsets.ModelViewSet):
+    # Newest first, and ordered at all: SelfAssessment has no Meta.ordering, so
+    # paginating an unordered queryset could repeat or skip submissions between
+    # pages. Same reason EvidenceViewSet carries an explicit ordering.
     queryset = SelfAssessment.objects.select_related(
         'risk_assessment', 'submitted_by', 'reviewed_by'
-    ).all()
+    ).order_by('-submitted_at')
     serializer_class = SelfAssessmentSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['status', 'submitted_by']
 
+    def get_queryset(self):
+        """A submitter sees only their own; reviewers see everything.
+
+        Every role may submit a self-assessment, but a department
+        representative has no business reading another department's candid
+        self-appraisal. Reviewers (APPROVE_PLANS holders) need the full list to
+        work through the queue.
+        """
+        user = self.request.user
+        qs = super().get_queryset()
+        if user.is_authenticated and not has_capability(user, APPROVE_PLANS):
+            return qs.filter(submitted_by=user)
+        return qs
+
+    def check_object_permissions(self, request, obj):
+        """Only the submitter may edit their own submission, and only while open.
+
+        Without this, any authenticated user could PATCH any submission — which
+        also meant PATCHing status='reviewed' and side-stepping the review
+        action's APPROVE_PLANS gate entirely. Reviewers go through
+        ``review``, which stamps reviewed_by/reviewed_at and notifies.
+        """
+        super().check_object_permissions(request, obj)
+        if request.method in permissions.SAFE_METHODS or self.action == 'review':
+            return
+        if obj.submitted_by_id != request.user.id:
+            raise PermissionDenied('You can only modify your own self-assessment.')
+        if obj.status == 'reviewed':
+            raise PermissionDenied('A reviewed self-assessment can no longer be edited.')
+
+    def perform_update(self, serializer):
+        """Status is a workflow field, not a form field.
+
+        The review flow must go through the gated ``review`` action, so a PATCH
+        can never promote a submission to reviewed — silently pin the stored
+        value instead of trusting the payload.
+        """
+        assessment = serializer.save(status=serializer.instance.status)
+        log_audit(self.request, 'UPDATE', assessment)
+
+    def perform_destroy(self, instance):
+        log_audit(self.request, 'DELETE', instance)
+        instance.delete()
+
     def perform_create(self, serializer):
         assessment = serializer.save(submitted_by=self.request.user)
         log_audit(self.request, 'CREATE', assessment)
+        # Flag the parent so the matrix shows the department has responded.
+        # This has to happen server-side: an auditee holds no WRITE_AUDIT, so
+        # the client PATCHing RiskAssessment itself would 403 and make a
+        # successful submission look like a failure.
+        parent = assessment.risk_assessment
+        if parent and not parent.is_self_assessment:
+            parent.is_self_assessment = True
+            parent.save(update_fields=['is_self_assessment'])
         # Notify reviewers that a self-assessment was submitted.
-        dept = assessment.risk_assessment.department if assessment.risk_assessment else None
+        dept = parent.department if parent else None
         notify_roles(
             ['audit_manager', 'supervisor'],
             'system',
             'Self-assessment submitted',
             f'A self-assessment for {dept.name if dept else "a department"} was submitted by '
             f'{self.request.user.get_full_name() or self.request.user.username}.',
-            '/risk-assessment',
+            '/risk',
             exclude=self.request.user,
         )
 
@@ -128,6 +186,6 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
                 'approved',
                 'Self-assessment reviewed',
                 'Your submitted self-assessment has been reviewed.',
-                '/risk-assessment',
+                '/risk',
             )
         return Response({'detail': 'Self-assessment marked as reviewed.'})

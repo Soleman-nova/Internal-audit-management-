@@ -49,7 +49,7 @@ class Command(BaseCommand):
             if effective_due is None:
                 continue
 
-            link = f'/follow-up?action={action.id}'
+            link = f'/capa/{action.id}'
 
             if effective_due < today:
                 # Past due -> flip to overdue and notify the owner.
@@ -92,7 +92,7 @@ class Command(BaseCommand):
                 f'Follow-up due: {capa.action_number if capa else ""}',
                 f'A follow-up scheduled for {follow_up.scheduled_date.isoformat()} '
                 f'on "{capa.title if capa else ""}" is due.',
-                f'/follow-up?action={capa.id}' if capa else '',
+                f'/capa/{capa.id}' if capa else '',
             )
 
         self.stdout.write(self.style.SUCCESS(

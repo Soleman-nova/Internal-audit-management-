@@ -9,8 +9,8 @@ export const riskApi = {
     const res = await apiClient.get('/risk/assessments/', { params });
     return res.data?.results ?? res.data;
   },
-  getHeatmap: async () => {
-    const res = await apiClient.get('/risk/assessments/heatmap/');
+  getHeatmap: async (params = {}) => {
+    const res = await apiClient.get('/risk/assessments/heatmap/', { params });
     return res.data;
   },
   getSummary: async () => {
@@ -35,6 +35,17 @@ export const riskApi = {
   },
   updateSelfAssessment: async (id, data) => {
     const res = await apiClient.patch(`/risk/self-assessments/${id}/`, data);
+    return res.data;
+  },
+  // Marking a self-assessment reviewed must go through this action, not a
+  // status PATCH: the backend gate (APPROVE_PLANS), reviewed_by/reviewed_at
+  // stamps, audit log and submitter notification all live here.
+  reviewSelfAssessment: async (id, comments = '') => {
+    const res = await apiClient.post(`/risk/self-assessments/${id}/review/`, { comments });
+    return res.data;
+  },
+  deleteSelfAssessment: async (id) => {
+    const res = await apiClient.delete(`/risk/self-assessments/${id}/`);
     return res.data;
   },
 };

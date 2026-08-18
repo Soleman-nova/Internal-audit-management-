@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { executionApi, planningApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -18,6 +19,9 @@ function ExecutionPage() {
   const toast = useToast();
   const { t } = useI18n();
   const { canWriteAudit, canApprovePlans } = usePermissions();
+  const [searchParams] = useSearchParams();
+  const focusProgramId = searchParams.get('program');
+  const focusEngagementId = searchParams.get('engagement');
   const [engagements, setEngagements] = useState([]);
   const [selectedEngId, setSelectedEngId] = useState('');
   const [program, setProgram] = useState(null);
@@ -71,13 +75,33 @@ function ExecutionPage() {
       const list = await planningApi.getEngagements();
       const engList = Array.isArray(list) ? list : [];
       setEngagements(engList);
-      if (engList.length > 0) {
-        setSelectedEngId(engList[0].id);
-        fetchProgramAndProcedures(engList[0].id);
-      }
+      if (engList.length === 0) return;
+      // Notifications deep-link here as /execution?program=<id> or
+      // ?engagement=<id>. Resolve that to an engagement before defaulting to
+      // the first one, so the link lands on the record it named.
+      const targetEngId = await resolveDeepLinkEngagement(engList);
+      setSelectedEngId(targetEngId);
+      fetchProgramAndProcedures(targetEngId);
     } catch (err) {
       toast.error('Failed to load engagements');
     }
+  };
+
+  const resolveDeepLinkEngagement = async (engList) => {
+    const has = (id) => engList.some(e => e.id.toString() === id);
+    if (focusEngagementId && has(focusEngagementId)) return focusEngagementId;
+    if (focusProgramId) {
+      try {
+        const prog = await executionApi.getProgram(focusProgramId);
+        if (prog?.engagement && has(prog.engagement.toString())) {
+          return prog.engagement.toString();
+        }
+      } catch {
+        // A stale or out-of-scope link is not worth an error toast — just fall
+        // through to the default engagement.
+      }
+    }
+    return engList[0].id;
   };
 
   const fetchProgramAndProcedures = async (engId) => {
@@ -198,8 +222,8 @@ function ExecutionPage() {
     setSavingProc(true);
     try {
       if (editingProc) {
-        // Update existing procedure via executionApi or apiClient
-        const res = await executionApi.createProcedure({ ...procForm, id: editingProc.id });
+        // PATCH — posting the form back with an `id` would create a duplicate.
+        const res = await executionApi.updateProcedure(editingProc.id, procForm);
         setProcedures(procedures.map(p => p.id === editingProc.id ? res : p));
         toast.success('Procedure updated successfully');
       } else {
@@ -221,20 +245,32 @@ function ExecutionPage() {
   const handleDeleteProc = async (procId) => {
     if (!window.confirm(t('deleteProcedure'))) return;
     try {
-      // Delete via API
+      await executionApi.deleteProcedure(procId);
       setProcedures(procedures.filter(p => p.id !== procId));
       toast.success('Procedure removed');
     } catch (err) {
-      toast.error('Failed to delete procedure');
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to delete procedure';
+      toast.error(msg);
     }
   };
 
   const handleStatusChange = async (procId, newStatus) => {
     try {
-      setProcedures(procedures.map(p => p.id === procId ? { ...p, status: newStatus } : p));
+      // 'completed' goes through the dedicated action so the server stamps
+      // completed_by/completed_at and notifies the engagement lead; anything
+      // else is a plain status PATCH.
+      const res = newStatus === 'completed'
+        ? await executionApi.completeProcedure(procId)
+        : await executionApi.updateProcedure(procId, { status: newStatus });
+      // The complete action returns a detail message, not the record, so fall
+      // back to patching status locally when there is no object to merge.
+      setProcedures(procedures.map(p => (
+        p.id === procId ? { ...p, ...(res?.id ? res : { status: newStatus }) } : p
+      )));
       toast.success(`Procedure status set to ${newStatus}`);
     } catch (err) {
-      toast.error('Failed to update procedure status');
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to update procedure status';
+      toast.error(msg);
     }
   };
 

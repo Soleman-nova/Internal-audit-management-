@@ -1,13 +1,34 @@
 import axios from 'axios';
 
-const API_BASE_URL = localStorage.getItem('apiBaseUrl') || 'http://localhost:8000/api';
+// Resolution order: the value saved in Settings, then the build-time Vite env,
+// then the dev default. VITE_API_BASE_URL is what a deployed build needs —
+// without it every non-local deployment was pinned to localhost:8000.
+export const DEFAULT_API_BASE_URL =
+  import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
+export function resolveApiBaseUrl() {
+  return localStorage.getItem('apiBaseUrl') || DEFAULT_API_BASE_URL;
+}
 
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: resolveApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+/** Point the shared client at a new API host without a page reload.
+ *
+ * The base URL used to be captured once at module load, so saving a new
+ * endpoint in Settings showed a success toast while every subsequent request
+ * still went to the old host until the user happened to refresh.
+ */
+export function setApiBaseUrl(url) {
+  const next = (url || '').trim() || DEFAULT_API_BASE_URL;
+  localStorage.setItem('apiBaseUrl', next);
+  apiClient.defaults.baseURL = next;
+  return next;
+}
 
 // Request interceptor to attach JWT token
 apiClient.interceptors.request.use(
@@ -31,7 +52,9 @@ apiClient.interceptors.response.use(
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
         try {
-          const res = await axios.post(`${API_BASE_URL}/auth/token/refresh/`, {
+          // Read the current base URL rather than a module-load snapshot, so a
+          // refresh still works after the endpoint is changed in Settings.
+          const res = await axios.post(`${apiClient.defaults.baseURL}/auth/token/refresh/`, {
             refresh: refreshToken,
           });
           const newToken = res.data.access;

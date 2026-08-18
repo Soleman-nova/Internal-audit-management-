@@ -2967,6 +2967,29 @@ tbody tr:hover {
   color: var(--text-muted);
 }
 
+/* Inline client-side validation feedback. Without these, a form that blocks
+   submit on a failed validator gives the user no signal at all. */
+.form-control.is-invalid {
+  border-color: var(--danger, #f43f5e);
+}
+
+.form-control.is-invalid:focus {
+  border-color: var(--danger, #f43f5e);
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.15);
+}
+
+.form-error {
+  font-size: 12px;
+  color: var(--danger, #f43f5e);
+  margin: 6px 0 0;
+}
+
+.form-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 6px 0 0;
+}
+
 select.form-control {
   cursor: pointer;
 }
@@ -3779,6 +3802,119 @@ textarea.form-control {
   flex-shrink: 0;
 }
 
+/* ── "My Work" panel ─────────────────────────────────────────────────
+   Three columns of the signed-in user's own queue, sitting between the KPI
+   cards and the org chart. Uses the same card surface tokens as .chart-box so
+   it inherits the light/dark themes without a second set of colour rules. */
+.my-work-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px 22px;
+}
+
+.my-work-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1200px) {
+  .my-work-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.my-work-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.my-work-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.my-work-card-header h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.my-work-count {
+  margin-left: auto;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.my-work-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.my-work-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  color: inherit;
+  text-decoration: none;
+  font-size: 12px;
+  transition: var(--transition);
+}
+
+.my-work-row:hover {
+  color: var(--accent);
+}
+
+.my-work-ref {
+  font-family: monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* The title takes whatever is left and truncates — min-width: 0 is what lets a
+   flex item shrink below its content width, without which the badges on the
+   right get pushed out of the card. */
+.my-work-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-work-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.my-work-chevron {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.my-work-empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 8px 0;
+}
+
 /* Activity feed */
 .activity-feed {
   display: flex;
@@ -3895,6 +4031,26 @@ textarea.form-control {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 4px 10px;
+}
+
+/* Applied to the KPI grid and every directorate-scoped chart while the switcher
+   is refetching, so changing the selection visibly does something. */
+.is-refreshing {
+  opacity: 0.55;
+  transition: opacity 120ms ease-in;
+  pointer-events: none;
+}
+
+/* Stands in for a chart with nothing to plot — an empty recharts canvas reads as
+   a rendering bug rather than as "this directorate has no open findings". */
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 280px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
 }
 
 /* ============================================================

@@ -10,7 +10,7 @@ import {
 /* ─── Demo Roles ─────────────────────────────────────────────────────── */
 const DEMO_ROLES = [
   { label: 'System Admin', employeeId: 'EEU-10001', password: 'admin123', color: '#8b5cf6', desc: 'Full system access' },
-  { label: 'Audit Manager', employeeId: 'EEU-10002', password: 'S@12345678', color: '#24406e', desc: 'Plan & approve audits' },
+  { label: 'Audit Manager', employeeId: 'EEU-10002', password: 'User1234', color: '#24406e', desc: 'Plan & approve audits' },
   { label: 'Supervisor', employeeId: 'EEU-10003', password: 'user123', color: '#0891b2', desc: 'Review fieldwork' },
   { label: 'Lead Auditor', employeeId: 'EEU-10004', password: 'user123', color: '#059669', desc: 'Execute procedures' },
   { label: 'Auditee', employeeId: 'EEU-10005', password: 'user123', color: '#d97706', desc: 'Respond to CAPAs' },
