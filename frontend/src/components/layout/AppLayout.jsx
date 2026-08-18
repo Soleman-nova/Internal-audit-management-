@@ -1,73 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 
-// ── Translations ──────────────────────────────────────────────
-const TRANSLATIONS = {
-  EN: {
-    dashboard: 'Dashboard',
-    auditPlanning: 'Audit Planning',
-    auditExecution: 'Audit Execution',
-    findingsRegistry: 'Findings Registry',
-    riskAssessment: 'Risk Assessment',
-    correctiveActions: 'Corrective Actions',
-    reportsAnalytics: 'Reports & Analytics',
-    userManagement: 'User Management',
-    auditTrail: 'Audit Trail',
-    signOut: 'Sign Out',
-    notifications: 'Notifications',
-    markAllRead: 'Mark all read',
-    noNotifications: 'No new notifications',
-    systemSettings: 'System Settings',
-    general: 'General',
-    changePassword: 'Change Password',
-    profile: 'Profile',
-    apiEndpoint: 'API Endpoint Server URL',
-    systemLanguage: 'System Language',
-    themePreference: 'Theme Preference',
-    darkMode: '🌙 Dark Mode',
-    lightMode: '☀️ Light Mode',
-    darkModeSub: 'Default (Recommended)',
-    lightModeSub: 'High-contrast environment',
-    cancel: 'Cancel',
-    saveChanges: 'Save Changes',
-    settingsSaved: '✓ Settings saved! Applying changes...',
-    help: 'Help & Support',
-  },
-  AM: {
-    dashboard: 'ዳሽቦርድ',
-    auditPlanning: 'የኦዲት እቅድ',
-    auditExecution: 'የኦዲት አፈጻጸም',
-    findingsRegistry: 'ግኝቶች መዝገብ',
-    riskAssessment: 'የአደጋ ግምገማ',
-    correctiveActions: 'እርምት እርምጃዎች',
-    reportsAnalytics: 'ሪፖርቶች እና ትንታኔ',
-    userManagement: 'የተጠቃሚ አስተዳደር',
-    auditTrail: 'የኦዲት ዱካ',
-    signOut: 'ዘግተህ ውጣ',
-    notifications: 'ማሳወቂያዎች',
-    markAllRead: 'ሁሉም እንደተነበበ ምልክት ያድርጉ',
-    noNotifications: 'አዲስ ማሳወቂያ የለም',
-    systemSettings: 'የስርዓት ቅንብሮች',
-    general: 'አጠቃላይ',
-    changePassword: 'የይለፍ ቃል ቀይር',
-    profile: 'መገለጫ',
-    apiEndpoint: 'የ API አገልጋይ URL',
-    systemLanguage: 'የስርዓት ቋንቋ',
-    themePreference: 'የቴሜ ምርጫ',
-    darkMode: '🌙 ጨለማ ሁነታ',
-    lightMode: '☀️ ብርሃን ሁነታ',
-    darkModeSub: 'ነባሪ (የሚመከር)',
-    lightModeSub: 'ከፍተኛ-ኮንትራስት አካባቢ',
-    cancel: 'ሰርዝ',
-    saveChanges: 'ለውጦችን አስቀምጥ',
-    settingsSaved: '✓ ቅንብሮች ተቀምጠዋል! ለውጦች እየተተገበሩ...',
-    help: 'እርዳታ እና ድጋፍ',
-  },
-};
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { authApi, notificationApi } from '../../api/apiClient';
+import { authApi, notificationApi, resolveApiBaseUrl, setApiBaseUrl } from '../../api/apiClient';
 import { hasCapability, CAPABILITIES } from '../../hooks/usePermissions';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { useI18n } from '../../context/I18nContext';
 import {
   LayoutDashboard,
   Calendar,
@@ -115,16 +53,15 @@ function AppLayout() {
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const notifContainerRef = useRef(null);
-  const [apiServer, setApiServer] = useState(localStorage.getItem('apiBaseUrl') || 'http://localhost:8000/api');
+  const [apiServer, setApiServer] = useState(resolveApiBaseUrl);
   const themeMode = auth.theme || 'light';
   const language = auth.language === 'am' ? 'AM' : 'EN';
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-
-  // Translation helper
-  const t = useCallback((key) => {
-    return (TRANSLATIONS[language] || TRANSLATIONS.EN)[key] || key;
-  }, [language]);
+  // One dictionary for the whole app. The layout used to carry its own inline
+  // TRANSLATIONS object duplicating ~30 keys, so a term fixed in I18nContext
+  // stayed wrong in the sidebar and settings modal.
+  const { t } = useI18n();
   const [settingsTab, setSettingsTab] = useState('general');
   const [helpTab, setHelpTab] = useState('overview');
   const [helpRole, setHelpRole] = useState('admin');
@@ -201,7 +138,11 @@ function AppLayout() {
 
   const handleSaveSettings = (e) => {
     e.preventDefault();
-    localStorage.setItem('apiBaseUrl', apiServer);
+    // Retargets the live axios instance as well as persisting the choice, so
+    // the next request goes to the new host — previously the toast said
+    // "saved" while every call kept hitting the old endpoint until a reload.
+    const applied = setApiBaseUrl(apiServer);
+    setApiServer(applied);
     toast.success('System settings saved.');
     setShowSettings(false);
   };

@@ -1,0 +1,33 @@
+# ── Secrets and local configuration ──────────────────────────────────
+# `.env.example` in backend/ and frontend/ documents what belongs here.
+.env
+.env.local
+.env.*.local
+
+# ── Python ───────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# ── Django ───────────────────────────────────────────────────────────
+db.sqlite3
+db.sqlite3-journal
+/backend/media/
+staticfiles/
+
+# ── Node / Vite ──────────────────────────────────────────────────────
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-error.log*
+
+# ── Editors and OS ───────────────────────────────────────────────────
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

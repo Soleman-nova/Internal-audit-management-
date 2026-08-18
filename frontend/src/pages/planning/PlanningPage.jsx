@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { planningApi, usersApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -16,7 +17,30 @@ function PlanningPage() {
   const toast = useToast();
   const { t } = useI18n();
   const { canWriteAudit, canApprovePlans } = usePermissions();
-  const [activeTab, setActiveTab] = useState('universe');
+
+  // ── Deep links from notifications ────────────────────────────────
+  // The backend emits /planning?plan=<id> and /planning?engagement=<id>.
+  // The tab that holds the record is derived from the query string, not set
+  // from an effect — an effect would render the universe tab first and then
+  // replace it, and the scroll-into-view below would chase a moving target.
+  const [searchParams] = useSearchParams();
+  const focusPlanId = searchParams.get('plan');
+  const focusEngagementId = searchParams.get('engagement');
+  const deepLinkTab = focusPlanId ? 'plans' : focusEngagementId ? 'engagements' : null;
+  const deepLinkKey = focusPlanId
+    ? `plan-${focusPlanId}`
+    : focusEngagementId ? `engagement-${focusEngagementId}` : '';
+
+  const [activeTab, setActiveTab] = useState(deepLinkTab || 'universe');
+  const [lastDeepLink, setLastDeepLink] = useState(deepLinkKey);
+  if (deepLinkKey && deepLinkKey !== lastDeepLink) {
+    // Clicking a second notification while already on this page changes the
+    // query string without remounting, so the initial state above never
+    // re-runs. Adjusting during render is React's documented answer.
+    setLastDeepLink(deepLinkKey);
+    setActiveTab(deepLinkTab);
+  }
+
   const [formErrors, setFormErrors] = useState({});
   const [universe, setUniverse] = useState([]);
   const [plans, setPlans] = useState([]);
@@ -58,6 +82,15 @@ function PlanningPage() {
   useEffect(() => {
     fetchPlanningData();
   }, []);
+
+  // Scroll the deep-linked record into view once the fetch has landed —
+  // otherwise the notification drops the user on the right tab with no
+  // indication of which row they were meant to look at.
+  useEffect(() => {
+    if (loading || !deepLinkKey) return;
+    const el = document.getElementById(deepLinkKey);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [loading, activeTab, deepLinkKey]);
 
   const fetchPlanningData = async () => {
     setLoading(true);
@@ -443,7 +476,11 @@ function PlanningPage() {
               </div>
               <div className="plans-grid mt-4">
                 {plans.map(plan => (
-                  <div key={plan.id} className="plan-card">
+                  <div
+                    key={plan.id}
+                    id={`plan-${plan.id}`}
+                    className={`plan-card${String(plan.id) === focusPlanId ? ' ring-2 ring-emerald-500' : ''}`}
+                  >
                     <div className="plan-card-header">
                       <h4>{plan.title}</h4>
                       <span className={`badge ${plan.status === 'approved' || plan.status === 'active' ? 'badge-success' : 'badge-info'}`}>
@@ -516,7 +553,11 @@ function PlanningPage() {
                   </thead>
                   <tbody>
                     {engagements.map(eng => (
-                      <tr key={eng.id}>
+                      <tr
+                        key={eng.id}
+                        id={`engagement-${eng.id}`}
+                        className={String(eng.id) === focusEngagementId ? 'ring-2 ring-emerald-500' : undefined}
+                      >
                         <td><strong>{eng.engagement_number}</strong></td>
                         <td>{eng.title}</td>
                         <td><span className="badge badge-outline">{eng.engagement_type?.toUpperCase()}</span></td>

@@ -1,7 +1,6 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.utils import timezone
@@ -10,7 +9,9 @@ import random, string
 from .models import CorrectiveAction, ActionResponse, FollowUp
 from .serializers import CorrectiveActionSerializer, ActionResponseSerializer, FollowUpSerializer
 from apps.notifications.services import notify
-from apps.common.permissions import CanWriteAudit
+from apps.common.permissions import (
+    CanWriteAudit, InvolvedPartyOrCapability, APPROVE_PLANS,
+)
 from apps.common.audit_utils import log_audit
 
 
@@ -50,7 +51,7 @@ class CorrectiveActionViewSet(viewsets.ModelViewSet):
                 'assigned',
                 f'New corrective action: {action_obj.action_number}',
                 f'You have been assigned corrective action "{action_obj.title}" (due {due}).',
-                f'/corrective-actions?id={action_obj.id}',
+                f'/capa/{action_obj.id}',
             )
 
     def perform_update(self, serializer):
@@ -69,7 +70,7 @@ class CorrectiveActionViewSet(viewsets.ModelViewSet):
                 'assigned',
                 f'Corrective action assigned: {action_obj.action_number}',
                 f'You have been assigned corrective action "{action_obj.title}".',
-                f'/corrective-actions?id={action_obj.id}',
+                f'/capa/{action_obj.id}',
             )
 
     def perform_destroy(self, instance):
@@ -77,7 +78,7 @@ class CorrectiveActionViewSet(viewsets.ModelViewSet):
         instance.delete()
 
     @action(detail=True, methods=['post'], url_path='add-response',
-            permission_classes=[IsAuthenticated])
+            permission_classes=[InvolvedPartyOrCapability.for_('owner')])
     def add_response(self, request, pk=None):
         action_obj = self.get_object()
         data = request.data.copy()
@@ -101,12 +102,20 @@ class CorrectiveActionViewSet(viewsets.ModelViewSet):
                 f'Response on {action_obj.action_number}',
                 f'{request.user.get_full_name() or request.user.username} responded on '
                 f'corrective action "{action_obj.title}".',
-                f'/corrective-actions?id={action_obj.id}',
+                f'/capa/{action_obj.id}',
             )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=['post'], url_path='schedule-followup')
+    @action(detail=True, methods=['post'], url_path='schedule-followup',
+            permission_classes=[InvolvedPartyOrCapability.for_(
+                'assigned_by', capability=APPROVE_PLANS)])
     def schedule_followup(self, request, pk=None):
+        """Record a verification follow-up against the action.
+
+        Scoped to whoever raised the action, plus APPROVE_PLANS holders
+        (supervisor and above) who verify across engagements. The class-level
+        WRITE_AUDIT gate let any auditor sign off on a colleague's CAPA.
+        """
         action_obj = self.get_object()
         data = request.data.copy()
         data['corrective_action'] = action_obj.id
@@ -121,17 +130,27 @@ class CorrectiveActionViewSet(viewsets.ModelViewSet):
                 'follow_up',
                 f'Follow-up scheduled: {action_obj.action_number}',
                 f'A follow-up has been scheduled for corrective action "{action_obj.title}".',
-                f'/corrective-actions?id={action_obj.id}',
+                f'/capa/{action_obj.id}',
             )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'], url_path='overdue')
     def overdue(self, request):
+        """Actions past their due date and still open — paginated like every other list.
+
+        This feeds the Overdue tab on the follow-up page, and an audit backlog
+        can run to hundreds of rows, so it must not dump the whole queryset.
+        Derived from due_date rather than status='overdue' so the tab is correct
+        even before the flag_overdue_actions command has run.
+        """
         today = timezone.now().date()
-        qs = self.get_queryset().filter(
+        qs = self.filter_queryset(self.get_queryset()).filter(
             due_date__lt=today,
             status__in=['open', 'in_progress']
         )
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            return self.get_paginated_response(self.get_serializer(page, many=True).data)
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 

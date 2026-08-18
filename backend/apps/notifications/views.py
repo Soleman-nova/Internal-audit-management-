@@ -38,7 +38,9 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
 
 class SystemSettingViewSet(viewsets.ModelViewSet):
-    queryset = SystemSetting.objects.all()
+    # SystemSetting has no Meta.ordering; `key` is unique, so ordering by it is
+    # both stable for pagination and the order the settings screen reads best in.
+    queryset = SystemSetting.objects.order_by('key')
     serializer_class = SystemSettingSerializer
     permission_classes = [CanManageSettings]
 

@@ -5,6 +5,12 @@ export const executionApi = {
     const res = await apiClient.get('/execution/programs/', { params });
     return res.data?.results ?? res.data;
   },
+  // Single-record fetch, used to resolve a /execution?program=<id> deep link
+  // back to the engagement whose tab holds it.
+  getProgram: async (programId) => {
+    const res = await apiClient.get(`/execution/programs/${programId}/`);
+    return res.data;
+  },
   createProgram: async (data) => {
     const res = await apiClient.post('/execution/programs/', data);
     return res.data;
@@ -15,6 +21,21 @@ export const executionApi = {
   },
   createProcedure: async (data) => {
     const res = await apiClient.post('/execution/procedures/', data);
+    return res.data;
+  },
+  updateProcedure: async (procId, data) => {
+    const res = await apiClient.patch(`/execution/procedures/${procId}/`, data);
+    return res.data;
+  },
+  deleteProcedure: async (procId) => {
+    const res = await apiClient.delete(`/execution/procedures/${procId}/`);
+    return res.data;
+  },
+  // Marks the procedure complete via the dedicated action, which also stamps
+  // completed_by/completed_at and notifies the engagement lead. A plain PATCH
+  // of status would skip all three.
+  completeProcedure: async (procId, conclusion = '') => {
+    const res = await apiClient.post(`/execution/procedures/${procId}/complete/`, { conclusion });
     return res.data;
   },
   getWorkingPapers: async (params = {}) => {
@@ -56,11 +77,11 @@ export const executionApi = {
     window.URL.revokeObjectURL(url);
   },
   submitForReview: async (programId) => {
-    const res = await apiClient.post(`/execution/programs/${programId}/submit-for-review/`);
+    const res = await apiClient.post(`/execution/programs/${programId}/submit/`);
     return res.data;
   },
   approveFieldwork: async (programId) => {
-    const res = await apiClient.post(`/execution/programs/${programId}/approve-fieldwork/`);
+    const res = await apiClient.post(`/execution/programs/${programId}/approve/`);
     return res.data;
   },
 };

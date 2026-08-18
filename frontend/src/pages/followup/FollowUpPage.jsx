@@ -18,8 +18,9 @@ function FollowUpPage() {
   const auth = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
-  const { canWriteAudit } = usePermissions();
+  const { canWriteAudit, canApprovePlans } = usePermissions();
   const [capas, setCapas] = useState([]);
+  const [overdueCapas, setOverdueCapas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [formErrors, setFormErrors] = useState({});
@@ -58,8 +59,16 @@ function FollowUpPage() {
   const fetchCapas = async () => {
     setLoading(true);
     try {
-      const res = await capaApi.getActions();
+      // The overdue list comes from the server so the tab is correct even
+      // before flag_overdue_actions has stamped status='overdue' — it derives
+      // the set from due_date. Filtering the main list on status='overdue'
+      // left the tab silently empty between management-command runs.
+      const [res, overdueRes] = await Promise.all([
+        capaApi.getActions(),
+        capaApi.getOverdue(),
+      ]);
       setCapas(Array.isArray(res) ? res : []);
+      setOverdueCapas(Array.isArray(overdueRes) ? overdueRes : []);
     } catch (err) {
       toast.error('Failed to load CAPA actions');
     } finally {
@@ -201,13 +210,28 @@ function FollowUpPage() {
     }
   };
 
+  const overdueIds = new Set(overdueCapas.map(c => c.id));
+  const isOverdue = (c) => c.status === 'overdue' || c.is_overdue || overdueIds.has(c.id);
+  const overdueCount = capas.filter(isOverdue).length;
+
   const filteredCapas = capas.filter(c => {
     if (activeTab === 'all') return true;
     if (activeTab === 'open') return c.status === 'open' || c.status === 'in_progress';
     if (activeTab === 'resolved') return c.status === 'resolved' || c.status === 'closed';
-    if (activeTab === 'overdue') return c.status === 'overdue';
+    // Trust the server-derived set, plus anything the command has already flagged.
+    if (activeTab === 'overdue') return isOverdue(c);
     return true;
   });
+
+  // The named owner may respond without holding WRITE_AUDIT — that mirrors the
+  // backend's InvolvedPartyOrCapability.for_('owner') gate on add-response.
+  // Anyone else would get a 403, so don't offer them the button.
+  const canRespondTo = (capa) => canWriteAudit || capa.owner === currentUser?.id;
+
+  // Verification is scoped to whoever raised the action, plus APPROVE_PLANS
+  // holders who sign off across engagements — the same object check the backend
+  // applies to schedule-followup.
+  const canVerify = (capa) => canApprovePlans || capa.assigned_by === currentUser?.id;
 
   const isAuditorOrManager = currentUser && currentUser.role !== 'auditee';
 
@@ -224,7 +248,7 @@ function FollowUpPage() {
           {t('resolvedCapas')}
         </button>
         <button className={`tab-btn ${activeTab === 'overdue' ? 'active' : ''}`} onClick={() => setActiveTab('overdue')}>
-          {t('overdueCapas')}
+          {t('overdue')}{overdueCount > 0 ? ` (${overdueCount})` : ''}
         </button>
       </div>
 
@@ -269,7 +293,7 @@ function FollowUpPage() {
                   </tr>
                 ) : (
                   filteredCapas.map(c => (
-                    <tr key={c.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/50" onClick={() => navigate(`/capa/${c.id}`)} title={t('clickForDetails') || 'Click to view details'}>
+                    <tr key={c.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/50" onClick={() => navigate(`/capa/${c.id}`)} title="Click to view details">
                       <td><strong>{c.action_number}</strong></td>
                       <td>
                         <div className="capa-title-container">
@@ -283,16 +307,32 @@ function FollowUpPage() {
                           {c.priority?.toUpperCase()}
                         </span>
                       </td>
-                      <td>{c.due_date}</td>
+                      <td>{c.extended_due_date || c.due_date}</td>
                       <td>
                         <span className={`badge ${getStatusBadge(c.status)}`}>
                           {c.status?.replace('_', ' ').toUpperCase()}
                         </span>
+                        {/* Due-date-derived, so it shows before the nightly command runs */}
+                        {isOverdue(c) && c.status !== 'overdue' && (
+                          <span className="badge badge-danger ml-1">{t('overdue').toUpperCase()}</span>
+                        )}
                       </td>
                       <td>
-                        <button className="btn btn-outline btn-sm flex items-center gap-1" onClick={(e) => { e.stopPropagation(); handleOpenResponse(c); }}>
-                          <MessageCircle size={14} /> Respond
-                        </button>
+                        <div className="flex gap-1">
+                          {canRespondTo(c) && (
+                            <button className="btn btn-outline btn-sm flex items-center gap-1" onClick={(e) => { e.stopPropagation(); handleOpenResponse(c); }}>
+                              <MessageCircle size={14} /> Respond
+                            </button>
+                          )}
+                          {canVerify(c) && (
+                            <button
+                              className="btn btn-outline btn-sm flex items-center gap-1"
+                              onClick={(e) => { e.stopPropagation(); navigate(`/capa/${c.id}`); }}
+                            >
+                              <CheckCircle2 size={14} /> {t('verifyAndSchedule')}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))

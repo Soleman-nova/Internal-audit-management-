@@ -143,11 +143,9 @@ function RiskAssessmentPage() {
         ...surveyResponse
       };
       await riskApi.createSelfAssessment(payload);
-
-      // Update risk assessment parent to indicate self assessment is complete
-      await riskApi.updateAssessment(selectedAssessment.id, {
-        is_self_assessment: true
-      });
+      // The parent assessment's is_self_assessment flag is set server-side —
+      // an auditee has no write access to RiskAssessment, so PATCHing it here
+      // used to 403 and report a failure after the survey had already saved.
 
       toast.success('Self-assessment survey submitted successfully!');
       setShowSurveyModal(false);
@@ -171,10 +169,11 @@ function RiskAssessmentPage() {
     if (!selectedSelfAss) return;
     setSubmittingReview(true);
     try {
-      await riskApi.updateSelfAssessment(selectedSelfAss.id, {
-        reviewer_notes: reviewerNotes,
-        status: 'reviewed'
-      });
+      // Must go through the review action, not a status PATCH: only that path
+      // enforces APPROVE_PLANS, stamps reviewed_by/reviewed_at, writes the
+      // audit trail and notifies the submitter. The backend now also refuses
+      // to accept status through PATCH at all.
+      await riskApi.reviewSelfAssessment(selectedSelfAss.id, reviewerNotes);
       toast.success('Review submitted and status updated!');
       setShowReviewModal(false);
       fetchAll();

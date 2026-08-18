@@ -4,11 +4,14 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.db.models import Q
 from django.utils import timezone
 from .models import AuditUniverse, AuditPlan, AuditEngagement, AuditTeamMember
 from .serializers import (AuditUniverseSerializer, AuditPlanSerializer,
                           AuditEngagementSerializer, AuditTeamMemberSerializer)
-from apps.common.permissions import CanWriteAudit, RequiresCapability, APPROVE_PLANS
+from apps.common.permissions import (
+    CanWriteAudit, RequiresCapability, InvolvedPartyOrCapability, APPROVE_PLANS,
+)
 from apps.common.audit_utils import log_audit
 from apps.notifications.services import notify, notify_roles
 
@@ -104,12 +107,20 @@ class AuditPlanViewSet(viewsets.ModelViewSet):
                 'approved',
                 f'Audit plan approved: {plan.year}',
                 f'Your audit plan "{plan.title}" has been approved.',
-                f'/audit-planning?plan={plan.id}',
+                f'/planning?plan={plan.id}',
             )
         return Response({'detail': 'Plan approved successfully.'})
 
-    @action(detail=True, methods=['post'], url_path='submit')
+    @action(detail=True, methods=['post'], url_path='submit',
+            permission_classes=[InvolvedPartyOrCapability.for_(
+                'created_by', capability=APPROVE_PLANS)])
     def submit(self, request, pk=None):
+        """Send the plan up for approval.
+
+        Restricted to the author plus APPROVE_PLANS holders. At the class-level
+        WRITE_AUDIT gate any auditor could submit a plan they had no part in
+        drafting, which then went to the approvers under their name.
+        """
         plan = self.get_object()
         prev_status = plan.status
         plan.status = 'submitted'
@@ -122,7 +133,7 @@ class AuditPlanViewSet(viewsets.ModelViewSet):
             f'Audit plan awaiting approval: {plan.year}',
             f'Audit plan "{plan.title}" has been submitted for approval by '
             f'{request.user.get_full_name() or request.user.username}.',
-            f'/audit-planning?plan={plan.id}',
+            f'/planning?plan={plan.id}',
             exclude=request.user,
         )
         return Response({'detail': 'Plan submitted for approval.'})
@@ -139,13 +150,31 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'engagement_number', 'objectives']
     ordering = ['-created_at']
 
+    def get_queryset(self):
+        """Auditees see only engagements covering their own department.
+
+        Same shape as AuditFindingViewSet.get_queryset. An auditee is a
+        department representative, so the EEU-wide engagement calendar — who is
+        being audited, when, and by whom — is not theirs to read. A user with no
+        department sees only the engagements they are personally named on rather
+        than everything, which is the safer reading of a missing department.
+        """
+        user = self.request.user
+        qs = super().get_queryset()
+        if user.is_authenticated and user.role == 'auditee':
+            scope = Q(lead_auditor=user) | Q(supervisor=user) | Q(team_members__user=user)
+            if user.department_id:
+                scope |= Q(department_id=user.department_id)
+            return qs.filter(scope).distinct()
+        return qs
+
     def perform_create(self, serializer):
         import random, string
         num = ''.join(random.choices(string.digits, k=5))
         engagement = serializer.save(engagement_number=f'ENG-{num}')
         log_audit(self.request, 'CREATE', engagement)
         # Notify the lead auditor and supervisor of their assignment.
-        link = f'/engagements?id={engagement.id}'
+        link = f'/planning?engagement={engagement.id}'
         recipients = {engagement.lead_auditor, engagement.supervisor}
         recipients.discard(None)
         recipients.discard(self.request.user)
@@ -183,7 +212,7 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
                 f'Added to engagement: {engagement.engagement_number}',
                 f'You have been added to audit engagement "{engagement.title}" '
                 f'as {member.get_role_display()}.',
-                f'/engagements?id={engagement.id}',
+                f'/planning?engagement={engagement.id}',
             )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -216,7 +245,7 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
                 universe.save(update_fields=['last_audited', 'updated_at'])
         log_audit(request, 'UPDATE', engagement, changes={'status': [old_status, new_status]})
         # Notify the relevant parties of the status transition.
-        link = f'/engagements?id={engagement.id}'
+        link = f'/planning?engagement={engagement.id}'
         if new_status == 'in_progress' and engagement.lead_auditor and engagement.lead_auditor != request.user:
             notify(
                 engagement.lead_auditor,

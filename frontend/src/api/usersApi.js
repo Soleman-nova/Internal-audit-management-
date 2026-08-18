@@ -14,8 +14,10 @@ export const usersApi = {
     return res.data;
   },
   resetPassword: async (id, newPassword) => {
+    // The backend action reads request.data['password'] — sending any other key
+    // makes every reset fail with "Password is required."
     const res = await apiClient.post(`/auth/users/${id}/reset-password/`, {
-      new_password: newPassword,
+      password: newPassword,
     });
     return res.data;
   },
@@ -32,6 +34,12 @@ export const usersApi = {
   },
   getAuditTrail: async (params = {}) => {
     const res = await apiClient.get('/auth/audit-trail/', { params });
+    return res.data;
+  },
+  // Dashboard KPI cards and chart series. Pass { directorate: <department id> }
+  // to scope every number to one audit directorate; omit it for EEU-wide totals.
+  getDashboardStats: async (params = {}) => {
+    const res = await apiClient.get('/auth/dashboard/stats/', { params });
     return res.data;
   },
 };

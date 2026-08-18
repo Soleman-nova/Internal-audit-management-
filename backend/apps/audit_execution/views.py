@@ -10,7 +10,9 @@ import mimetypes
 
 from .models import AuditProgram, AuditProcedure, WorkingPaper
 from .serializers import AuditProgramSerializer, AuditProcedureSerializer, WorkingPaperSerializer
-from apps.common.permissions import CanWriteAudit, RequiresCapability, APPROVE_PLANS
+from apps.common.permissions import (
+    CanWriteAudit, RequiresCapability, InvolvedPartyOrCapability, APPROVE_PLANS,
+)
 from apps.common.audit_utils import log_audit
 from apps.notifications.services import notify, notify_roles
 
@@ -21,13 +23,29 @@ class AuditProgramViewSet(viewsets.ModelViewSet):
     ).prefetch_related('procedures').all()
     serializer_class = AuditProgramSerializer
     permission_classes = [CanWriteAudit]
-    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'engagement']
     search_fields = ['title']
+    ordering_fields = ['created_at', 'title', 'status']
+    # Without a default ordering the queryset comes back in whatever order the
+    # database happens to return, so paginating it can repeat or skip rows.
+    ordering = ['-created_at']
 
     def perform_create(self, serializer):
         program = serializer.save(prepared_by=self.request.user)
         log_audit(self.request, 'CREATE', program)
+
+    def perform_update(self, serializer):
+        prev_status = serializer.instance.status
+        program = serializer.save()
+        changes = None
+        if program.status != prev_status:
+            changes = {'status': [prev_status, program.status]}
+        log_audit(self.request, 'UPDATE', program, changes=changes)
+
+    def perform_destroy(self, instance):
+        log_audit(self.request, 'DELETE', instance)
+        instance.delete()
 
     @action(detail=True, methods=['post'], url_path='approve',
             permission_classes=[RequiresCapability.for_(APPROVE_PLANS)])
@@ -52,12 +70,22 @@ class AuditProgramViewSet(viewsets.ModelViewSet):
             )
         return Response({'detail': 'Audit program approved.'})
 
-    @action(detail=True, methods=['post'], url_path='submit')
+    @action(detail=True, methods=['post'], url_path='submit',
+            permission_classes=[InvolvedPartyOrCapability.for_(
+                'prepared_by', 'engagement.lead_auditor', capability=APPROVE_PLANS)])
     def submit(self, request, pk=None):
+        """Send the program up for approval.
+
+        Restricted to the people who own the work — whoever prepared it or leads
+        the engagement — plus APPROVE_PLANS holders, who may push any program
+        through. At the class-level WRITE_AUDIT gate, any auditor in the
+        organisation could submit a colleague's program for review.
+        """
         program = self.get_object()
+        prev_status = program.status
         program.status = 'submitted'
         program.save()
-        log_audit(request, 'UPDATE', program)
+        log_audit(request, 'UPDATE', program, changes={'status': [prev_status, 'submitted']})
         notify_roles(
             ['audit_manager', 'supervisor'],
             'approval_needed',
@@ -82,15 +110,36 @@ class AuditProcedureViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'description', 'risk_area']
     ordering = ['order', 'step_number']
 
+    def perform_create(self, serializer):
+        procedure = serializer.save()
+        log_audit(self.request, 'CREATE', procedure)
+
+    def perform_update(self, serializer):
+        prev_status = serializer.instance.status
+        procedure = serializer.save()
+        changes = None
+        if procedure.status != prev_status:
+            changes = {'status': [prev_status, procedure.status]}
+        log_audit(self.request, 'UPDATE', procedure, changes=changes)
+
+    def perform_destroy(self, instance):
+        log_audit(self.request, 'DELETE', instance)
+        instance.delete()
+
     @action(detail=True, methods=['post'], url_path='complete')
     def complete(self, request, pk=None):
         procedure = self.get_object()
+        prev_status = procedure.status
         procedure.status = 'completed'
         procedure.completed_by = request.user
         procedure.completed_at = timezone.now()
-        procedure.conclusion = request.data.get('conclusion', '')
+        # Only overwrite the conclusion when one is supplied — completing from the
+        # status dropdown sends no body, and blanking a written conclusion there
+        # would quietly destroy fieldwork evidence.
+        if 'conclusion' in request.data:
+            procedure.conclusion = request.data.get('conclusion') or ''
         procedure.save()
-        log_audit(request, 'UPDATE', procedure)
+        log_audit(request, 'UPDATE', procedure, changes={'status': [prev_status, 'completed']})
         # Notify the engagement lead that a procedure was completed.
         engagement = procedure.program.engagement if procedure.program else None
         lead = engagement.lead_auditor if engagement else None
@@ -103,7 +152,9 @@ class AuditProcedureViewSet(viewsets.ModelViewSet):
                 f'{request.user.get_full_name() or request.user.username}.',
                 f'/execution?program={procedure.program_id}',
             )
-        return Response({'detail': 'Procedure marked as completed.'})
+        # Return the updated record, not just a message, so the client can merge
+        # completed_by/completed_at into its row without a second round trip.
+        return Response(self.get_serializer(procedure).data)
 
 
 class WorkingPaperViewSet(viewsets.ModelViewSet):

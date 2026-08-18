@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { reportsApi, planningApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
@@ -13,11 +14,15 @@ import { FileText, Download, Plus, RefreshCw, BarChart2, X } from 'lucide-react'
 function ReportsPage() {
   const toast = useToast();
   const { t } = useI18n();
+  const [searchParams] = useSearchParams();
+  // reports/jobs.py notifies with /reports?id=<id> when a report finishes.
+  const focusReportId = searchParams.get('id');
   const [templates, setTemplates] = useState([]);
   const [engagements, setEngagements] = useState([]);
   const [generated, setGenerated] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formErrors, setFormErrors] = useState({});
+  const [downloadingId, setDownloadingId] = useState(null);
 
   // Form State
   const [showGenModal, setShowGenModal] = useState(false);
@@ -29,7 +34,48 @@ function ReportsPage() {
 
   useEffect(() => {
     fetchReportsData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Poll while anything is still being generated ─────────────────
+  // Generation runs off-thread in reports/jobs.py, so the row lands as
+  // `generating` and flips to ready/failed seconds later. A single fixed
+  // 2 s refetch missed anything slower than that and left the row stuck.
+  const pollRef = useRef(null);
+  const anyGenerating = generated.some(g => g.status === 'generating');
+
+  const refreshGenerated = useCallback(async () => {
+    try {
+      const genRes = await reportsApi.getGeneratedReports();
+      setGenerated(Array.isArray(genRes) ? genRes : []);
+    } catch {
+      // A failed poll is not worth a toast — the next tick retries.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!anyGenerating) {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      return undefined;
+    }
+    pollRef.current = setInterval(refreshGenerated, 3000);
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [anyGenerating, refreshGenerated]);
+
+  // Scroll the deep-linked row into view once the archive has loaded.
+  useEffect(() => {
+    if (loading || !focusReportId) return;
+    const el = document.getElementById(`report-${focusReportId}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [loading, focusReportId]);
 
   const fetchReportsData = async () => {
     setLoading(true);
@@ -87,8 +133,8 @@ function ReportsPage() {
       setGenerated([response, ...generated]);
       setShowGenModal(false);
       toast.success('Report generation triggered. Download available when status is READY.');
-      // Refresh list after brief delay
-      setTimeout(fetchReportsData, 2000);
+      // The polling effect above takes over from here — the new row is
+      // `generating`, so it refetches every 3 s until the file is ready.
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
       toast.error('Failed to generate report: ' + msg);
@@ -97,16 +143,21 @@ function ReportsPage() {
     }
   };
 
-  const triggerDownload = (report) => {
-    // Use file_url if available (full absolute URL from serializer)
-    if (report.file_url) {
-      window.open(report.file_url, '_blank');
-    } else if (report.file) {
-      window.open(report.file, '_blank');
-    } else {
-      // Fallback to export endpoint
-      const downloadUrl = `http://localhost:8000/api/reports/generated/${report.id}/export/`;
-      window.open(downloadUrl, '_blank');
+  // Always go through the export endpoint via apiClient: it attaches the JWT,
+  // resolves the host from the configured base URL, and honours the
+  // Content-Disposition filename. window.open on file_url sends no auth header,
+  // and the old localhost:8000 fallback broke every non-local deployment.
+  const triggerDownload = async (report) => {
+    setDownloadingId(report.id);
+    try {
+      await reportsApi.downloadReport(report.id, `${report.title}.${report.format}`);
+    } catch (err) {
+      const msg = err.response?.status === 400
+        ? 'This report has no file attached yet.'
+        : 'Failed to download report';
+      toast.error(msg);
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -172,22 +223,32 @@ function ReportsPage() {
                     </tr>
                   ) : (
                     generated.map(gen => (
-                      <tr key={gen.id}>
+                      <tr
+                        key={gen.id}
+                        id={`report-${gen.id}`}
+                        className={String(gen.id) === focusReportId ? 'ring-2 ring-emerald-500' : undefined}
+                      >
                         <td><strong>{gen.title}</strong></td>
                         <td><span className="badge badge-outline">{gen.format?.toUpperCase()}</span></td>
                         <td>{new Date(gen.generated_at).toLocaleDateString()}</td>
                         <td>
-                          <span className={`badge ${gen.status === 'ready' ? 'badge-success' : 'badge-warning'}`}>
+                          <span className={`badge ${
+                            gen.status === 'ready' ? 'badge-success'
+                              : gen.status === 'failed' ? 'badge-danger' : 'badge-warning'
+                          }`}>
                             {gen.status?.toUpperCase()}
                           </span>
+                          {gen.status === 'failed' && gen.error_message && (
+                            <p className="text-xs text-danger mt-1">{gen.error_message}</p>
+                          )}
                         </td>
                         <td>
                           <button
                             className="btn btn-outline btn-sm flex items-center gap-1"
                             onClick={() => triggerDownload(gen)}
-                            disabled={gen.status !== 'ready' && !gen.file}
+                            disabled={gen.status !== 'ready' || downloadingId === gen.id}
                           >
-                            <Download size={14} /> {t('download')}
+                            <Download size={14} /> {downloadingId === gen.id ? t('loading') : t('download')}
                           </button>
                         </td>
                       </tr>

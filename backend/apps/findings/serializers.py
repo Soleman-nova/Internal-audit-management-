@@ -52,6 +52,14 @@ class AuditFindingSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuditFinding
         fields = '__all__'
+        # Both are the server's to set: perform_create assigns FND-##### and
+        # stamps the caller as the identifier. Left writable, `finding_number`
+        # was a *required* field on create — so a client that correctly stopped
+        # inventing its own number got a 400 — and `identified_by` could be
+        # reassigned to someone else through a plain PATCH. Same shape as
+        # AuditEngagementSerializer.engagement_number and
+        # CorrectiveActionSerializer.action_number/assigned_by.
+        read_only_fields = ['finding_number', 'identified_by']
 
     def get_identified_by_name(self, obj):
         if obj.identified_by:

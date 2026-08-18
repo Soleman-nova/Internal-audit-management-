@@ -90,10 +90,11 @@ function FindingsPage() {
     }
     setFormErrors({});
 
+    // finding_number is assigned server-side (FND-#####) — sending one here was
+    // silently discarded by perform_create, so the client value never applied.
     const data = {
       ...newFinding,
       engagement: selectedEngId,
-      finding_number: `FIND-${Date.now().toString().slice(-4)}`
     };
 
     try {

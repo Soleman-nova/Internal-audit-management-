@@ -106,3 +106,63 @@ class RequiresCapability(BasePermission):
             (cls,),
             {'capability': capability},
         )
+
+
+class InvolvedPartyOrCapability(BasePermission):
+    """Allow capability holders, or the specific users named on the object itself.
+
+    Auditees hold no capabilities, so a plain CanWriteAudit gate locks them out
+    of the records that are *about* them — they cannot comment on their own
+    finding or attach the evidence being asked of them. Rather than granting
+    auditees WRITE_AUDIT across the app, this checks the object's own FK fields
+    (``auditee``, ``assigned_to``, ``owner``, …) and lets those people through
+    for that one record.
+
+    Object-level only, so it must be used on actions that call
+    ``self.get_object()`` — that is what triggers ``check_object_permissions``.
+
+    Field names may traverse relations with dots, so a program's engagement lead
+    counts as an involved party: ``for_('prepared_by', 'engagement.lead_auditor')``.
+
+    Usage:
+        @action(..., permission_classes=[
+            InvolvedPartyOrCapability.for_('auditee', 'assigned_to')])
+    """
+    capability = WRITE_AUDIT
+    object_fields = ()
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated)
+
+    def has_object_permission(self, request, view, obj):
+        if has_capability(request.user, self.capability):
+            return True
+        return any(
+            self._field_user_id(obj, field) == request.user.id
+            for field in self.object_fields
+        )
+
+    @staticmethod
+    def _field_user_id(obj, field):
+        """The user id a (possibly dotted) field path points at, or None.
+
+        Compares ``<field>_id`` rather than the related object so the common case
+        costs no extra query; only the dotted segments before the last one are
+        dereferenced, and a null anywhere along the path short-circuits to None
+        instead of raising.
+        """
+        *path, leaf = field.split('.')
+        for step in path:
+            obj = getattr(obj, step, None)
+            if obj is None:
+                return None
+        return getattr(obj, f'{leaf}_id', None)
+
+    @classmethod
+    def for_(cls, *object_fields, capability=WRITE_AUDIT):
+        suffix = '_'.join(object_fields).replace('.', '__')
+        return type(
+            f'InvolvedPartyOrCapability_{suffix}',
+            (cls,),
+            {'capability': capability, 'object_fields': tuple(object_fields)},
+        )

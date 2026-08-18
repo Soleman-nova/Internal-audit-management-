@@ -60,6 +60,22 @@ class UserSerializer(serializers.ModelSerializer):
         return None
 
 
+class ProfileSerializer(UserSerializer):
+    """Self-service profile edits — same shape as UserSerializer, fewer writable fields.
+
+    The response keeps the full user payload so the client can replace its
+    stored user object wholesale (it needs ``role`` to keep rendering the right
+    nav). But role, department, employee_id, is_active and email are pinned
+    read-only: a user PATCHing their own profile must never be able to promote
+    themselves or reassign their department.
+    """
+
+    class Meta(UserSerializer.Meta):
+        read_only_fields = UserSerializer.Meta.read_only_fields + [
+            'email', 'username', 'role', 'department', 'employee_id', 'is_active',
+        ]
+
+
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True, required=False, allow_blank=True, default='')

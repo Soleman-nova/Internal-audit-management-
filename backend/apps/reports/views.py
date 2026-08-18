@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.core.files.base import ContentFile
 from io import BytesIO
 from django.db.models import Count
+import mimetypes
 
 from .models import ReportTemplate, GeneratedReport
 from .serializers import ReportTemplateSerializer, GeneratedReportSerializer
@@ -17,14 +18,25 @@ from apps.common.audit_utils import log_audit
 
 
 class ReportTemplateViewSet(viewsets.ModelViewSet):
-    queryset = ReportTemplate.objects.all()
+    # ReportTemplate has no Meta.ordering, so paginating it could repeat or skip
+    # templates between pages. Newest first, matching GeneratedReport.
+    queryset = ReportTemplate.objects.order_by('-created_at')
     serializer_class = ReportTemplateSerializer
     permission_classes = [CanManageSettings]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['template_type', 'is_default']
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        template = serializer.save(created_by=self.request.user)
+        log_audit(self.request, 'CREATE', template)
+
+    def perform_update(self, serializer):
+        template = serializer.save()
+        log_audit(self.request, 'UPDATE', template)
+
+    def perform_destroy(self, instance):
+        log_audit(self.request, 'DELETE', instance)
+        instance.delete()
 
 
 class GeneratedReportViewSet(viewsets.ModelViewSet):
@@ -83,7 +95,32 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
             }
             
         buf = BytesIO()
-        filename = f"{report.title.replace(' ', '_')}.{report.format}"
+        # The severity/status tally used to be computed inside the `pdf` branch,
+        # but the excel and word branches read `total_findings` /
+        # `severity_counts` / `critical_count` too — so every non-PDF report died
+        # with UnboundLocalError before it wrote a byte, leaving the row stuck on
+        # `generating`. Computed once here, for all three formats.
+        total_findings = len(findings)
+        severity_counts = {}
+        status_counts = {}
+        for f in findings:
+            sev = f.severity.upper() if f.severity else 'UNKNOWN'
+            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+            sts = f.status.upper() if f.status else 'UNKNOWN'
+            status_counts[sts] = status_counts.get(sts, 0) + 1
+
+        critical_count = severity_counts.get('CRITICAL', 0)
+        high_count = severity_counts.get('HIGH', 0)
+        medium_count = severity_counts.get('MEDIUM', 0)
+        low_count = severity_counts.get('LOW', 0)
+
+        # The real extension, not the format key: `.excel` / `.word` are not file
+        # types, so `mimetypes.guess_type` in `export` returned None and the
+        # browser was handed octet-stream and a file it could not open.
+        extension = {'pdf': 'pdf', 'excel': 'xlsx', 'word': 'docx'}.get(
+            report.format, report.format,
+        )
+        filename = f"{report.title.replace(' ', '_')}.{extension}"
 
         if report.format == 'pdf':
             from reportlab.lib.pagesizes import A4
@@ -213,21 +250,7 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
             # ========== 2. EXECUTIVE SUMMARY ==========
             elements.append(Paragraph("2. EXECUTIVE SUMMARY", styles['SectionTitle']))
             elements.append(Spacer(1, 10))
-            
-            total_findings = len(findings)
-            severity_counts = {}
-            status_counts = {}
-            for f in findings:
-                sev = f.severity.upper() if f.severity else 'UNKNOWN'
-                severity_counts[sev] = severity_counts.get(sev, 0) + 1
-                sts = f.status.upper() if f.status else 'UNKNOWN'
-                status_counts[sts] = status_counts.get(sts, 0) + 1
-            
-            critical_count = severity_counts.get('CRITICAL', 0)
-            high_count = severity_counts.get('HIGH', 0)
-            medium_count = severity_counts.get('MEDIUM', 0)
-            low_count = severity_counts.get('LOW', 0)
-            
+
             elements.append(Paragraph(
                 f"A total of <b>{total_findings}</b> finding(s) were identified during this audit engagement. "
                 f"Of these, <b>{critical_count}</b> are classified as Critical, <b>{high_count}</b> as High, "
@@ -1037,7 +1060,12 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
     def export(self, request, pk=None):
         report = self.get_object()
         if report.file:
-            response = HttpResponse(report.file.read(), content_type='application/octet-stream')
+            # Send the real content type so the browser names and opens the file
+            # correctly; octet-stream made every download look like binary junk.
+            content_type, _ = mimetypes.guess_type(report.file.name)
+            response = HttpResponse(
+                report.file.read(), content_type=content_type or 'application/octet-stream'
+            )
             response['Content-Disposition'] = f'attachment; filename="{report.file.name.split("/")[-1]}"'
             return response
         return Response({'detail': 'Report file not generated yet.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1122,9 +1150,21 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
         buf = BytesIO()
         wb.save(buf)
         buf.seek(0)
+        xlsx_bytes = buf.read()
+
+        # Record and persist it, exactly as generate_pdf does. Streaming the
+        # bytes back without saving left no row in the Generated Reports list
+        # and nothing for the `export` action to serve, so an Excel export
+        # existed only in the browser's download folder.
+        report = GeneratedReport.objects.create(
+            title=title, format='excel', status='ready',
+            generated_by=request.user,
+            parameters=request.data
+        )
+        report.file.save(f"{title}.xlsx", ContentFile(xlsx_bytes), save=True)
 
         response = HttpResponse(
-            buf.read(),
+            xlsx_bytes,
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response['Content-Disposition'] = f'attachment; filename="{title}.xlsx"'
@@ -1136,19 +1176,27 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
         from apps.findings.models import AuditFinding
         from apps.corrective_actions.models import CorrectiveAction
         from apps.audit_planning.models import AuditEngagement
-        from django.db.models import Count
+        from django.db.models import Count, Q
         from django.utils import timezone
-        import datetime
+        from apps.common.date_utils import month_starts, month_end
 
         today = timezone.now().date()
-        six_months = [(today.replace(day=1) - datetime.timedelta(days=30 * i)) for i in range(5, -1, -1)]
-
-        monthly_findings = []
-        for m in six_months:
-            count = AuditFinding.objects.filter(
-                created_at__year=m.year, created_at__month=m.month
-            ).count()
-            monthly_findings.append({'month': m.strftime('%b %Y'), 'count': count})
+        # Calendar months, not 30-day steps — stepping back by 30 * i skipped
+        # February and returned the same 31-day month twice, so the chart lost
+        # and duplicated buckets.
+        starts = month_starts(today, 6)
+        # One aggregate over the whole window instead of a query per month.
+        buckets = {
+            f'month_{index}': Count('id', filter=Q(
+                created_at__date__gte=start, created_at__date__lte=month_end(start),
+            ))
+            for index, start in enumerate(starts)
+        }
+        counts = AuditFinding.objects.aggregate(**buckets)
+        monthly_findings = [
+            {'month': start.strftime('%b %Y'), 'count': counts.get(f'month_{index}', 0) or 0}
+            for index, start in enumerate(starts)
+        ]
 
         return Response({
             'findings_by_severity': list(
