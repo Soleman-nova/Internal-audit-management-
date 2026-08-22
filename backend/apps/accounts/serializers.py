@@ -16,8 +16,17 @@ class DepartmentSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_children(self, obj):
-        """Expose child departments for the org chart."""
-        children = obj.children.filter(is_active=True).order_by('name')
+        """Expose child departments for the org chart.
+
+        Prefers the ``active_children`` list attached by ACTIVE_CHILDREN_PREFETCH
+        (see apps/accounts/views.py). Falling back to a query keeps this correct
+        for the single-object responses from create/update, where there is no
+        prefetch — but on a list of 600+ units that fallback was one query per
+        row, and max_page_size is 1000.
+        """
+        children = getattr(obj, 'active_children', None)
+        if children is None:
+            children = obj.children.filter(is_active=True).order_by('name')
         return [
             {
                 'id': c.id,

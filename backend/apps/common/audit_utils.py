@@ -3,6 +3,8 @@ Centralized audit-trail logging utilities.
 """
 import logging
 
+from django.db import transaction
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,16 +29,22 @@ def log_audit(request, action, instance, changes=None, object_repr=None, user=No
         if user is None and request is not None:
             user = request.user if request.user.is_authenticated else None
         meta = getattr(request, 'META', {}) or {}
-        return AuditTrail.objects.create(
-            user=user,
-            action=action,
-            model_name=instance.__class__.__name__,
-            object_id=str(instance.pk),
-            object_repr=(object_repr or str(instance))[:300],
-            changes=changes or {},
-            ip_address=meta.get('REMOTE_ADDR'),
-            user_agent=meta.get('HTTP_USER_AGENT', '')[:500],
-        )
+        # Savepoint, so a failed insert here rolls back only itself. Callers now
+        # run inside transaction.atomic(); without this the failed query would
+        # mark the whole transaction for rollback and every statement after it
+        # would raise TransactionManagementError — turning best-effort logging
+        # into the thing that blocks the business operation.
+        with transaction.atomic():
+            return AuditTrail.objects.create(
+                user=user,
+                action=action,
+                model_name=instance.__class__.__name__,
+                object_id=str(instance.pk),
+                object_repr=(object_repr or str(instance))[:300],
+                changes=changes or {},
+                ip_address=meta.get('REMOTE_ADDR'),
+                user_agent=meta.get('HTTP_USER_AGENT', '')[:500],
+            )
     except Exception:
         # Best-effort; never block the business operation
         logger.exception(

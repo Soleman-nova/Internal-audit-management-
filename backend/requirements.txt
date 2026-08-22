@@ -1,14 +1,50 @@
-django==4.2.13
-djangorestframework==3.15.2
-djangorestframework-simplejwt==5.3.1
-django-cors-headers==4.3.1
-django-filter==24.1
-psycopg2-binary==2.9.9
+# Pinned to the versions the test suite actually runs against — `backend/venv`,
+# on Python 3.13. All 306 tests pass on this exact set.
+#
+# The previous pins claimed Django 4.2.13 while the venv ran 6.0.5, so a fresh
+# `pip install -r requirements.txt` produced a stack that had never been tested:
+# two major versions and four years of deprecations away from the code above it.
+# Re-pin from `venv/Scripts/python -m pip freeze` whenever you upgrade, and
+# re-run the suite before committing the change.
+#
+# Direct dependencies only — transitive ones (asgiref, sqlparse, tzdata, PyJWT,
+# et_xmlfile, lxml, tablib, …) are left to the resolver so an upgrade here does
+# not need a matching edit for each of them.
+
+# --- Framework ---
+django==6.0.5
+djangorestframework==3.17.1
+djangorestframework-simplejwt==5.5.1
+django-cors-headers==4.9.0
+django-filter==25.2
+
+# --- Configuration ---
+# settings.py reads every deployment value through `decouple.config`.
 python-decouple==3.8
-Pillow==10.3.0
-celery==5.3.6
-django-import-export==3.3.8
-reportlab==4.2.0
-openpyxl==3.1.2
-python-docx==1.1.2
-dj-database-url==2.1.0
+
+# --- Database ---
+# Postgres driver for the DB_ENGINE=postgresql branch of settings.DATABASES;
+# development runs on the bundled sqlite3 and needs nothing here.
+psycopg2-binary==2.9.12
+
+# --- Uploads and report rendering ---
+# Pillow backs ImageField validation (User.avatar); the rest are imported inside
+# GeneratedReportViewSet.generate_report_file, one per output format.
+Pillow==12.2.0
+reportlab==4.5.1      # PDF
+openpyxl==3.1.5       # Excel
+python-docx==1.2.0    # Word
+
+# --- Admin bulk import/export ---
+# 'import_export' is in INSTALLED_APPS.
+django-import-export==4.4.1
+
+# --- Background jobs ---
+# Not wired up yet: report generation still runs on a daemon thread in
+# apps/reports/jobs.py, with no broker configured and no task defined. Pinned
+# because it is the intended replacement for that thread — until then, nothing
+# imports it and no worker is expected to be running.
+celery==5.6.3
+
+# Removed: dj-database-url. It was pinned and installed but never imported —
+# settings.DATABASES is assembled from individual DB_* env vars instead.

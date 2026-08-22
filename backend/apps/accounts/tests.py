@@ -1,20 +1,27 @@
 """Tests for the organisational-unit tree (pagination, the picker endpoint, the
-service-center seed) and the directorate-scoped dashboard statistics.
+service-center seed), the directorate-scoped dashboard statistics, and the
+authentication hardening (login throttling, logout error handling).
 """
 import datetime
 import json
 import tempfile
 from io import StringIO
 from pathlib import Path
+from unittest import mock
 
+from django.conf import settings
+from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import OperationalError, connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import Department, Role
+from apps.accounts.models import AuditTrail, Department, Role
 from apps.accounts.management.commands.seed_service_centers import (
     CSC_CODE_PREFIX, is_amharic, repair_mojibake,
 )
@@ -583,3 +590,241 @@ class ProfileViewTest(TestCase):
         self.assertEqual(
             self.client.patch(self.URL, {'first_name': 'X'}, format='json').status_code, 401,
         )
+
+
+class LoginThrottleTest(TestCase):
+    """Login is rate limited per client.
+
+    It is the only unauthenticated write in the system and the username space is
+    the guessable EEU-##### series, so before this there was nothing at all
+    slowing down credential stuffing. The rate lives in
+    settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['login'].
+    """
+
+    URL = '/api/auth/login/'
+
+    def setUp(self):
+        # DRF keeps throttle history in the default cache, which is process-wide
+        # and outlives the per-test transaction rollback. Without this the count
+        # leaks between tests and the suite fails differently depending on order.
+        cache.clear()
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='throttled', employee_id='EEU-00001',
+            email='throttled@test.com', password='correct-horse-battery',
+            role=Role.AUDITOR,
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def attempt(self, password='wrong'):
+        return self.client.post(
+            self.URL, {'employee_id': 'EEU-00001', 'password': password},
+            format='json',
+        )
+
+    def test_the_rate_is_configured(self):
+        self.assertEqual(
+            settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['login'], '5/min',
+        )
+
+    def test_the_sixth_rapid_attempt_is_refused(self):
+        for index in range(5):
+            with self.subTest(attempt=index + 1):
+                self.assertEqual(self.attempt().status_code, 400)
+        self.assertEqual(self.attempt().status_code, 429)
+
+    def test_a_successful_login_also_counts_against_the_budget(self):
+        """Otherwise an attacker who lands one valid credential gets an
+        unmetered channel for enumerating the rest."""
+        for _ in range(5):
+            self.attempt()
+        self.assertEqual(self.attempt(password='correct-horse-battery').status_code, 429)
+
+    def test_a_valid_login_inside_the_budget_still_works(self):
+        """The throttle must not break the ordinary case — one honest typo
+        followed by the right password."""
+        self.assertEqual(self.attempt().status_code, 400)
+        response = self.attempt(password='correct-horse-battery')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn('access', response.data)
+        self.assertIn('refresh', response.data)
+
+    def test_the_login_scope_does_not_throttle_authenticated_traffic(self):
+        """The tight 5/min applies to the login scope only; an auditor paging
+        through the org tree is on the far looser 'user' rate."""
+        self.client.force_authenticate(user=self.user)
+        for _ in range(8):
+            self.assertEqual(self.client.get('/api/auth/departments/').status_code, 200)
+
+
+class LogoutViewTest(TestCase):
+    """A client error and a server error must not look the same.
+
+    The bare ``except Exception`` reported a stale tab and a database failure
+    writing the blacklist row identically — a 400 'Invalid token.' with nothing
+    logged anywhere.
+    """
+
+    URL = '/api/auth/logout/'
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='logout', employee_id='L001', email='logout@test.com',
+            password='pass', role=Role.AUDITOR,
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_a_valid_refresh_token_is_blacklisted(self):
+        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+
+        refresh = RefreshToken.for_user(self.user)
+        response = self.client.post(self.URL, {'refresh': str(refresh)}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(
+            BlacklistedToken.objects.filter(token__jti=refresh['jti']).exists()
+        )
+
+    def test_the_logout_is_audit_logged(self):
+        refresh = RefreshToken.for_user(self.user)
+        self.client.post(self.URL, {'refresh': str(refresh)}, format='json')
+        self.assertTrue(
+            AuditTrail.objects.filter(action='LOGOUT', user=self.user).exists()
+        )
+
+    def test_a_garbage_token_is_the_clients_problem(self):
+        response = self.client.post(self.URL, {'refresh': 'not-a-token'}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['detail'], 'Invalid token.')
+
+    def test_a_missing_token_is_a_400_not_a_silent_success(self):
+        """``RefreshToken(None)`` mints a fresh token instead of raising, so this
+        used to blacklist a token nobody held, write a LOGOUT trail entry, and
+        return 200 while the client's real refresh token stayed valid."""
+        response = self.client.post(self.URL, {}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('required', response.data['detail'])
+        self.assertFalse(AuditTrail.objects.filter(action='LOGOUT').exists())
+
+    def test_a_token_presented_twice_is_a_400(self):
+        """The stale-tab case: the second POST is a client error, not an outage."""
+        refresh = str(RefreshToken.for_user(self.user))
+        self.assertEqual(
+            self.client.post(self.URL, {'refresh': refresh}, format='json').status_code, 200,
+        )
+        self.assertEqual(
+            self.client.post(self.URL, {'refresh': refresh}, format='json').status_code, 400,
+        )
+
+    def test_an_unexpected_failure_is_a_500_and_is_logged(self):
+        """The distinction the bare ``except`` erased. A blacklist write that
+        fails is an outage, and reporting it as 'Invalid token.' sent the user
+        off to re-authenticate against a backend that was already broken."""
+        refresh = str(RefreshToken.for_user(self.user))
+        with mock.patch(
+            'rest_framework_simplejwt.tokens.RefreshToken.blacklist',
+            side_effect=OperationalError('database is locked'),
+        ):
+            with self.assertLogs('apps.accounts.views', level='ERROR') as logged:
+                response = self.client.post(self.URL, {'refresh': refresh}, format='json')
+        self.assertEqual(response.status_code, 500)
+        self.assertIn('Logout failed', '\n'.join(logged.output))
+
+    def test_logout_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+        self.assertEqual(
+            self.client.post(self.URL, {'refresh': 'x'}, format='json').status_code, 401,
+        )
+
+
+class DepartmentListQueryCountTest(TestCase):
+    """``children`` must not cost a query per department.
+
+    DepartmentSerializer.get_children filters and orders, so a plain
+    prefetch_related('children') would be re-queried and thrown away. The
+    Prefetch on DepartmentViewSet lands the rows on ``active_children``, which
+    the serializer reads in preference to querying. EEU's tree is 600+ units and
+    max_page_size is 1000, so the difference is ~600 queries on one request.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.auditee = User.objects.create_user(
+            username='counter', employee_id='Q001', email='counter@test.com',
+            password='pass', role=Role.AUDITEE,
+        )
+        self.client.force_authenticate(user=self.auditee)
+
+    def make_tree(self, parents, children_each, offset=0):
+        for parent_index in range(parents):
+            parent = Department.objects.create(
+                name=f'Region {offset + parent_index:03d}',
+                code=f'RGN-{offset + parent_index:03d}',
+                unit_type=Department.REGION,
+            )
+            for child_index in range(children_each):
+                Department.objects.create(
+                    name=f'CSC {offset + parent_index:03d}-{child_index}',
+                    code=f'CSC-{offset + parent_index:03d}-{child_index}',
+                    unit_type=Department.SERVICE_CENTER, parent=parent,
+                )
+
+    def query_count(self):
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.get('/api/auth/departments/?page_size=1000')
+            self.assertEqual(response.status_code, 200)
+        return len(captured.captured_queries), response
+
+    def test_the_query_count_is_flat_as_the_tree_grows(self):
+        self.make_tree(parents=3, children_each=3)
+        small_count, small_response = self.query_count()
+
+        self.make_tree(parents=15, children_each=3, offset=100)
+        large_count, large_response = self.query_count()
+
+        # Six times the rows, the same number of queries.
+        self.assertEqual(small_response.data['count'], 12)
+        self.assertEqual(large_response.data['count'], 72)
+        self.assertEqual(
+            large_count, small_count,
+            f'query count grew with the tree: {small_count} -> {large_count}',
+        )
+
+    def test_children_are_still_serialized(self):
+        """The prefetch is only correct if the payload is unchanged — a fix that
+        dropped the children would also make the count flat."""
+        self.make_tree(parents=1, children_each=2)
+        _, response = self.query_count()
+        parents = [row for row in response.data['results'] if row['children']]
+        self.assertEqual(len(parents), 1)
+        self.assertEqual(
+            {child['name'] for child in parents[0]['children']},
+            {'CSC 000-0', 'CSC 000-1'},
+        )
+
+    def test_retired_children_are_excluded(self):
+        """The filter the Prefetch queryset has to reproduce exactly."""
+        parent = Department.objects.create(name='Region X', code='RGN-X')
+        Department.objects.create(name='Live CSC', code='CSC-L', parent=parent)
+        Department.objects.create(
+            name='Closed CSC', code='CSC-C', parent=parent, is_active=False,
+        )
+        _, response = self.query_count()
+        row = next(r for r in response.data['results'] if r['code'] == 'RGN-X')
+        self.assertEqual([child['code'] for child in row['children']], ['CSC-L'])
+
+    def test_children_are_present_on_a_single_object_response(self):
+        """retrieve/create/update responses have no prefetch, so the serializer's
+        fallback query has to stay — this is the case that proves it."""
+        parent = Department.objects.create(name='Region Y', code='RGN-Y')
+        Department.objects.create(name='Y CSC', code='CSC-Y', parent=parent)
+        response = self.client.get(f'/api/auth/departments/{parent.id}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([child['code'] for child in response.data['children']], ['CSC-Y'])

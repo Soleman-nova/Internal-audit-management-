@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.db import transaction
 from django.http import HttpResponse
 from django.utils import timezone
 import mimetypes
@@ -32,42 +33,46 @@ class AuditProgramViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def perform_create(self, serializer):
-        program = serializer.save(prepared_by=self.request.user)
-        log_audit(self.request, 'CREATE', program)
+        with transaction.atomic():
+            program = serializer.save(prepared_by=self.request.user)
+            log_audit(self.request, 'CREATE', program)
 
     def perform_update(self, serializer):
         prev_status = serializer.instance.status
-        program = serializer.save()
-        changes = None
-        if program.status != prev_status:
-            changes = {'status': [prev_status, program.status]}
-        log_audit(self.request, 'UPDATE', program, changes=changes)
+        with transaction.atomic():
+            program = serializer.save()
+            changes = None
+            if program.status != prev_status:
+                changes = {'status': [prev_status, program.status]}
+            log_audit(self.request, 'UPDATE', program, changes=changes)
 
     def perform_destroy(self, instance):
-        log_audit(self.request, 'DELETE', instance)
-        instance.delete()
+        with transaction.atomic():
+            log_audit(self.request, 'DELETE', instance)
+            instance.delete()
 
     @action(detail=True, methods=['post'], url_path='approve',
             permission_classes=[RequiresCapability.for_(APPROVE_PLANS)])
     def approve(self, request, pk=None):
         program = self.get_object()
-        program.status = 'approved'
-        program.approved_by = request.user
-        program.reviewed_by = request.user
-        program.approved_at = timezone.now()
-        program.save()
-        log_audit(request, 'APPROVE', program)
-        # Let the auditor who prepared/leads it know it was approved.
-        lead = program.engagement.lead_auditor if program.engagement else None
-        recipient = lead or program.prepared_by
-        if recipient and recipient != request.user:
-            notify(
-                recipient,
-                'approved',
-                f'Audit program approved: {program.title}',
-                f'The audit program "{program.title}" has been approved.',
-                f'/execution?program={program.id}',
-            )
+        with transaction.atomic():
+            program.status = 'approved'
+            program.approved_by = request.user
+            program.reviewed_by = request.user
+            program.approved_at = timezone.now()
+            program.save()
+            log_audit(request, 'APPROVE', program)
+            # Let the auditor who prepared/leads it know it was approved.
+            lead = program.engagement.lead_auditor if program.engagement else None
+            recipient = lead or program.prepared_by
+            if recipient and recipient != request.user:
+                notify(
+                    recipient,
+                    'approved',
+                    f'Audit program approved: {program.title}',
+                    f'The audit program "{program.title}" has been approved.',
+                    f'/execution?program={program.id}',
+                )
         return Response({'detail': 'Audit program approved.'})
 
     @action(detail=True, methods=['post'], url_path='submit',
@@ -83,18 +88,19 @@ class AuditProgramViewSet(viewsets.ModelViewSet):
         """
         program = self.get_object()
         prev_status = program.status
-        program.status = 'submitted'
-        program.save()
-        log_audit(request, 'UPDATE', program, changes={'status': [prev_status, 'submitted']})
-        notify_roles(
-            ['audit_manager', 'supervisor'],
-            'approval_needed',
-            f'Audit program awaiting approval: {program.title}',
-            f'The audit program "{program.title}" was submitted for review by '
-            f'{request.user.get_full_name() or request.user.username}.',
-            f'/execution?program={program.id}',
-            exclude=request.user,
-        )
+        with transaction.atomic():
+            program.status = 'submitted'
+            program.save()
+            log_audit(request, 'UPDATE', program, changes={'status': [prev_status, 'submitted']})
+            notify_roles(
+                ['audit_manager', 'supervisor'],
+                'approval_needed',
+                f'Audit program awaiting approval: {program.title}',
+                f'The audit program "{program.title}" was submitted for review by '
+                f'{request.user.get_full_name() or request.user.username}.',
+                f'/execution?program={program.id}',
+                exclude=request.user,
+            )
         return Response({'detail': 'Program submitted for review.'})
 
 
@@ -111,47 +117,51 @@ class AuditProcedureViewSet(viewsets.ModelViewSet):
     ordering = ['order', 'step_number']
 
     def perform_create(self, serializer):
-        procedure = serializer.save()
-        log_audit(self.request, 'CREATE', procedure)
+        with transaction.atomic():
+            procedure = serializer.save()
+            log_audit(self.request, 'CREATE', procedure)
 
     def perform_update(self, serializer):
         prev_status = serializer.instance.status
-        procedure = serializer.save()
-        changes = None
-        if procedure.status != prev_status:
-            changes = {'status': [prev_status, procedure.status]}
-        log_audit(self.request, 'UPDATE', procedure, changes=changes)
+        with transaction.atomic():
+            procedure = serializer.save()
+            changes = None
+            if procedure.status != prev_status:
+                changes = {'status': [prev_status, procedure.status]}
+            log_audit(self.request, 'UPDATE', procedure, changes=changes)
 
     def perform_destroy(self, instance):
-        log_audit(self.request, 'DELETE', instance)
-        instance.delete()
+        with transaction.atomic():
+            log_audit(self.request, 'DELETE', instance)
+            instance.delete()
 
     @action(detail=True, methods=['post'], url_path='complete')
     def complete(self, request, pk=None):
         procedure = self.get_object()
         prev_status = procedure.status
-        procedure.status = 'completed'
-        procedure.completed_by = request.user
-        procedure.completed_at = timezone.now()
-        # Only overwrite the conclusion when one is supplied — completing from the
-        # status dropdown sends no body, and blanking a written conclusion there
-        # would quietly destroy fieldwork evidence.
-        if 'conclusion' in request.data:
-            procedure.conclusion = request.data.get('conclusion') or ''
-        procedure.save()
-        log_audit(request, 'UPDATE', procedure, changes={'status': [prev_status, 'completed']})
-        # Notify the engagement lead that a procedure was completed.
-        engagement = procedure.program.engagement if procedure.program else None
-        lead = engagement.lead_auditor if engagement else None
-        if lead and lead != request.user:
-            notify(
-                lead,
-                'system',
-                f'Procedure completed: {procedure.title}',
-                f'Procedure "{procedure.title}" was marked completed by '
-                f'{request.user.get_full_name() or request.user.username}.',
-                f'/execution?program={procedure.program_id}',
-            )
+        with transaction.atomic():
+            procedure.status = 'completed'
+            procedure.completed_by = request.user
+            procedure.completed_at = timezone.now()
+            # Only overwrite the conclusion when one is supplied — completing from the
+            # status dropdown sends no body, and blanking a written conclusion there
+            # would quietly destroy fieldwork evidence.
+            if 'conclusion' in request.data:
+                procedure.conclusion = request.data.get('conclusion') or ''
+            procedure.save()
+            log_audit(request, 'UPDATE', procedure, changes={'status': [prev_status, 'completed']})
+            # Notify the engagement lead that a procedure was completed.
+            engagement = procedure.program.engagement if procedure.program else None
+            lead = engagement.lead_auditor if engagement else None
+            if lead and lead != request.user:
+                notify(
+                    lead,
+                    'system',
+                    f'Procedure completed: {procedure.title}',
+                    f'Procedure "{procedure.title}" was marked completed by '
+                    f'{request.user.get_full_name() or request.user.username}.',
+                    f'/execution?program={procedure.program_id}',
+                )
         # Return the updated record, not just a message, so the client can merge
         # completed_by/completed_at into its row without a second round trip.
         return Response(self.get_serializer(procedure).data)
@@ -168,38 +178,45 @@ class WorkingPaperViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'reference', 'description']
 
     def perform_create(self, serializer):
-        paper = serializer.save(prepared_by=self.request.user)
-        log_audit(self.request, 'CREATE', paper)
+        with transaction.atomic():
+            paper = serializer.save(prepared_by=self.request.user)
+            log_audit(self.request, 'CREATE', paper)
 
     def perform_destroy(self, instance):
-        log_audit(self.request, 'DELETE', instance)
-        # Remove the physical file from storage when the paper is deleted.
-        if instance.file:
-            storage, filename = instance.file.storage, instance.file.name
+        # Capture the storage handle before the row goes, since `instance.file`
+        # is the only place the stored name is recorded.
+        storage, filename = (
+            (instance.file.storage, instance.file.name) if instance.file else (None, None)
+        )
+        with transaction.atomic():
+            log_audit(self.request, 'DELETE', instance)
             instance.delete()
-            if filename and storage.exists(filename):
-                storage.delete(filename)
-        else:
-            instance.delete()
+        # Deliberately outside the transaction: unlinking a file cannot be rolled
+        # back, so it waits until the row is really gone. Reversed, a rollback
+        # would leave a working paper pointing at a file that no longer exists —
+        # a broken download instead of an undone delete.
+        if filename and storage.exists(filename):
+            storage.delete(filename)
 
     @action(detail=True, methods=['post'], url_path='review',
             permission_classes=[RequiresCapability.for_(APPROVE_PLANS)])
     def review(self, request, pk=None):
         paper = self.get_object()
-        paper.is_reviewed = True
-        paper.reviewed_by = request.user
-        paper.review_notes = request.data.get('review_notes', '')
-        paper.save()
-        log_audit(request, 'UPDATE', paper)
-        # Notify the preparer that their working paper was reviewed.
-        if paper.prepared_by and paper.prepared_by != request.user:
-            notify(
-                paper.prepared_by,
-                'approved',
-                f'Working paper reviewed: {paper.title}',
-                f'Your working paper "{paper.title}" has been reviewed.',
-                f'/execution?engagement={paper.engagement_id}',
-            )
+        with transaction.atomic():
+            paper.is_reviewed = True
+            paper.reviewed_by = request.user
+            paper.review_notes = request.data.get('review_notes', '')
+            paper.save()
+            log_audit(request, 'UPDATE', paper)
+            # Notify the preparer that their working paper was reviewed.
+            if paper.prepared_by and paper.prepared_by != request.user:
+                notify(
+                    paper.prepared_by,
+                    'approved',
+                    f'Working paper reviewed: {paper.title}',
+                    f'Your working paper "{paper.title}" has been reviewed.',
+                    f'/execution?engagement={paper.engagement_id}',
+                )
         return Response({'detail': 'Working paper reviewed.'})
 
     @action(detail=True, methods=['get'], url_path='download')
