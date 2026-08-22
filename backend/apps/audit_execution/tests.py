@@ -329,6 +329,13 @@ class WorkingPaperTest(RoleFixtureMixin, TestCase):
         self.assertEqual(paper.prepared_by, self.auditor)
         self.assertTrue(paper.file)
 
+    def test_an_executable_cannot_be_attached_as_a_working_paper(self):
+        """WorkingPaper.file was a bare FileField. See apps/common/validators.py."""
+        response = self.upload(self.auditor, name='tool.exe', body=b'MZ\x90\x00')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('file', response.data)
+        self.assertFalse(WorkingPaper.objects.filter(reference='WP-1.1').exists())
+
     def test_auditee_cannot_upload(self):
         self.assertEqual(self.upload(self.auditee).status_code, 403)
 

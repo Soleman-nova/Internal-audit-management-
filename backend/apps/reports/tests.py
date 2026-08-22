@@ -2,16 +2,21 @@
 
 Covers the MANAGE_SETTINGS gate on templates, the asynchronous generation
 contract (201 + ``generating``, then ``ready``/``failed`` from the background
-job), a real compile of each of the three formats, the authenticated ``export``
-download, and the ``analytics`` month buckets — including the February and
-year-boundary cases the old ``30 * i`` day arithmetic got wrong.
+job), the ``fail_stuck_reports`` sweep that closes out compiles a restart
+abandoned, a real compile of each of the three formats, the authenticated
+``export`` download, and the ``analytics`` month buckets — including the
+February and year-boundary cases the old ``30 * i`` day arithmetic got wrong.
 """
 import datetime
 import shutil
 import tempfile
+from io import StringIO
 from unittest import mock
 
 from django.core.files.base import ContentFile
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.db import transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -101,7 +106,9 @@ class GeneratedReportRequestTest(RoleFixtureMixin, TestCase):
 
     The compile is queued on a background thread, so every test here patches the
     enqueue helper: a real thread would touch the test database outside the
-    transaction the test case rolls back.
+    transaction the test case rolls back. The queueing itself goes through
+    ``transaction.on_commit``, so a test that asserts on it has to open
+    ``captureOnCommitCallbacks``.
     """
 
     def setUp(self):
@@ -136,9 +143,13 @@ class GeneratedReportRequestTest(RoleFixtureMixin, TestCase):
     def test_the_request_returns_before_the_compile_starts(self):
         """The API used to compile in-band, which blocked the worker for the
         length of a 1000-row PDF and made ``generating`` unobservable."""
-        response = self.as_user(self.auditor).post(
-            GENERATED_URL, self.payload(), format='json',
-        )
+        # captureOnCommitCallbacks because the view queues the compile through
+        # `transaction.on_commit`, and a TestCase rolls its transaction back
+        # rather than committing — so the callback would never run.
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.as_user(self.auditor).post(
+                GENERATED_URL, self.payload(), format='json',
+            )
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data['status'], 'generating')
         report = GeneratedReport.objects.get(pk=response.data['id'])
@@ -146,6 +157,21 @@ class GeneratedReportRequestTest(RoleFixtureMixin, TestCase):
         self.assertFalse(report.file)
         self.enqueue.assert_called_once()
         self.assertEqual(self.enqueue.call_args.args[0].pk, report.pk)
+
+    def test_nothing_is_queued_for_a_report_that_was_never_committed(self):
+        """The enqueue hangs off ``on_commit``, so a rolled-back create must not
+        leave a thread compiling a report whose row does not exist. Without that
+        the worker races the commit and can fail to find its own report.
+        """
+        with self.captureOnCommitCallbacks(execute=True):
+            with self.assertRaises(RuntimeError):
+                with transaction.atomic():
+                    self.as_user(self.auditor).post(
+                        GENERATED_URL, self.payload(), format='json',
+                    )
+                    raise RuntimeError('something later in the request failed')
+        self.enqueue.assert_not_called()
+        self.assertFalse(GeneratedReport.objects.exists())
 
     def test_export_before_the_file_exists_is_a_400(self):
         """The frontend polls until ``ready``; a Download click that races the
@@ -386,6 +412,105 @@ class AdHocExportTest(RoleFixtureMixin, TestCase):
         }, lambda client, role: client.post(
             f'{GENERATED_URL}generate-pdf/', {'title': f'Extract {role}'}, format='json',
         ))
+
+
+class FailStuckReportsCommandTest(RoleFixtureMixin, TestCase):
+    """``fail_stuck_reports`` — the recovery sweep for abandoned compiles.
+
+    Generation runs on a ``daemon=True`` thread, so a restart kills it without
+    recording anything and the row keeps ``generating`` forever while the
+    frontend polls a status that will never change. The command gives those rows
+    a terminal state.
+    """
+
+    def stuck_report(self, minutes_ago, status='generating', **kwargs):
+        """A report whose request timestamp is pushed into the past.
+
+        ``generated_at`` is ``auto_now_add``, so it cannot be passed to
+        ``create()`` — the value has to be written back with an UPDATE.
+        """
+        report = GeneratedReport.objects.create(
+            title=kwargs.pop('title', 'Q3 Board Report'),
+            format='pdf', status=status,
+            generated_by=kwargs.pop('generated_by', self.auditor),
+            **kwargs,
+        )
+        GeneratedReport.objects.filter(pk=report.pk).update(
+            generated_at=timezone.now() - datetime.timedelta(minutes=minutes_ago),
+        )
+        report.refresh_from_db()
+        return report
+
+    def run_command(self, **options):
+        out = StringIO()
+        call_command('fail_stuck_reports', stdout=out, stderr=StringIO(), **options)
+        return out.getvalue()
+
+    def test_a_report_stuck_past_the_timeout_is_failed_and_the_requester_told(self):
+        report = self.stuck_report(minutes_ago=45)
+        self.run_command()
+        report.refresh_from_db()
+        self.assertEqual(report.status, 'failed')
+        self.assertIn('did not complete', report.error_message)
+        notification = Notification.objects.get(
+            user=self.auditor, notification_type='system',
+        )
+        self.assertIn('failed', notification.title.lower())
+        self.assertEqual(notification.link, f'/reports?id={report.id}')
+
+    def test_a_report_still_inside_the_timeout_is_left_alone(self):
+        """The timeout has to outlast the slowest real compile. Sweeping up a
+        live job would replace a spinner with a lie."""
+        report = self.stuck_report(minutes_ago=5)
+        self.run_command()
+        report.refresh_from_db()
+        self.assertEqual(report.status, 'generating')
+        self.assertFalse(Notification.objects.exists())
+
+    def test_finished_reports_are_never_touched(self):
+        ready = self.stuck_report(minutes_ago=500, status='ready', title='Done')
+        failed = self.stuck_report(minutes_ago=500, status='failed', title='Broken')
+        self.run_command()
+        ready.refresh_from_db()
+        failed.refresh_from_db()
+        self.assertEqual(ready.status, 'ready')
+        self.assertEqual(failed.status, 'failed')
+        self.assertEqual(failed.error_message, '')
+
+    def test_a_second_run_finds_nothing(self):
+        """Idempotent, because it is meant to be scheduled: the first run moves
+        the rows off ``generating``, so a re-run must not re-notify."""
+        self.stuck_report(minutes_ago=45)
+        self.run_command()
+        self.run_command()
+        self.assertEqual(Notification.objects.count(), 1)
+
+    def test_the_timeout_is_configurable(self):
+        report = self.stuck_report(minutes_ago=45)
+        self.run_command(minutes=90)
+        report.refresh_from_db()
+        self.assertEqual(report.status, 'generating')
+        self.run_command(minutes=15)
+        report.refresh_from_db()
+        self.assertEqual(report.status, 'failed')
+
+    def test_dry_run_reports_without_writing(self):
+        report = self.stuck_report(minutes_ago=45)
+        output = self.run_command(dry_run=True)
+        self.assertIn(str(report.id), output)
+        self.assertIn('Would fail 1', output)
+        report.refresh_from_db()
+        self.assertEqual(report.status, 'generating')
+        self.assertFalse(Notification.objects.exists())
+
+    def test_a_nonsense_timeout_is_refused_rather_than_sweeping_everything(self):
+        """``--minutes 0`` would put the cutoff at "now" and fail reports that
+        were enqueued this second, whose threads are running perfectly well."""
+        report = self.stuck_report(minutes_ago=0)
+        with self.assertRaises(CommandError):
+            call_command('fail_stuck_reports', minutes=0, stdout=StringIO())
+        report.refresh_from_db()
+        self.assertEqual(report.status, 'generating')
 
 
 class AnalyticsTest(RoleFixtureMixin, TestCase):

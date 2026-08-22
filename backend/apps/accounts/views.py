@@ -1,16 +1,19 @@
 import datetime
+import logging
 
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.throttling import ScopedRateThrottle
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Count, Q
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -31,10 +34,17 @@ from .serializers import (
     DepartmentSerializer, AuditTrailSerializer, ProfileSerializer
 )
 
+logger = logging.getLogger(__name__)
+
 
 class LoginView(generics.GenericAPIView):
     permission_classes = [AllowAny]
     serializer_class = LoginSerializer
+    # The only unauthenticated write in the system, against a guessable username
+    # space (EEU-#####). The scope is configured in settings.DEFAULT_THROTTLE_RATES
+    # as 'login' (5/min) — far tighter than the global anon rate.
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'login'
 
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -54,14 +64,35 @@ class LogoutView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        """Blacklist the presented refresh token.
+
+        A malformed, expired or already-blacklisted token is the client's
+        problem and earns a 400. Anything else — a database failure writing the
+        blacklist row, say — is ours, and used to be reported identically with
+        nothing logged, so a broken logout looked exactly like a stale tab.
+        """
+        raw_token = request.data.get('refresh')
+        # Not merely defensive: RefreshToken(None) *mints a new token* rather
+        # than raising (that is how for_user builds one), so a request with no
+        # refresh field used to blacklist a brand-new token, log a LOGOUT, and
+        # report success while the client's real token stayed valid.
+        if not raw_token:
+            return Response(
+                {'detail': 'A refresh token is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
-            refresh_token = request.data.get('refresh')
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-            log_audit(request, 'LOGOUT', request.user)
-            return Response({'detail': 'Successfully logged out.'})
-        except Exception:
+            RefreshToken(raw_token).blacklist()
+        except TokenError:
             return Response({'detail': 'Invalid token.'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception('Logout failed for user %s', request.user.pk)
+            return Response(
+                {'detail': 'Could not complete logout.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        log_audit(request, 'LOGOUT', request.user)
+        return Response({'detail': 'Successfully logged out.'})
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -85,20 +116,23 @@ class UserViewSet(viewsets.ModelViewSet):
         return UserSerializer
 
     def perform_create(self, serializer):
-        user = serializer.save()
-        log_audit(self.request, 'CREATE', user)
+        with transaction.atomic():
+            user = serializer.save()
+            log_audit(self.request, 'CREATE', user)
 
     def perform_update(self, serializer):
         old_repr = str(serializer.instance)
-        user = serializer.save()
-        log_audit(
-            self.request, 'UPDATE', user,
-            object_repr=f"{old_repr} -> {str(user)}",
-        )
+        with transaction.atomic():
+            user = serializer.save()
+            log_audit(
+                self.request, 'UPDATE', user,
+                object_repr=f"{old_repr} -> {str(user)}",
+            )
 
     def perform_destroy(self, instance):
-        log_audit(self.request, 'DELETE', instance)
-        instance.delete()
+        with transaction.atomic():
+            log_audit(self.request, 'DELETE', instance)
+            instance.delete()
 
     @action(detail=False, methods=['get'], url_path='me')
     def me(self, request):
@@ -108,17 +142,19 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='activate')
     def activate(self, request, pk=None):
         user = self.get_object()
-        user.is_active = True
-        user.save()
-        log_audit(request, 'UPDATE', user, object_repr=f"Activated user {user.email}")
+        with transaction.atomic():
+            user.is_active = True
+            user.save()
+            log_audit(request, 'UPDATE', user, object_repr=f"Activated user {user.email}")
         return Response({'detail': 'User activated.'})
 
     @action(detail=True, methods=['post'], url_path='deactivate')
     def deactivate(self, request, pk=None):
         user = self.get_object()
-        user.is_active = False
-        user.save()
-        log_audit(request, 'UPDATE', user, object_repr=f"Deactivated user {user.email}")
+        with transaction.atomic():
+            user.is_active = False
+            user.save()
+            log_audit(request, 'UPDATE', user, object_repr=f"Deactivated user {user.email}")
         return Response({'detail': 'User deactivated.'})
 
     @action(detail=True, methods=['post'], url_path='reset-password')
@@ -135,11 +171,12 @@ class UserViewSet(viewsets.ModelViewSet):
         except DjangoValidationError as exc:
             return Response({'detail': ' '.join(exc.messages)},
                             status=status.HTTP_400_BAD_REQUEST)
-        user.set_password(password)
-        user.save()
-
-        # Log the password reset
-        log_audit(request, 'UPDATE', user, object_repr=f"Reset password for {user.email}")
+        # One unit: an admin-issued password change that is not in the trail is
+        # the single entry an investigation would most want to find.
+        with transaction.atomic():
+            user.set_password(password)
+            user.save()
+            log_audit(request, 'UPDATE', user, object_repr=f"Reset password for {user.email}")
         return Response({'detail': 'Password reset successful.'})
 
 
@@ -151,6 +188,17 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     filterset_fields = ['unit_type', 'directorate_type', 'parent', 'is_active']
     search_fields = ['name', 'name_am', 'code']
 
+    # DepartmentSerializer.get_children() filters and orders, so a bare
+    # prefetch_related('children') would be re-queried and discarded. The
+    # queryset here matches the serializer's exactly and lands on `active_children`,
+    # which the serializer reads in preference to querying. Two queries for the
+    # page instead of one per row.
+    ACTIVE_CHILDREN_PREFETCH = models.Prefetch(
+        'children',
+        queryset=Department.objects.filter(is_active=True).order_by('name'),
+        to_attr='active_children',
+    )
+
     def get_queryset(self):
         """Hide retired departments from the default list.
 
@@ -160,26 +208,29 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         applies to the list action only, and an explicit ?is_active= query
         param always wins — pass ?is_active=false to review retired units.
         """
-        queryset = Department.objects.all()
+        queryset = Department.objects.prefetch_related(self.ACTIVE_CHILDREN_PREFETCH)
         if self.action == 'list' and 'is_active' not in self.request.query_params:
             queryset = queryset.filter(is_active=True)
         return queryset
 
     def perform_create(self, serializer):
-        dept = serializer.save()
-        log_audit(self.request, 'CREATE', dept)
+        with transaction.atomic():
+            dept = serializer.save()
+            log_audit(self.request, 'CREATE', dept)
 
     def perform_update(self, serializer):
         old_repr = str(serializer.instance)
-        dept = serializer.save()
-        log_audit(
-            self.request, 'UPDATE', dept,
-            object_repr=f"{old_repr} -> {str(dept)}",
-        )
+        with transaction.atomic():
+            dept = serializer.save()
+            log_audit(
+                self.request, 'UPDATE', dept,
+                object_repr=f"{old_repr} -> {str(dept)}",
+            )
 
     def perform_destroy(self, instance):
-        log_audit(self.request, 'DELETE', instance)
-        instance.delete()
+        with transaction.atomic():
+            log_audit(self.request, 'DELETE', instance)
+            instance.delete()
 
     @action(detail=False, methods=['get'], url_path='tree')
     def tree(self, request):
@@ -243,10 +294,12 @@ class ChangePasswordView(generics.GenericAPIView):
             return Response({'detail': ' '.join(exc.messages)},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        user.set_password(new_password)
-        user.save()
-
-        log_audit(request, 'UPDATE', user, object_repr='Password changed', user=user)
+        # The password change and its trail entry are one unit — a changed
+        # password with no log entry is exactly what an investigation looks for.
+        with transaction.atomic():
+            user.set_password(new_password)
+            user.save()
+            log_audit(request, 'UPDATE', user, object_repr='Password changed', user=user)
 
         return Response({'detail': 'Password changed successfully.'})
 
@@ -268,8 +321,9 @@ class ProfileView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
     def perform_update(self, serializer):
-        user = serializer.save()
-        log_audit(self.request, 'UPDATE', user, object_repr=f"Profile updated: {user.email}")
+        with transaction.atomic():
+            user = serializer.save()
+            log_audit(self.request, 'UPDATE', user, object_repr=f"Profile updated: {user.email}")
 
 
 class DashboardStatsView(generics.GenericAPIView):

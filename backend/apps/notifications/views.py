@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
 from django.utils import timezone
 from .models import Notification, SystemSetting
 from .serializers import NotificationSerializer, SystemSettingSerializer
@@ -44,7 +45,21 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
     serializer_class = SystemSettingSerializer
     permission_classes = [CanManageSettings]
 
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            setting = serializer.save(updated_by=self.request.user)
+            log_audit(self.request, 'CREATE', setting)
+
     def perform_update(self, serializer):
-        setting = serializer.save(updated_by=self.request.user)
-        # Settings changes are sensitive — always record them.
-        log_audit(self.request, 'UPDATE', setting)
+        with transaction.atomic():
+            setting = serializer.save(updated_by=self.request.user)
+            # Settings changes are sensitive — always record them.
+            log_audit(self.request, 'UPDATE', setting)
+
+    def perform_destroy(self, instance):
+        # Creating and removing a setting were the two paths that wrote nothing to
+        # the trail, so a key could be deleted and re-added with a new value and
+        # the log would show only the update in between.
+        with transaction.atomic():
+            log_audit(self.request, 'DELETE', instance)
+            instance.delete()

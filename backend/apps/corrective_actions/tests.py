@@ -66,7 +66,7 @@ class CorrectiveActionCreateTest(RoleFixtureMixin, TestCase):
         )
         self.assertEqual(response.status_code, 201, response.data)
         action = CorrectiveAction.objects.get(pk=response.data['id'])
-        self.assertRegex(action.action_number, r'^CAPA-\d{5}$')
+        self.assertRegex(action.action_number, r'^CAPA-\d{4}-\d{4}$')
         self.assertEqual(action.assigned_by, self.auditor)
 
     def test_owner_is_notified_with_the_due_date(self):
@@ -128,14 +128,15 @@ class AddResponseTest(RoleFixtureMixin, TestCase):
         self.action = make_action(owner=self.auditee, assigned_by=self.auditor)
         self.url = f'{ACTIONS_URL}{self.action.id}/add-response/'
 
-    def respond_as(self, user, status_update='in_progress', with_file=False):
+    def respond_as(self, user, status_update='in_progress', with_file=False,
+                   filename='proof.txt'):
         data = {
             'response_text': 'Workflow configured; awaiting the next cycle.',
             'status_update': status_update,
         }
         if with_file:
             data['evidence_file'] = SimpleUploadedFile(
-                'proof.txt', b'configuration export', content_type='text/plain',
+                filename, b'configuration export', content_type='text/plain',
             )
             return self.as_user(user).post(self.url, data, format='multipart')
         return self.as_user(user).post(self.url, data, format='json')
@@ -153,6 +154,17 @@ class AddResponseTest(RoleFixtureMixin, TestCase):
         response = self.respond_as(self.auditee, with_file=True)
         self.assertEqual(response.status_code, 201, response.data)
         self.assertTrue(ActionResponse.objects.get(pk=response.data['id']).evidence_file)
+
+    def test_an_executable_cannot_be_attached_to_a_response(self):
+        """The auditee-reachable upload path on this app. ActionResponse.evidence_file
+        was a bare FileField — see apps/common/validators.py."""
+        response = self.respond_as(self.auditee, with_file=True, filename='macro.exe')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('evidence_file', response.data)
+        self.assertFalse(ActionResponse.objects.exists())
+        # The action's status must not move on a rejected response either.
+        self.action.refresh_from_db()
+        self.assertEqual(self.action.status, 'open')
 
     def test_response_notifies_the_auditor_who_raised_it(self):
         self.respond_as(self.auditee)

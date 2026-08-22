@@ -13,6 +13,7 @@ confusing place for an import error to surface.
 import itertools
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -79,6 +80,11 @@ class RoleFixtureMixin:
     def setUp(self):
         super().setUp()
         self.client = APIClient()
+        # DRF's throttles keep their history in the default cache, which is
+        # process-wide and is not rolled back with the test transaction. Left
+        # alone, one class's request volume can 429 a later class's assertions
+        # and the suite starts failing on test order rather than on behaviour.
+        cache.clear()
 
     # ── Helpers ──────────────────────────────────────────────────────────
     def as_user(self, user):

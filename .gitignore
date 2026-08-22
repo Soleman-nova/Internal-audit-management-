@@ -16,6 +16,9 @@ db.sqlite3
 db.sqlite3-journal
 /backend/media/
 staticfiles/
+# settings.LOGGING creates this directory on import and rotates
+# audit_system.log inside it, so it appears the first time anything runs.
+/backend/logs/
 
 # ── Node / Vite ──────────────────────────────────────────────────────
 node_modules/

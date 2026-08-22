@@ -1,13 +1,18 @@
 """
 Tests for the RBAC capability matrix and permission classes.
 """
-from django.test import TestCase
+from django.core.exceptions import ValidationError
+from django.test import SimpleTestCase, TestCase
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from apps.accounts.models import Department, Role
 from apps.common.permissions import (
     has_capability, MANAGE_USERS, MANAGE_SETTINGS, APPROVE_PLANS,
     WRITE_AUDIT, CLOSE_FINDINGS, VIEW_AUDIT_TRAIL
+)
+from apps.common.validators import (
+    MAX_DOCUMENT_SIZE, MAX_IMAGE_SIZE, UploadValidator,
+    validate_document_upload, validate_image_upload,
 )
 
 User = get_user_model()
@@ -160,3 +165,122 @@ class RBACAPITest(TestCase):
         self.client.force_authenticate(user=self.auditor)
         response = self.client.get('/api/auth/audit-trail/')
         self.assertEqual(response.status_code, 403)
+
+
+class UploadValidatorTest(SimpleTestCase):
+    """The extension allowlist and size cap in apps/common/validators.py.
+
+    Every file field in the system was a bare FileField: no allowlist, no cap.
+    Auditees can reach ``upload-evidence`` by design, so that was an
+    authenticated arbitrary-file store. Unit-level here, with a stub standing in
+    for the uploaded file — the two attributes the validator reads are ``name``
+    and ``size``, and stubbing them keeps the size cases from allocating 10 MB.
+    """
+
+    class Stub:
+        def __init__(self, name, size=0):
+            self.name = name
+            self.size = size
+
+    def assert_rejected(self, validator, stub, code):
+        with self.assertRaises(ValidationError) as caught:
+            validator(stub)
+        self.assertEqual(caught.exception.code, code)
+
+    # ── Extensions ───────────────────────────────────────────────────────
+    def test_an_executable_is_rejected(self):
+        self.assert_rejected(
+            validate_document_upload, self.Stub('payroll.exe', 1024),
+            'invalid_extension',
+        )
+
+    def test_the_formats_an_audit_actually_attaches_are_accepted(self):
+        for name in ('ledger.pdf', 'sample.xlsx', 'memo.docx', 'export.csv',
+                     'scan.jpg', 'bundle.zip', 'notes.txt'):
+            with self.subTest(name=name):
+                validate_document_upload(self.Stub(name, 1024))
+
+    def test_the_extension_check_is_case_insensitive(self):
+        """Windows clients routinely send SCAN.PDF."""
+        validate_document_upload(self.Stub('SCAN.PDF', 1024))
+
+    def test_a_file_with_no_extension_is_rejected(self):
+        self.assert_rejected(
+            validate_document_upload, self.Stub('Makefile', 10),
+            'invalid_extension',
+        )
+
+    def test_only_the_final_extension_counts(self):
+        """``report.pdf.exe`` is an executable, whatever the middle segment says."""
+        self.assert_rejected(
+            validate_document_upload, self.Stub('report.pdf.exe', 10),
+            'invalid_extension',
+        )
+
+    def test_the_rejection_message_names_the_allowed_types(self):
+        """The auditee who picked the wrong file needs to know what to pick."""
+        with self.assertRaises(ValidationError) as caught:
+            validate_document_upload(self.Stub('macro.xlsm', 10))
+        message = str(caught.exception)
+        self.assertIn('xlsm', message)
+        self.assertIn('xlsx', message)
+
+    # ── Size ─────────────────────────────────────────────────────────────
+    def test_a_document_over_the_cap_is_rejected(self):
+        self.assert_rejected(
+            validate_document_upload, self.Stub('dump.pdf', MAX_DOCUMENT_SIZE + 1),
+            'file_too_large',
+        )
+
+    def test_a_document_exactly_at_the_cap_is_accepted(self):
+        """The boundary is inclusive — 10.0 MB exactly must not be refused."""
+        validate_document_upload(self.Stub('dump.pdf', MAX_DOCUMENT_SIZE))
+
+    def test_the_size_message_reports_megabytes_not_bytes(self):
+        with self.assertRaises(ValidationError) as caught:
+            validate_document_upload(self.Stub('dump.pdf', 50 * 1024 * 1024))
+        self.assertIn('50.0 MB', str(caught.exception))
+        self.assertIn('10.0 MB', str(caught.exception))
+
+    def test_a_missing_size_is_not_treated_as_zero_or_as_a_failure(self):
+        """A FileField re-validated from storage may expose no size; the
+        extension check still has to run and must not raise on the size branch."""
+        validate_document_upload(self.Stub('ledger.pdf', None))
+
+    # ── The avatar variant ───────────────────────────────────────────────
+    def test_the_avatar_validator_is_narrower_than_the_document_one(self):
+        """A real TIFF is a valid image as far as ImageField is concerned, so the
+        allowlist is the only thing keeping a 40 MB scan out of the nav bar."""
+        validate_document_upload(self.Stub('scan.tiff', 1024))
+        self.assert_rejected(
+            validate_image_upload, self.Stub('scan.tiff', 1024), 'invalid_extension',
+        )
+        self.assert_rejected(
+            validate_image_upload, self.Stub('cv.pdf', 1024), 'invalid_extension',
+        )
+        validate_image_upload(self.Stub('portrait.png', 1024))
+
+    def test_the_avatar_cap_is_tighter_than_the_document_cap(self):
+        self.assertLess(MAX_IMAGE_SIZE, MAX_DOCUMENT_SIZE)
+        self.assert_rejected(
+            validate_image_upload, self.Stub('portrait.png', MAX_IMAGE_SIZE + 1),
+            'file_too_large',
+        )
+
+    # ── Migration safety ─────────────────────────────────────────────────
+    def test_two_validators_with_the_same_settings_compare_equal(self):
+        """Without __eq__, Django reads the field as changed on every run and
+        ``makemigrations`` emits an identical migration each time."""
+        self.assertEqual(validate_document_upload, UploadValidator())
+        self.assertEqual(
+            hash(validate_document_upload), hash(UploadValidator()),
+        )
+        self.assertNotEqual(validate_document_upload, validate_image_upload)
+
+    def test_the_validator_deconstructs_to_an_importable_path(self):
+        path, args, kwargs = validate_image_upload.deconstruct()
+        self.assertEqual(path, 'apps.common.validators.UploadValidator')
+        # Reconstructing from the deconstructed form must round-trip, which is
+        # exactly what the migration file does at load time.
+        rebuilt = UploadValidator(*args, **kwargs)
+        self.assertEqual(rebuilt, validate_image_upload)

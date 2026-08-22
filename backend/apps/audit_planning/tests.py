@@ -289,7 +289,7 @@ class AuditEngagementTest(RoleFixtureMixin, TestCase):
         self.assertEqual(response.status_code, 201, response.data)
 
         engagement = AuditEngagement.objects.get(pk=response.data['id'])
-        self.assertRegex(engagement.engagement_number, r'^ENG-\d{5}$')
+        self.assertRegex(engagement.engagement_number, r'^ENG-\d{4}-\d{4}$')
         for member in (self.auditor, self.supervisor):
             self.assertTrue(
                 Notification.objects.filter(

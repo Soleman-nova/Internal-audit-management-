@@ -1,6 +1,7 @@
 from django.db import models
 from apps.accounts.models import User
 from apps.audit_planning.models import AuditEngagement
+from apps.common.validators import validate_document_upload
 
 
 class ReportTemplate(models.Model):
@@ -18,7 +19,10 @@ class ReportTemplate(models.Model):
     template_type = models.CharField(max_length=30, choices=TEMPLATE_TYPE_CHOICES)
     description = models.TextField(blank=True)
     is_default = models.BooleanField(default=False)
-    template_file = models.FileField(upload_to='report_templates/', null=True, blank=True)
+    template_file = models.FileField(
+        upload_to='report_templates/', null=True, blank=True,
+        validators=[validate_document_upload],
+    )
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -7,6 +7,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 from django.core.files.base import ContentFile
 from io import BytesIO
+from django.db import transaction
 from django.db.models import Count
 import mimetypes
 
@@ -27,16 +28,19 @@ class ReportTemplateViewSet(viewsets.ModelViewSet):
     filterset_fields = ['template_type', 'is_default']
 
     def perform_create(self, serializer):
-        template = serializer.save(created_by=self.request.user)
-        log_audit(self.request, 'CREATE', template)
+        with transaction.atomic():
+            template = serializer.save(created_by=self.request.user)
+            log_audit(self.request, 'CREATE', template)
 
     def perform_update(self, serializer):
-        template = serializer.save()
-        log_audit(self.request, 'UPDATE', template)
+        with transaction.atomic():
+            template = serializer.save()
+            log_audit(self.request, 'UPDATE', template)
 
     def perform_destroy(self, instance):
-        log_audit(self.request, 'DELETE', instance)
-        instance.delete()
+        with transaction.atomic():
+            log_audit(self.request, 'DELETE', instance)
+            instance.delete()
 
 
 class GeneratedReportViewSet(viewsets.ModelViewSet):
@@ -49,12 +53,19 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
     filterset_fields = ['format', 'status', 'engagement']
 
     def perform_create(self, serializer):
-        report = serializer.save(generated_by=self.request.user, status='generating')
-        # Phase 3.4 — run the heavy compile off the request thread so the API
-        # returns immediately and the frontend can poll status:
-        # generating -> ready / failed.
         from apps.reports.jobs import enqueue_report_generation
-        enqueue_report_generation(report)
+
+        with transaction.atomic():
+            report = serializer.save(generated_by=self.request.user, status='generating')
+            # Phase 3.4 — run the heavy compile off the request thread so the API
+            # returns immediately and the frontend can poll status:
+            # generating -> ready / failed.
+            #
+            # on_commit, not a bare call: the worker looks the report up by id in
+            # its own connection, so starting the thread inside the transaction is
+            # a race it can lose — and if the request then fails, a thread would be
+            # compiling a report for a row that was never committed.
+            transaction.on_commit(lambda: enqueue_report_generation(report))
 
     def generate_report_file(self, report, request=None):
         from django.core.files.base import ContentFile
@@ -1105,13 +1116,23 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
         buf.seek(0)
         pdf_bytes = buf.read()
 
-        report = GeneratedReport.objects.create(
-            title=title, format='pdf', status='ready',
-            generated_by=request.user,
-            parameters=request.data
-        )
-        # Persist the generated file so the `export` action can serve it later.
-        report.file.save(f"{title}.pdf", ContentFile(pdf_bytes), save=True)
+        # One unit: a committed row claiming status='ready' with no file behind it
+        # is a Download button that 400s forever, so the insert has to be inside
+        # the transaction with the file write rather than committed ahead of it.
+        # The bytes themselves may survive a rollback in storage — an unlink
+        # cannot be rolled back — but an orphaned file nothing references is
+        # harmless, where an orphaned row is a broken button in the UI.
+        with transaction.atomic():
+            report = GeneratedReport.objects.create(
+                title=title, format='pdf', status='ready',
+                generated_by=request.user,
+                parameters=request.data
+            )
+            report.file.save(f"{title}.pdf", ContentFile(pdf_bytes), save=True)
+            log_audit(
+                request, 'EXPORT', report,
+                object_repr=f"Generated PDF report: {report.title}",
+            )
 
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{title}.pdf"'
@@ -1152,16 +1173,22 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
         buf.seek(0)
         xlsx_bytes = buf.read()
 
-        # Record and persist it, exactly as generate_pdf does. Streaming the
-        # bytes back without saving left no row in the Generated Reports list
-        # and nothing for the `export` action to serve, so an Excel export
-        # existed only in the browser's download folder.
-        report = GeneratedReport.objects.create(
-            title=title, format='excel', status='ready',
-            generated_by=request.user,
-            parameters=request.data
-        )
-        report.file.save(f"{title}.xlsx", ContentFile(xlsx_bytes), save=True)
+        # Record and persist it, exactly as generate_pdf does — insert and file
+        # write in one transaction. Streaming the bytes back without saving left
+        # no row in the Generated Reports list and nothing for the `export`
+        # action to serve, so an Excel export existed only in the browser's
+        # download folder.
+        with transaction.atomic():
+            report = GeneratedReport.objects.create(
+                title=title, format='excel', status='ready',
+                generated_by=request.user,
+                parameters=request.data
+            )
+            report.file.save(f"{title}.xlsx", ContentFile(xlsx_bytes), save=True)
+            log_audit(
+                request, 'EXPORT', report,
+                object_repr=f"Generated Excel report: {report.title}",
+            )
 
         response = HttpResponse(
             xlsx_bytes,

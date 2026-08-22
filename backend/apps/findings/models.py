@@ -2,6 +2,7 @@ from django.db import models
 from apps.accounts.models import User
 from apps.audit_planning.models import AuditEngagement
 from apps.audit_execution.models import AuditProcedure
+from apps.common.validators import validate_document_upload
 
 
 class AuditFinding(models.Model):
@@ -80,7 +81,9 @@ class Evidence(models.Model):
     title = models.CharField(max_length=300)
     description = models.TextField(blank=True)
     evidence_type = models.CharField(max_length=20, choices=EVIDENCE_TYPE_CHOICES, default='document')
-    file = models.FileField(upload_to='evidence/%Y/%m/')
+    file = models.FileField(
+        upload_to='evidence/%Y/%m/', validators=[validate_document_upload],
+    )
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 

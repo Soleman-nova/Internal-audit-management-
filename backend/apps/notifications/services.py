@@ -8,6 +8,7 @@ so every public helper swallows and logs errors.
 import logging
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 
 from .models import Notification
 
@@ -24,13 +25,18 @@ def notify(user, notification_type, title, message, link=''):
     if user is None:
         return None
     try:
-        return Notification.objects.create(
-            user=user,
-            notification_type=notification_type,
-            title=title,
-            message=message,
-            link=link or '',
-        )
+        # Savepoint: callers wrap their writes in transaction.atomic(), and a
+        # failure here must not poison that transaction. Without it, a bad
+        # notification would take the finding/CAPA down with it — the opposite
+        # of the best-effort contract in this module's docstring.
+        with transaction.atomic():
+            return Notification.objects.create(
+                user=user,
+                notification_type=notification_type,
+                title=title,
+                message=message,
+                link=link or '',
+            )
     except Exception:  # pragma: no cover - defensive
         logger.exception('Failed to create notification for user %s', getattr(user, 'id', None))
         return None

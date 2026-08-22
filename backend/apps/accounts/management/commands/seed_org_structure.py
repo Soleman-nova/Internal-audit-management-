@@ -73,7 +73,7 @@ CHIEF_OFFICES = [
     (
         'Marketing',
         'Marketing, Sales and Customer Service',
-        'ግብይት፣ ሽያጭና ደንበኛ አገልግሎት',
+        'ማርኬቲንግ, ሽያጭና ደንበኛ አገልግሎት',
         'Chief Marketing, Sales and Customer Service officer',
         '',
     ),
@@ -101,9 +101,9 @@ CHIEF_OFFICES = [
     (
         'P&Qmgt',
         'Process and Quality Management',
-        'ሂደትና ጥራት አስተዳደር',
+        'ፕሮሰስ እና ኳሊቲ አስተዳደር',
         'Chief Process and Quality Management officer',
-        'ዋና ሂደትና ጥራት አስተዳደር ኦፊሰር',
+        'ዋና ፕሮሰስ እና ኳሊቲ አስተዳደር ኦፊሰር',
     ),
     (
         'PPM',
@@ -122,14 +122,19 @@ CHIEF_OFFICES = [
     (
         'RGN Coordination',
         'Region Coordination',
-        'ክልል ቅንጅት',
+        'ሪጅን ቅንጅት',
         'Chief Regional Coordination officer',
-        'ዋና ክልል ቅንጅት ኦፊሰር',
+        'ዋና ሪጅን ቅንጅት ኦፊሰር',
     ),
 ]
 
 # ── The 32 EEU regions, reporting to Region Coordination ──────────────────────
 # (region code, English name, Amharic name)
+#
+# "ሪጅን", not "ክልል": an EEU region is an operating area drawn for distribution,
+# and does not follow the boundaries of an Ethiopian federal region — several
+# EEU regions sit inside Oromia alone. Rendering it "ክልል" reads as a claim
+# about federal geography, so the term is transliterated throughout.
 REGIONS = [
     ('BA', 'Adama', 'አዳማ'),
     ('FA', 'Afar', 'አፋር'),
@@ -248,9 +253,9 @@ class Command(BaseCommand):
                 f'{REGION_CODE_PREFIX}{region_code}',
                 {
                     'name': f'{name} Region',
-                    'name_am': f'{name_am} ክልል',
+                    'name_am': f'{name_am} ሪጅን',
                     'head_title': f'{name} Region Manager',
-                    'head_title_am': f'የ{name_am} ክልል ሥራ አስኪያጅ',
+                    'head_title_am': f'የ{name_am} ሪጅን ሥራ አስኪያጅ',
                     'unit_type': Department.REGION,
                     'directorate_type': 'OTHER',
                     'parent': region_coordination,

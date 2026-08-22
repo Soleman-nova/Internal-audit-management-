@@ -1,6 +1,7 @@
 from django.db import models
 from apps.accounts.models import User
 from apps.audit_planning.models import AuditEngagement
+from apps.common.validators import validate_document_upload
 
 
 class AuditProgram(models.Model):
@@ -91,7 +92,10 @@ class WorkingPaper(models.Model):
     title = models.CharField(max_length=300)
     description = models.TextField(blank=True)
     paper_type = models.CharField(max_length=30, choices=PAPER_TYPE_CHOICES, default='workpaper')
-    file = models.FileField(upload_to='working_papers/%Y/%m/', null=True, blank=True)
+    file = models.FileField(
+        upload_to='working_papers/%Y/%m/', null=True, blank=True,
+        validators=[validate_document_upload],
+    )
     prepared_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='prepared_papers')
     reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_papers')
     is_reviewed = models.BooleanField(default=False)

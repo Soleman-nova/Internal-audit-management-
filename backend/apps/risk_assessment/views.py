@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.db import transaction
 from django.db.models import Count, Avg
 from django.utils import timezone
 
@@ -26,16 +27,19 @@ class RiskParameterViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'description']
 
     def perform_create(self, serializer):
-        param = serializer.save(created_by=self.request.user)
-        log_audit(self.request, 'CREATE', param)
+        with transaction.atomic():
+            param = serializer.save(created_by=self.request.user)
+            log_audit(self.request, 'CREATE', param)
 
     def perform_update(self, serializer):
-        param = serializer.save()
-        log_audit(self.request, 'UPDATE', param)
+        with transaction.atomic():
+            param = serializer.save()
+            log_audit(self.request, 'UPDATE', param)
 
     def perform_destroy(self, instance):
-        log_audit(self.request, 'DELETE', instance)
-        instance.delete()
+        with transaction.atomic():
+            log_audit(self.request, 'DELETE', instance)
+            instance.delete()
 
 
 class RiskAssessmentViewSet(viewsets.ModelViewSet):
@@ -54,16 +58,19 @@ class RiskAssessmentViewSet(viewsets.ModelViewSet):
     ordering = ['-risk_score']
 
     def perform_create(self, serializer):
-        assessment = serializer.save(assessed_by=self.request.user)
-        log_audit(self.request, 'CREATE', assessment)
+        with transaction.atomic():
+            assessment = serializer.save(assessed_by=self.request.user)
+            log_audit(self.request, 'CREATE', assessment)
 
     def perform_update(self, serializer):
-        assessment = serializer.save()
-        log_audit(self.request, 'UPDATE', assessment)
+        with transaction.atomic():
+            assessment = serializer.save()
+            log_audit(self.request, 'UPDATE', assessment)
 
     def perform_destroy(self, instance):
-        log_audit(self.request, 'DELETE', instance)
-        instance.delete()
+        with transaction.atomic():
+            log_audit(self.request, 'DELETE', instance)
+            instance.delete()
 
     @action(detail=False, methods=['get'], url_path='heatmap')
     def heatmap(self, request):
@@ -139,53 +146,56 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
         can never promote a submission to reviewed — silently pin the stored
         value instead of trusting the payload.
         """
-        assessment = serializer.save(status=serializer.instance.status)
-        log_audit(self.request, 'UPDATE', assessment)
+        with transaction.atomic():
+            assessment = serializer.save(status=serializer.instance.status)
+            log_audit(self.request, 'UPDATE', assessment)
 
     def perform_destroy(self, instance):
-        log_audit(self.request, 'DELETE', instance)
-        instance.delete()
-
+        with transaction.atomic():
+            log_audit(self.request, 'DELETE', instance)
+            instance.delete()
     def perform_create(self, serializer):
-        assessment = serializer.save(submitted_by=self.request.user)
-        log_audit(self.request, 'CREATE', assessment)
-        # Flag the parent so the matrix shows the department has responded.
-        # This has to happen server-side: an auditee holds no WRITE_AUDIT, so
-        # the client PATCHing RiskAssessment itself would 403 and make a
-        # successful submission look like a failure.
-        parent = assessment.risk_assessment
-        if parent and not parent.is_self_assessment:
-            parent.is_self_assessment = True
-            parent.save(update_fields=['is_self_assessment'])
-        # Notify reviewers that a self-assessment was submitted.
-        dept = parent.department if parent else None
-        notify_roles(
-            ['audit_manager', 'supervisor'],
-            'system',
-            'Self-assessment submitted',
-            f'A self-assessment for {dept.name if dept else "a department"} was submitted by '
-            f'{self.request.user.get_full_name() or self.request.user.username}.',
-            '/risk',
-            exclude=self.request.user,
-        )
+        with transaction.atomic():
+            assessment = serializer.save(submitted_by=self.request.user)
+            log_audit(self.request, 'CREATE', assessment)
+            # Flag the parent so the matrix shows the department has responded.
+            # This has to happen server-side: an auditee holds no WRITE_AUDIT, so
+            # the client PATCHing RiskAssessment itself would 403 and make a
+            # successful submission look like a failure.
+            parent = assessment.risk_assessment
+            if parent and not parent.is_self_assessment:
+                parent.is_self_assessment = True
+                parent.save(update_fields=['is_self_assessment'])
+            # Notify reviewers that a self-assessment was submitted.
+            dept = parent.department if parent else None
+            notify_roles(
+                ['audit_manager', 'supervisor'],
+                'system',
+                'Self-assessment submitted',
+                f'A self-assessment for {dept.name if dept else "a department"} was submitted by '
+                f'{self.request.user.get_full_name() or self.request.user.username}.',
+                '/risk',
+                exclude=self.request.user,
+            )
 
     @action(detail=True, methods=['post'], url_path='review',
             permission_classes=[RequiresCapability.for_(APPROVE_PLANS)])
     def review(self, request, pk=None):
         assessment = self.get_object()
-        assessment.status = 'reviewed'
-        assessment.reviewed_by = request.user
-        assessment.reviewed_at = timezone.now()
-        assessment.reviewer_notes = request.data.get('comments', assessment.reviewer_notes)
-        assessment.save()
-        log_audit(request, 'UPDATE', assessment)
-        # Notify the submitter that their self-assessment was reviewed.
-        if assessment.submitted_by and assessment.submitted_by != request.user:
-            notify(
-                assessment.submitted_by,
-                'approved',
-                'Self-assessment reviewed',
-                'Your submitted self-assessment has been reviewed.',
-                '/risk',
-            )
+        with transaction.atomic():
+            assessment.status = 'reviewed'
+            assessment.reviewed_by = request.user
+            assessment.reviewed_at = timezone.now()
+            assessment.reviewer_notes = request.data.get('comments', assessment.reviewer_notes)
+            assessment.save()
+            log_audit(request, 'UPDATE', assessment)
+            # Notify the submitter that their self-assessment was reviewed.
+            if assessment.submitted_by and assessment.submitted_by != request.user:
+                notify(
+                    assessment.submitted_by,
+                    'approved',
+                    'Self-assessment reviewed',
+                    'Your submitted self-assessment has been reviewed.',
+                    '/risk',
+                )
         return Response({'detail': 'Self-assessment marked as reviewed.'})

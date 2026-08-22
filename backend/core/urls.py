@@ -16,4 +16,13 @@ urlpatterns = [
     path('api/corrective/', include('apps.corrective_actions.urls')),
     path('api/reports/', include('apps.reports.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]
+
+# Media is served by Django only in development, and only for convenience —
+# `static()` already returns [] when DEBUG is False, so the unconditional form
+# was a silent no-op in production while still exposing every uploaded file
+# without authentication in development. Audit evidence and working papers are
+# reached through their permission-gated `download` actions instead
+# (EvidenceViewSet.download, WorkingPaperViewSet.download).
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

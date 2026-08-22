@@ -1,6 +1,7 @@
 from django.db import models
 from apps.accounts.models import User
 from apps.findings.models import AuditFinding
+from apps.common.validators import validate_document_upload
 
 
 class CorrectiveAction(models.Model):
@@ -51,7 +52,10 @@ class ActionResponse(models.Model):
     corrective_action = models.ForeignKey(CorrectiveAction, on_delete=models.CASCADE, related_name='responses')
     responder = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     response_text = models.TextField()
-    evidence_file = models.FileField(upload_to='capa_evidence/%Y/%m/', null=True, blank=True)
+    evidence_file = models.FileField(
+        upload_to='capa_evidence/%Y/%m/', null=True, blank=True,
+        validators=[validate_document_upload],
+    )
     status_update = models.CharField(max_length=30, choices=CorrectiveAction.STATUS_CHOICES)
     responded_at = models.DateTimeField(auto_now_add=True)
 
