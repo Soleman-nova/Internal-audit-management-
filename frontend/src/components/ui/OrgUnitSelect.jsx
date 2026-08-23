@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { useI18n } from '../../context/I18nContext';
 import { useOrgUnits } from '../../hooks/useOrgUnits';
 
@@ -31,6 +31,9 @@ import { useOrgUnits } from '../../hooks/useOrgUnits';
  *   disabled    disables all three steps
  *   valueLabel  name to show when `value` points at a unit missing from the
  *               tree — a retired one, say — so editing cannot silently drop it
+ *   idPrefix    optional stable prefix for the three selects' ids; a `useId()`
+ *               value is generated when omitted. Callers pass one so the ids
+ *               match the rest of their form's `<field>_<name>` convention.
  */
 
 // Step one flattens the non-geographic side of the tree. A literal
@@ -55,9 +58,18 @@ export const OrgUnitSelect = ({
   disabled = false,
   valueLabel = '',
   className = '',
+  idPrefix,
 }) => {
   const { t, lang } = useI18n();
   const { units, byId, childrenOf, ancestorsOf, loading, error } = useOrgUnits();
+
+  // One visible label above three controls, so it is bound to step one and the
+  // three are wrapped in a named group; steps two and three keep their own
+  // aria-label. Without an id here the label was decorative — clicking it did
+  // nothing and no control had an accessible name from it.
+  const generatedId = useId();
+  const prefix = idPrefix || generatedId;
+  const departmentSelectId = `${prefix}_department`;
 
   const selectedId = value == null ? '' : String(value);
   const known = selectedId !== '' && byId.has(selectedId);
@@ -113,7 +125,7 @@ export const OrgUnitSelect = ({
   if (error) {
     return (
       <div className={`form-group ${className}`}>
-        <label className="form-label">{label || t('department')}</label>
+        <label className="form-label" htmlFor={departmentSelectId}>{label || t('department')}</label>
         <p className="org-unit-select-error">{t('orgStructureError')}</p>
       </div>
     );
@@ -121,17 +133,17 @@ export const OrgUnitSelect = ({
 
   return (
     <div className={`form-group ${className}`}>
-      <label className="form-label">{label || t('department')}</label>
+      <label className="form-label" htmlFor={departmentSelectId}>{label || t('department')}</label>
 
-      <div className="org-unit-select">
+      <div className="org-unit-select" role="group" aria-label={label || t('department')}>
         {/* Step 1 — chief office, executive office, or audit directorate */}
         <select
+          id={departmentSelectId}
           className="form-control"
           value={isOrphanValue ? selectedId : departmentId}
           onChange={handleDepartment}
           required={required}
           disabled={disabled || loading}
-          aria-label={label || t('department')}
         >
           <option value="">{loading ? t('loadingStructure') : t('selectDepartment')}</option>
           {isOrphanValue && (
@@ -152,6 +164,7 @@ export const OrgUnitSelect = ({
 
         {/* Step 2 — region; always live, independent of the step-one choice */}
         <select
+          id={`${prefix}_region`}
           className="form-control"
           value={regionId}
           onChange={handleRegion}
@@ -168,6 +181,7 @@ export const OrgUnitSelect = ({
 
         {/* Step 3 — customer service center within the chosen region */}
         <select
+          id={`${prefix}_service_center`}
           className="form-control"
           value={centerId}
           onChange={handleCenter}

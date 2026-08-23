@@ -35,6 +35,16 @@ export const findingsApi = {
     });
     return res.data;
   },
+  // The auditee's own formal position. A plain PATCH is not an option for them:
+  // auditees hold no capabilities, so the viewset's CanWriteAudit gate refuses
+  // every write except the involved-party actions. Re-posting replaces the text,
+  // so this is both the create and the update path.
+  respondToFinding: async (id, managementResponse) => {
+    const res = await apiClient.post(`/findings/findings/${id}/respond/`, {
+      management_response: managementResponse,
+    });
+    return res.data;
+  },
 
   /* ── Lifecycle transitions ─────────────────────────────────────────── */
   // Each of these stamps dates, writes the audit trail and notifies the

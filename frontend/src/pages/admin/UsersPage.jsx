@@ -8,7 +8,7 @@ import DataTable from '../../components/ui/DataTable';
 import Badge from '../../components/ui/Badge';
 import FormField from '../../components/ui/FormField';
 import OrgUnitSelect from '../../components/ui/OrgUnitSelect';
-import { UserPlus, Shield, Activity, UserCheck, Edit2, Key, X } from 'lucide-react';
+import { UserPlus, Shield, Activity, UserCheck, Edit2, Key } from 'lucide-react';
 
 // Turn a DRF error body into one readable sentence. Raw JSON.stringify output
 // ("{"email":["..."]}") is unreadable in a toast.
@@ -334,411 +334,379 @@ function UsersPage() {
       </div>
 
       {/* Add User Modal */}
-      {showAddModal && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={closeAddModal}
-          onKeyDown={(e) => { if (e.key === 'Escape') closeAddModal(); }}
-        >
-          <div
-            className="modal-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="add-user-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="add-user-modal-title">{t('createStaffAccount')}</h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={closeAddModal}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
+      <Modal
+        isOpen={showAddModal}
+        onClose={closeAddModal}
+        title={t('createStaffAccount')}
+        size="lg"
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={closeAddModal}>Cancel</button>
+            {/* `form=` because Modal renders the footer as a sibling of its
+                children, so the submit button sits outside the <form>. */}
+            <button type="submit" form="add-user-form" className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Creating…' : 'Create User'}
+            </button>
+          </>
+        )}
+      >
+        <form id="add-user-form" onSubmit={handleAddUser} noValidate>
+          {hasErrors(formErrors) && (
+            <div className="alert alert-red" role="alert">
+              <span className="alert-icon">!</span>
+              <span>Some fields need attention before this account can be created.</span>
             </div>
-            <form onSubmit={handleAddUser} noValidate>
-              <div className="modal-body">
-                {hasErrors(formErrors) && (
-                  <div className="alert alert-red" role="alert">
-                    <span className="alert-icon">!</span>
-                    <span>Some fields need attention before this account can be created.</span>
-                  </div>
-                )}
+          )}
 
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="add_first_name">First Name</label>
-                    <input
-                      id="add_first_name"
-                      type="text"
-                      className={`form-control ${formErrors.first_name ? 'is-invalid' : ''}`}
-                      value={newUser.first_name}
-                      onChange={(e) => setNewUserField('first_name', e.target.value)}
-                      aria-invalid={!!formErrors.first_name}
-                      aria-describedby={formErrors.first_name ? 'add_first_name_error' : undefined}
-                    />
-                    {formErrors.first_name && (
-                      <p className="form-error" id="add_first_name_error">{formErrors.first_name}</p>
-                    )}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="add_last_name">Last Name</label>
-                    <input
-                      id="add_last_name"
-                      type="text"
-                      className={`form-control ${formErrors.last_name ? 'is-invalid' : ''}`}
-                      value={newUser.last_name}
-                      onChange={(e) => setNewUserField('last_name', e.target.value)}
-                      aria-invalid={!!formErrors.last_name}
-                      aria-describedby={formErrors.last_name ? 'add_last_name_error' : undefined}
-                    />
-                    {formErrors.last_name && (
-                      <p className="form-error" id="add_last_name_error">{formErrors.last_name}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="add_username">Username</label>
-                    <input
-                      id="add_username"
-                      type="text"
-                      className={`form-control ${formErrors.username ? 'is-invalid' : ''}`}
-                      value={newUser.username}
-                      onChange={(e) => setNewUserField('username', e.target.value)}
-                      aria-invalid={!!formErrors.username}
-                      aria-describedby={formErrors.username ? 'add_username_error' : undefined}
-                    />
-                    {formErrors.username && (
-                      <p className="form-error" id="add_username_error">{formErrors.username}</p>
-                    )}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="add_employee_id">Employee ID</label>
-                    <input
-                      id="add_employee_id"
-                      type="text"
-                      className={`form-control ${formErrors.employee_id ? 'is-invalid' : ''}`}
-                      placeholder="e.g. EEU-10255"
-                      value={newUser.employee_id}
-                      onChange={(e) => setNewUserField('employee_id', e.target.value)}
-                      aria-invalid={!!formErrors.employee_id}
-                      aria-describedby={formErrors.employee_id ? 'add_employee_id_error' : undefined}
-                    />
-                    {formErrors.employee_id && (
-                      <p className="form-error" id="add_employee_id_error">{formErrors.employee_id}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="add_email">Email Address</label>
-                    <input
-                      id="add_email"
-                      type="email"
-                      className={`form-control ${formErrors.email ? 'is-invalid' : ''}`}
-                      placeholder="name@eeu.com"
-                      value={newUser.email}
-                      onChange={(e) => setNewUserField('email', e.target.value)}
-                      aria-invalid={!!formErrors.email}
-                      aria-describedby={formErrors.email ? 'add_email_error' : undefined}
-                    />
-                    {formErrors.email && (
-                      <p className="form-error" id="add_email_error">{formErrors.email}</p>
-                    )}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="add_phone">Phone Number</label>
-                    <input
-                      id="add_phone"
-                      type="text"
-                      className={`form-control ${formErrors.phone ? 'is-invalid' : ''}`}
-                      placeholder="e.g. +251911..."
-                      value={newUser.phone}
-                      onChange={(e) => setNewUserField('phone', e.target.value)}
-                      aria-invalid={!!formErrors.phone}
-                      aria-describedby={formErrors.phone ? 'add_phone_error' : undefined}
-                    />
-                    {formErrors.phone && (
-                      <p className="form-error" id="add_phone_error">{formErrors.phone}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="add_role">Security Role</label>
-                    <select
-                      id="add_role"
-                      className="form-control"
-                      value={newUser.role}
-                      onChange={(e) => setNewUserField('role', e.target.value)}
-                    >
-                      <option value="admin">System Administrator</option>
-                      <option value="audit_manager">Audit Manager</option>
-                      <option value="supervisor">Supervisor</option>
-                      <option value="auditor">Lead Auditor</option>
-                      <option value="auditee">Auditee Representative</option>
-                    </select>
-                  </div>
-                  <OrgUnitSelect
-                    label="Department / Unit"
-                    value={newUser.department}
-                    onChange={(id) => setNewUserField('department', id)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label" htmlFor="add_password">Default Password</label>
-                  <input
-                    id="add_password"
-                    type="password"
-                    className={`form-control ${formErrors.password ? 'is-invalid' : ''}`}
-                    value={newUser.password}
-                    onChange={(e) => setNewUserField('password', e.target.value)}
-                    aria-invalid={!!formErrors.password}
-                    aria-describedby={formErrors.password ? 'add_password_error' : 'add_password_hint'}
-                  />
-                  {formErrors.password ? (
-                    <p className="form-error" id="add_password_error">{formErrors.password}</p>
-                  ) : (
-                    <p className="form-hint" id="add_password_hint">
-                      At least 8 characters, with an uppercase letter, a lowercase letter, and a number.
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={closeAddModal}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? 'Creating…' : 'Create User'}
-                </button>
-              </div>
-            </form>
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="add_first_name">First Name</label>
+              <input
+                id="add_first_name"
+                type="text"
+                className={`form-control ${formErrors.first_name ? 'is-invalid' : ''}`}
+                value={newUser.first_name}
+                onChange={(e) => setNewUserField('first_name', e.target.value)}
+                aria-invalid={!!formErrors.first_name}
+                aria-describedby={formErrors.first_name ? 'add_first_name_error' : undefined}
+              />
+              {formErrors.first_name && (
+                <p className="form-error" id="add_first_name_error">{formErrors.first_name}</p>
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="add_last_name">Last Name</label>
+              <input
+                id="add_last_name"
+                type="text"
+                className={`form-control ${formErrors.last_name ? 'is-invalid' : ''}`}
+                value={newUser.last_name}
+                onChange={(e) => setNewUserField('last_name', e.target.value)}
+                aria-invalid={!!formErrors.last_name}
+                aria-describedby={formErrors.last_name ? 'add_last_name_error' : undefined}
+              />
+              {formErrors.last_name && (
+                <p className="form-error" id="add_last_name_error">{formErrors.last_name}</p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="add_username">Username</label>
+              <input
+                id="add_username"
+                type="text"
+                className={`form-control ${formErrors.username ? 'is-invalid' : ''}`}
+                value={newUser.username}
+                onChange={(e) => setNewUserField('username', e.target.value)}
+                aria-invalid={!!formErrors.username}
+                aria-describedby={formErrors.username ? 'add_username_error' : undefined}
+              />
+              {formErrors.username && (
+                <p className="form-error" id="add_username_error">{formErrors.username}</p>
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="add_employee_id">Employee ID</label>
+              <input
+                id="add_employee_id"
+                type="text"
+                className={`form-control ${formErrors.employee_id ? 'is-invalid' : ''}`}
+                placeholder="e.g. EEU-10255"
+                value={newUser.employee_id}
+                onChange={(e) => setNewUserField('employee_id', e.target.value)}
+                aria-invalid={!!formErrors.employee_id}
+                aria-describedby={formErrors.employee_id ? 'add_employee_id_error' : undefined}
+              />
+              {formErrors.employee_id && (
+                <p className="form-error" id="add_employee_id_error">{formErrors.employee_id}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="add_email">Email Address</label>
+              <input
+                id="add_email"
+                type="email"
+                className={`form-control ${formErrors.email ? 'is-invalid' : ''}`}
+                placeholder="name@eeu.com"
+                value={newUser.email}
+                onChange={(e) => setNewUserField('email', e.target.value)}
+                aria-invalid={!!formErrors.email}
+                aria-describedby={formErrors.email ? 'add_email_error' : undefined}
+              />
+              {formErrors.email && (
+                <p className="form-error" id="add_email_error">{formErrors.email}</p>
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="add_phone">Phone Number</label>
+              <input
+                id="add_phone"
+                type="text"
+                className={`form-control ${formErrors.phone ? 'is-invalid' : ''}`}
+                placeholder="e.g. +251911..."
+                value={newUser.phone}
+                onChange={(e) => setNewUserField('phone', e.target.value)}
+                aria-invalid={!!formErrors.phone}
+                aria-describedby={formErrors.phone ? 'add_phone_error' : undefined}
+              />
+              {formErrors.phone && (
+                <p className="form-error" id="add_phone_error">{formErrors.phone}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="add_role">Security Role</label>
+              <select
+                id="add_role"
+                className="form-control"
+                value={newUser.role}
+                onChange={(e) => setNewUserField('role', e.target.value)}
+              >
+                <option value="admin">System Administrator</option>
+                <option value="audit_manager">Audit Manager</option>
+                <option value="supervisor">Supervisor</option>
+                <option value="auditor">Lead Auditor</option>
+                <option value="auditee">Auditee Representative</option>
+              </select>
+            </div>
+            <OrgUnitSelect
+              idPrefix="add_dept"
+              label="Department / Unit"
+              value={newUser.department}
+              onChange={(id) => setNewUserField('department', id)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="add_password">Default Password</label>
+            <input
+              id="add_password"
+              type="password"
+              className={`form-control ${formErrors.password ? 'is-invalid' : ''}`}
+              value={newUser.password}
+              onChange={(e) => setNewUserField('password', e.target.value)}
+              aria-invalid={!!formErrors.password}
+              aria-describedby={formErrors.password ? 'add_password_error' : 'add_password_hint'}
+            />
+            {formErrors.password ? (
+              <p className="form-error" id="add_password_error">{formErrors.password}</p>
+            ) : (
+              <p className="form-hint" id="add_password_hint">
+                At least 8 characters, with an uppercase letter, a lowercase letter, and a number.
+              </p>
+            )}
+          </div>
+        </form>
+      </Modal>
 
       {/* Edit User / Reset Password Modal */}
-      {showEditModal && editingUser && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={closeEditModal}
-          onKeyDown={(e) => { if (e.key === 'Escape') closeEditModal(); }}
-        >
-          <div
-            className="modal-card"
-            style={{ maxWidth: '600px' }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="edit-user-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="edit-user-modal-title">{t('editUserAccount', `${editingUser.first_name} ${editingUser.last_name}`)}</h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={closeEditModal}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="modal-body">
-              {/* Reset Password Form Section */}
-              <div className="card bg-surface-variant p-4 mb-5 border border-primary/20">
-                <h4 className="flex items-center gap-2 mb-2 text-primary">
-                  <Key size={16} /> Reset Password
-                </h4>
-                <p className="text-xs text-muted mb-3">
-                  Set a new password for this corporate user. At least 8 characters, with an
-                  uppercase letter, a lowercase letter, and a number.
-                </p>
-                <form onSubmit={handleResetPassword} noValidate>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      className={`form-control ${formErrors.reset_password ? 'is-invalid' : ''}`}
-                      placeholder="New password"
-                      value={resetPasswordVal}
-                      onChange={(e) => {
-                        setResetPasswordVal(e.target.value);
-                        setFormErrors((prev) => clearFieldError(prev, 'reset_password'));
-                      }}
-                      aria-invalid={!!formErrors.reset_password}
-                      aria-describedby={formErrors.reset_password ? 'reset_password_error' : undefined}
-                    />
-                    <button type="submit" className="btn btn-secondary whitespace-nowrap">
-                      Update Password
-                    </button>
-                  </div>
-                  {formErrors.reset_password && (
-                    <p className="form-error" id="reset_password_error">{formErrors.reset_password}</p>
-                  )}
-                </form>
-              </div>
-
-              {/* Edit Account Details Form Section */}
-              <form onSubmit={handleEditUser} noValidate>
-                <h4 className="flex items-center gap-2 mb-3 text-accent">
-                  <Edit2 size={16} /> Edit Account Details
-                </h4>
-
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="edit_first_name">First Name</label>
-                    <input
-                      id="edit_first_name"
-                      type="text"
-                      className={`form-control ${formErrors.first_name ? 'is-invalid' : ''}`}
-                      value={editingUser.first_name}
-                      onChange={(e) => setEditingUserField('first_name', e.target.value)}
-                      aria-invalid={!!formErrors.first_name}
-                      aria-describedby={formErrors.first_name ? 'edit_first_name_error' : undefined}
-                    />
-                    {formErrors.first_name && (
-                      <p className="form-error" id="edit_first_name_error">{formErrors.first_name}</p>
-                    )}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="edit_last_name">Last Name</label>
-                    <input
-                      id="edit_last_name"
-                      type="text"
-                      className={`form-control ${formErrors.last_name ? 'is-invalid' : ''}`}
-                      value={editingUser.last_name}
-                      onChange={(e) => setEditingUserField('last_name', e.target.value)}
-                      aria-invalid={!!formErrors.last_name}
-                      aria-describedby={formErrors.last_name ? 'edit_last_name_error' : undefined}
-                    />
-                    {formErrors.last_name && (
-                      <p className="form-error" id="edit_last_name_error">{formErrors.last_name}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="edit_username">Username</label>
-                    <input
-                      id="edit_username"
-                      type="text"
-                      className={`form-control ${formErrors.username ? 'is-invalid' : ''}`}
-                      value={editingUser.username}
-                      onChange={(e) => setEditingUserField('username', e.target.value)}
-                      aria-invalid={!!formErrors.username}
-                      aria-describedby={formErrors.username ? 'edit_username_error' : undefined}
-                    />
-                    {formErrors.username && (
-                      <p className="form-error" id="edit_username_error">{formErrors.username}</p>
-                    )}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="edit_employee_id">Employee ID</label>
-                    <input
-                      id="edit_employee_id"
-                      type="text"
-                      className={`form-control ${formErrors.employee_id ? 'is-invalid' : ''}`}
-                      value={editingUser.employee_id}
-                      onChange={(e) => setEditingUserField('employee_id', e.target.value)}
-                      aria-invalid={!!formErrors.employee_id}
-                      aria-describedby={formErrors.employee_id ? 'edit_employee_id_error' : undefined}
-                    />
-                    {formErrors.employee_id && (
-                      <p className="form-error" id="edit_employee_id_error">{formErrors.employee_id}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="edit_email">Email Address</label>
-                    <input
-                      id="edit_email"
-                      type="email"
-                      className={`form-control ${formErrors.email ? 'is-invalid' : ''}`}
-                      value={editingUser.email}
-                      onChange={(e) => setEditingUserField('email', e.target.value)}
-                      aria-invalid={!!formErrors.email}
-                      aria-describedby={formErrors.email ? 'edit_email_error' : undefined}
-                    />
-                    {formErrors.email && (
-                      <p className="form-error" id="edit_email_error">{formErrors.email}</p>
-                    )}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="edit_phone">Phone Number</label>
-                    <input
-                      id="edit_phone"
-                      type="text"
-                      className={`form-control ${formErrors.phone ? 'is-invalid' : ''}`}
-                      placeholder="e.g. +251911..."
-                      value={editingUser.phone}
-                      onChange={(e) => setEditingUserField('phone', e.target.value)}
-                      aria-invalid={!!formErrors.phone}
-                      aria-describedby={formErrors.phone ? 'edit_phone_error' : undefined}
-                    />
-                    {formErrors.phone && (
-                      <p className="form-error" id="edit_phone_error">{formErrors.phone}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="form-group-row">
-                  <OrgUnitSelect
-                    label="Department / Unit"
-                    value={editingUser.department || ''}
-                    onChange={(id) => setEditingUserField('department', id)}
-                    valueLabel={editingUser.department_name}
-                  />
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="edit_role">Security Role</label>
-                    <select
-                      id="edit_role"
-                      className="form-control"
-                      value={editingUser.role}
-                      onChange={(e) => setEditingUserField('role', e.target.value)}
-                    >
-                      <option value="admin">System Administrator</option>
-                      <option value="audit_manager">Audit Manager</option>
-                      <option value="supervisor">Supervisor</option>
-                      <option value="auditor">Lead Auditor</option>
-                      <option value="auditee">Auditee Representative</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-group flex items-center gap-2 mt-4">
+      <Modal
+        isOpen={Boolean(showEditModal && editingUser)}
+        onClose={closeEditModal}
+        title={editingUser ? t('editUserAccount', `${editingUser.first_name} ${editingUser.last_name}`) : 'Edit User Account'}
+        size="lg"
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={closeEditModal}>Cancel</button>
+            <button type="submit" form="edit-user-form" className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Saving…' : 'Save Changes'}
+            </button>
+          </>
+        )}
+      >
+        {editingUser && (
+          <>
+            {/* Reset Password Form Section */}
+            <div className="card bg-surface-variant p-4 mb-5 border border-primary/20">
+              <h4 className="flex items-center gap-2 mb-2 text-primary">
+                <Key size={16} /> Reset Password
+              </h4>
+              <p className="text-xs text-muted mb-3">
+                Set a new password for this corporate user. At least 8 characters, with an
+                uppercase letter, a lowercase letter, and a number.
+              </p>
+              {/* Its own form, and it stays in the body: it submits to a
+                  different endpoint than Save Changes and must not be reachable
+                  from the footer's submit button. */}
+              <form onSubmit={handleResetPassword} noValidate>
+                <div className="flex gap-2">
+                  <label className="sr-only" htmlFor="reset_password">New password</label>
                   <input
-                    type="checkbox"
-                    id="edit_is_active"
-                    checked={editingUser.is_active}
-                    onChange={(e) => setEditingUserField('is_active', e.target.checked)}
+                    id="reset_password"
+                    type="password"
+                    className={`form-control ${formErrors.reset_password ? 'is-invalid' : ''}`}
+                    placeholder="New password"
+                    value={resetPasswordVal}
+                    onChange={(e) => {
+                      setResetPasswordVal(e.target.value);
+                      setFormErrors((prev) => clearFieldError(prev, 'reset_password'));
+                    }}
+                    aria-invalid={!!formErrors.reset_password}
+                    aria-describedby={formErrors.reset_password ? 'reset_password_error' : undefined}
                   />
-                  <label htmlFor="edit_is_active" className="form-label mb-0 cursor-pointer">
-                    Account is Active and Enabled
-                  </label>
-                </div>
-
-                <div className="modal-footer mt-5">
-                  <button type="button" className="btn btn-outline" onClick={closeEditModal}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" disabled={submitting}>
-                    {submitting ? 'Saving…' : 'Save Changes'}
+                  <button type="submit" className="btn btn-secondary whitespace-nowrap">
+                    Update Password
                   </button>
                 </div>
+                {formErrors.reset_password && (
+                  <p className="form-error" id="reset_password_error">{formErrors.reset_password}</p>
+                )}
               </form>
             </div>
-          </div>
-        </div>
-      )}
+
+            {/* Edit Account Details Form Section */}
+            <form id="edit-user-form" onSubmit={handleEditUser} noValidate>
+              <h4 className="flex items-center gap-2 mb-3 text-accent">
+                <Edit2 size={16} /> Edit Account Details
+              </h4>
+
+              <div className="form-group-row">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="edit_first_name">First Name</label>
+                  <input
+                    id="edit_first_name"
+                    type="text"
+                    className={`form-control ${formErrors.first_name ? 'is-invalid' : ''}`}
+                    value={editingUser.first_name}
+                    onChange={(e) => setEditingUserField('first_name', e.target.value)}
+                    aria-invalid={!!formErrors.first_name}
+                    aria-describedby={formErrors.first_name ? 'edit_first_name_error' : undefined}
+                  />
+                  {formErrors.first_name && (
+                    <p className="form-error" id="edit_first_name_error">{formErrors.first_name}</p>
+                  )}
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="edit_last_name">Last Name</label>
+                  <input
+                    id="edit_last_name"
+                    type="text"
+                    className={`form-control ${formErrors.last_name ? 'is-invalid' : ''}`}
+                    value={editingUser.last_name}
+                    onChange={(e) => setEditingUserField('last_name', e.target.value)}
+                    aria-invalid={!!formErrors.last_name}
+                    aria-describedby={formErrors.last_name ? 'edit_last_name_error' : undefined}
+                  />
+                  {formErrors.last_name && (
+                    <p className="form-error" id="edit_last_name_error">{formErrors.last_name}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="form-group-row">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="edit_username">Username</label>
+                  <input
+                    id="edit_username"
+                    type="text"
+                    className={`form-control ${formErrors.username ? 'is-invalid' : ''}`}
+                    value={editingUser.username}
+                    onChange={(e) => setEditingUserField('username', e.target.value)}
+                    aria-invalid={!!formErrors.username}
+                    aria-describedby={formErrors.username ? 'edit_username_error' : undefined}
+                  />
+                  {formErrors.username && (
+                    <p className="form-error" id="edit_username_error">{formErrors.username}</p>
+                  )}
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="edit_employee_id">Employee ID</label>
+                  <input
+                    id="edit_employee_id"
+                    type="text"
+                    className={`form-control ${formErrors.employee_id ? 'is-invalid' : ''}`}
+                    value={editingUser.employee_id}
+                    onChange={(e) => setEditingUserField('employee_id', e.target.value)}
+                    aria-invalid={!!formErrors.employee_id}
+                    aria-describedby={formErrors.employee_id ? 'edit_employee_id_error' : undefined}
+                  />
+                  {formErrors.employee_id && (
+                    <p className="form-error" id="edit_employee_id_error">{formErrors.employee_id}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="form-group-row">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="edit_email">Email Address</label>
+                  <input
+                    id="edit_email"
+                    type="email"
+                    className={`form-control ${formErrors.email ? 'is-invalid' : ''}`}
+                    value={editingUser.email}
+                    onChange={(e) => setEditingUserField('email', e.target.value)}
+                    aria-invalid={!!formErrors.email}
+                    aria-describedby={formErrors.email ? 'edit_email_error' : undefined}
+                  />
+                  {formErrors.email && (
+                    <p className="form-error" id="edit_email_error">{formErrors.email}</p>
+                  )}
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="edit_phone">Phone Number</label>
+                  <input
+                    id="edit_phone"
+                    type="text"
+                    className={`form-control ${formErrors.phone ? 'is-invalid' : ''}`}
+                    placeholder="e.g. +251911..."
+                    value={editingUser.phone}
+                    onChange={(e) => setEditingUserField('phone', e.target.value)}
+                    aria-invalid={!!formErrors.phone}
+                    aria-describedby={formErrors.phone ? 'edit_phone_error' : undefined}
+                  />
+                  {formErrors.phone && (
+                    <p className="form-error" id="edit_phone_error">{formErrors.phone}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="form-group-row">
+                <OrgUnitSelect
+                  idPrefix="edit_dept"
+                  label="Department / Unit"
+                  value={editingUser.department || ''}
+                  onChange={(id) => setEditingUserField('department', id)}
+                  valueLabel={editingUser.department_name}
+                />
+                <div className="form-group">
+                  <label className="form-label" htmlFor="edit_role">Security Role</label>
+                  <select
+                    id="edit_role"
+                    className="form-control"
+                    value={editingUser.role}
+                    onChange={(e) => setEditingUserField('role', e.target.value)}
+                  >
+                    <option value="admin">System Administrator</option>
+                    <option value="audit_manager">Audit Manager</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="auditor">Lead Auditor</option>
+                    <option value="auditee">Auditee Representative</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group flex items-center gap-2 mt-4">
+                <input
+                  type="checkbox"
+                  id="edit_is_active"
+                  checked={editingUser.is_active}
+                  onChange={(e) => setEditingUserField('is_active', e.target.checked)}
+                />
+                <label htmlFor="edit_is_active" className="form-label mb-0 cursor-pointer">
+                  Account is Active and Enabled
+                </label>
+              </div>
+            </form>
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

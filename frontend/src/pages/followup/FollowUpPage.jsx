@@ -11,7 +11,7 @@ import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
-import { CheckCircle2, Clock, ShieldAlert, MessageCircle, RefreshCw, Plus, FileUp, X } from 'lucide-react';
+import { CheckCircle2, Clock, ShieldAlert, MessageCircle, RefreshCw, Plus, FileUp } from 'lucide-react';
 
 function FollowUpPage() {
   const toast = useToast();
@@ -344,217 +344,189 @@ function FollowUpPage() {
       )}
 
       {/* Spawn CAPA Modal */}
-      {showCreateModal && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setShowCreateModal(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
-        >
-          <div
-            className="modal-card modal-large"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="capa-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="capa-modal-title">{t('spawnCapaLinked')}</h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setShowCreateModal(false)}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <form onSubmit={handleCreateCapa}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">Link to Audit Finding</label>
-                  <select
-                    className="form-control"
-                    value={newCapa.finding}
-                    onChange={handleFindingChange}
-                    required
-                  >
-                    <option value="">Select Audit Finding...</option>
-                    {findings.map(f => (
-                      <option key={f.id} value={f.id}>{f.finding_number} - {f.title}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Action / CAPA Title</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="e.g. Implement dual-authorization controls"
-                    value={newCapa.title}
-                    onChange={e => setNewCapa({ ...newCapa, title: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Action Description</label>
-                  <textarea
-                    rows="3"
-                    className="form-control"
-                    placeholder="Provide detailed description of corrective action..."
-                    value={newCapa.description}
-                    onChange={e => setNewCapa({ ...newCapa, description: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Auditor Recommendation Reference</label>
-                  <textarea
-                    rows="2"
-                    className="form-control"
-                    value={newCapa.recommendation}
-                    onChange={e => setNewCapa({ ...newCapa, recommendation: e.target.value })}
-                    placeholder="Auditor recommendation details..."
-                    required
-                  />
-                </div>
-
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label">Assign Owner (Auditee)</label>
-                    <select
-                      className="form-control"
-                      value={newCapa.owner}
-                      onChange={e => setNewCapa({ ...newCapa, owner: e.target.value })}
-                      required
-                    >
-                      <option value="">Select Auditee Owner...</option>
-                      {auditees.map(a => (
-                        <option key={a.id} value={a.id}>{a.first_name} {a.last_name} ({a.department_name || 'Auditee'})</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Priority</label>
-                    <select
-                      className="form-control"
-                      value={newCapa.priority}
-                      onChange={e => setNewCapa({ ...newCapa, priority: e.target.value })}
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="immediate">Immediate</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Due Date</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={newCapa.due_date}
-                      onChange={e => setNewCapa({ ...newCapa, due_date: e.target.value })}
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowCreateModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-accent" disabled={creating}>
-                  {creating ? 'Spawning...' : 'Spawn & Assign CAPA'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title={t('spawnCapaLinked')}
+        size="xl"
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={() => setShowCreateModal(false)}>Cancel</button>
+            {/* `form=` because Modal renders the footer as a sibling of its
+                children, so the submit button sits outside the <form>. */}
+            <button type="submit" form="capa-form" className="btn btn-accent" disabled={creating}>
+              {creating ? 'Spawning...' : 'Spawn & Assign CAPA'}
+            </button>
+          </>
+        )}
+      >
+        <form id="capa-form" onSubmit={handleCreateCapa}>
+          <div className="form-group">
+            <label className="form-label" htmlFor="capa_finding">Link to Audit Finding</label>
+            <select
+              id="capa_finding"
+              className="form-control"
+              value={newCapa.finding}
+              onChange={handleFindingChange}
+              required
+            >
+              <option value="">Select Audit Finding...</option>
+              {findings.map(f => (
+                <option key={f.id} value={f.id}>{f.finding_number} - {f.title}</option>
+              ))}
+            </select>
           </div>
-        </div>
-      )}
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="capa_title">Action / CAPA Title</label>
+            <input
+              id="capa_title"
+              type="text"
+              className="form-control"
+              placeholder="e.g. Implement dual-authorization controls"
+              value={newCapa.title}
+              onChange={e => setNewCapa({ ...newCapa, title: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="capa_description">Action Description</label>
+            <textarea
+              id="capa_description"
+              rows="3"
+              className="form-control"
+              placeholder="Provide detailed description of corrective action..."
+              value={newCapa.description}
+              onChange={e => setNewCapa({ ...newCapa, description: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="capa_recommendation">Auditor Recommendation Reference</label>
+            <textarea
+              id="capa_recommendation"
+              rows="2"
+              className="form-control"
+              value={newCapa.recommendation}
+              onChange={e => setNewCapa({ ...newCapa, recommendation: e.target.value })}
+              placeholder="Auditor recommendation details..."
+              required
+            />
+          </div>
+
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="capa_owner">Assign Owner (Auditee)</label>
+              <select
+                id="capa_owner"
+                className="form-control"
+                value={newCapa.owner}
+                onChange={e => setNewCapa({ ...newCapa, owner: e.target.value })}
+                required
+              >
+                <option value="">Select Auditee Owner...</option>
+                {auditees.map(a => (
+                  <option key={a.id} value={a.id}>{a.first_name} {a.last_name} ({a.department_name || 'Auditee'})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="capa_priority">Priority</label>
+              <select
+                id="capa_priority"
+                className="form-control"
+                value={newCapa.priority}
+                onChange={e => setNewCapa({ ...newCapa, priority: e.target.value })}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="immediate">Immediate</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="capa_due_date">Due Date</label>
+              <input
+                id="capa_due_date"
+                type="date"
+                className="form-control"
+                value={newCapa.due_date}
+                onChange={e => setNewCapa({ ...newCapa, due_date: e.target.value })}
+                required
+              />
+            </div>
+          </div>
+        </form>
+      </Modal>
 
       {/* Auditee Response Modal */}
-      {showResponseModal && selectedCapa && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setShowResponseModal(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowResponseModal(false); }}
-        >
-          <div
-            className="modal-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="response-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="response-modal-title">Submit Management Update for {selectedCapa.action_number}</h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setShowResponseModal(false)}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
+      <Modal
+        isOpen={Boolean(showResponseModal && selectedCapa)}
+        onClose={() => setShowResponseModal(false)}
+        title={selectedCapa ? `Submit Management Update for ${selectedCapa.action_number}` : 'Submit Management Update'}
+        size="lg"
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={() => setShowResponseModal(false)}>Cancel</button>
+            <button type="submit" form="capa-response-form" className="btn btn-primary" disabled={submittingResponse}>
+              {submittingResponse ? 'Submitting...' : 'Submit Response'}
+            </button>
+          </>
+        )}
+      >
+        {selectedCapa && (
+          <form id="capa-response-form" onSubmit={handleSubmitResponse}>
+            <div className="mb-4">
+              <span className="text-xs text-muted font-bold block">Recommendation:</span>
+              <p className="text-sm font-semibold">{selectedCapa.recommendation}</p>
             </div>
-            <form onSubmit={handleSubmitResponse}>
-              <div className="modal-body">
-                <div className="mb-4">
-                  <span className="text-xs text-muted font-bold block">Recommendation:</span>
-                  <p className="text-sm font-semibold">{selectedCapa.recommendation}</p>
-                </div>
 
-                <div className="form-group">
-                  <label className="form-label">Progress Status</label>
-                  <select
-                    className="form-control"
-                    value={statusUpdate}
-                    onChange={(e) => setStatusUpdate(e.target.value)}
-                  >
-                    <option value="in_progress">In Progress</option>
-                    <option value="partially_resolved">Partially Resolved</option>
-                    <option value="resolved">Resolved / Actioned</option>
-                  </select>
-                </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="response_status">Progress Status</label>
+              <select
+                id="response_status"
+                className="form-control"
+                value={statusUpdate}
+                onChange={(e) => setStatusUpdate(e.target.value)}
+              >
+                <option value="in_progress">In Progress</option>
+                <option value="partially_resolved">Partially Resolved</option>
+                <option value="resolved">Resolved / Actioned</option>
+              </select>
+            </div>
 
-                <div className="form-group">
-                  <label className="form-label">Action / Update Notes</label>
-                  <textarea
-                    rows="4"
-                    className="form-control"
-                    placeholder="Provide details on action taken, systems modified, or policies published..."
-                    value={responseText}
-                    onChange={(e) => setResponseText(e.target.value)}
-                    required
-                  />
-                </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="response_notes">Action / Update Notes</label>
+              <textarea
+                id="response_notes"
+                rows="4"
+                className="form-control"
+                placeholder="Provide details on action taken, systems modified, or policies published..."
+                value={responseText}
+                onChange={(e) => setResponseText(e.target.value)}
+                required
+              />
+            </div>
 
-                <div className="form-group">
-                  <label className="form-label flex items-center gap-1"><FileUp size={16} /> Upload Implementation Document</label>
-                  <input
-                    type="file"
-                    className="form-control"
-                    onChange={(e) => setEvidenceFile(e.target.files[0])}
-                  />
-                  {evidenceFile && (
-                    <span className="text-xs text-success block mt-1">Selected file: {evidenceFile.name}</span>
-                  )}
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowResponseModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={submittingResponse}>
-                  {submittingResponse ? 'Submitting...' : 'Submit Response'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <div className="form-group">
+              <label className="form-label flex items-center gap-1" htmlFor="response_evidence"><FileUp size={16} /> Upload Implementation Document</label>
+              <input
+                id="response_evidence"
+                type="file"
+                className="form-control"
+                onChange={(e) => setEvidenceFile(e.target.files[0])}
+              />
+              {evidenceFile && (
+                <span className="text-xs text-success block mt-1">Selected file: {evidenceFile.name}</span>
+              )}
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

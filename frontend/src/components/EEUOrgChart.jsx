@@ -50,7 +50,8 @@ function EEUOrgChart({ onSelectDirectorate }) {
 
                 const universeList = Array.isArray(universe) ? universe : (universe?.results || []);
                 const plansList = Array.isArray(plans) ? plans : (plans?.results || []);
-                const engagementsList = Array.isArray(engagements) ? engagements : (engagements?.results || []);
+                // getEngagements returns { items, count, hasMore } — see api/paginated.js.
+                const engagementsList = engagements?.items || [];
 
                 const statsByDept = {};
                 const allDepts = [iaeo, ...(iaeo.children || [])];

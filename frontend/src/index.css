@@ -395,7 +395,7 @@ body {
 
 .form-input {
   width: 100%;
-  padding: 12px 14px 12px 42px;
+  padding: 12px 14px;
   background: var(--bg-dark);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -404,6 +404,15 @@ body {
   font-family: 'Inter', sans-serif;
   transition: var(--transition);
   outline: none;
+}
+
+/* The 42px icon gutter belongs to the wrapper, not to every .form-input.
+   Nothing in the app renders .form-input-wrap yet, so the 11 bare
+   .form-input elements were indenting 28px further than the .form-control
+   inputs beside them for an icon that was never there. Scoping it here
+   keeps the pattern working for whoever adopts the wrapper. */
+.form-input-wrap .form-input {
+  padding-left: 42px;
 }
 
 .form-input:focus {
@@ -1721,97 +1730,12 @@ tbody tr:hover {
   color: var(--text-secondary);
 }
 
-/* ── Modals ── */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s ease;
-}
-
-.modal-overlay.open {
-  opacity: 1;
-  pointer-events: all;
-}
-
-.modal {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
-  transform: scale(0.95) translateY(20px);
-  transition: var(--transition);
-  box-shadow: var(--shadow-lg);
-}
-
-.modal-overlay.open .modal {
-  transform: scale(1) translateY(0);
-}
-
-.modal-lg {
-  max-width: 800px;
-}
-
-.modal-sm {
-  max-width: 400px;
-}
-
-.modal-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.modal-title {
-  font-size: 17px;
-  font-weight: 700;
-  font-family: 'Outfit', sans-serif;
-}
-
-.modal-close {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  transition: var(--transition);
-}
-
-.modal-close:hover {
-  background: var(--bg-card2);
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: 24px;
-}
-
-.modal-footer {
-  padding: 16px 24px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
+/* The legacy .modal-overlay / .modal / .modal-header / .modal-body /
+   .modal-footer block lived here. Every dialog in the app now renders through
+   components/ui/Modal.jsx, which is Tailwind-styled and supplies its own
+   header, body and footer — nothing emitted these classes any more. The
+   duplicate .modal-header/-body/-footer definitions further down went with
+   them; they silently overrode this copy. */
 
 /* ── Form styles inside modals/pages ── */
 .form-grid {
@@ -3384,93 +3308,13 @@ textarea.form-control {
   font-size: 13px;
 }
 
-/* Modal */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.modal-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 560px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-  animation: slideUp 0.2s ease;
-}
-
-.modal-large {
-  max-width: 760px;
-}
-
-.modal-header {
-  padding: 18px 24px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.modal-header h3 {
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.modal-body {
-  padding: 24px;
-}
-
-.modal-footer {
-  padding: 16px 24px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.close-btn {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: var(--transition);
-  padding: 0;
-  line-height: 1;
-}
-
-.close-btn svg {
-  display: block;
-  pointer-events: none;
-}
-
-.close-btn:hover {
-  background: var(--bg-card2);
-  color: var(--text-primary);
-  border-color: var(--border-active);
-}
-
-.close-btn:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
+/* The hand-rolled modal shell lived here: .modal-backdrop, .modal-card,
+   .modal-large, .modal-header (+ h3), .modal-body, .modal-footer, and the
+   .close-btn it carried. These were the second copies of .modal-header /
+   -body / -footer — the pair further up silently lost to them on padding.
+   All 19 dialogs render through components/ui/Modal.jsx now, which is
+   Tailwind-styled and supplies its own backdrop, header, body, footer and
+   labelled close button, so nothing emits any of these class names. */
 
 /* Tabs */
 .tab-container {
@@ -5579,12 +5423,9 @@ textarea.form-control {
     gap: 8px;
   }
 
-  .app-modal-settings,
-  .app-modal-help {
-    flex-direction: column;
-    max-width: 96%;
-  }
-
+  /* .app-modal-settings / .app-modal-help were sized here. Modal.jsx owns the
+     dialog box now — size="lg"/"xl" plus its own w-full — so only the inner
+     layout below still needs a phone breakpoint. */
   .app-modal-layout {
     flex-direction: column;
   }
@@ -5611,159 +5452,17 @@ textarea.form-control {
 
 /* ============================================================
    APP MODALS — Settings & Help
+   The dialog shell that used to live at the top of this section
+   (@keyframes appModalFadeIn / appModalSlideUp, .app-modal-overlay,
+   .app-modal, .app-modal-settings, .app-modal-help, the
+   .app-modal-hero family with its ::before/::after glows and light-theme
+   variant, and .app-modal-close) is gone: AppLayout renders both dialogs
+   through components/ui/Modal.jsx, which supplies the overlay, the
+   animation, the title/subtitle header and the close button.
+   Everything below styles the *contents* of those two dialogs — the nav
+   rail, the fields, the theme and language pickers, the timeline — and is
+   still very much in use.
    ============================================================ */
-@keyframes appModalFadeIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes appModalSlideUp {
-  from {
-    opacity: 0;
-    transform: translateY(24px) scale(0.97);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.app-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(8px);
-  animation: appModalFadeIn 0.2s ease;
-}
-
-.app-modal {
-  display: flex;
-  width: 100%;
-  max-height: 90vh;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.04);
-  overflow: hidden;
-  animation: appModalSlideUp 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);
-}
-
-.app-modal-settings {
-  max-width: 680px;
-  flex-direction: column;
-}
-
-.app-modal-help {
-  max-width: 780px;
-  flex-direction: column;
-}
-
-.app-modal-hero {
-  position: relative;
-  padding: 24px 28px 22px;
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18) 0%, rgba(6, 182, 212, 0.12) 50%, rgba(139, 92, 246, 0.1) 100%);
-  border-bottom: 1px solid var(--border);
-  overflow: hidden;
-}
-
-.app-modal-hero::before {
-  content: '';
-  position: absolute;
-  top: -40%;
-  right: -10%;
-  width: 220px;
-  height: 220px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(37, 99, 235, 0.2) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-.app-modal-hero::after {
-  content: '';
-  position: absolute;
-  bottom: -50%;
-  left: 10%;
-  width: 160px;
-  height: 160px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-[data-theme="light"] .app-modal-hero {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(6, 182, 212, 0.06) 50%, rgba(139, 92, 246, 0.05) 100%);
-}
-
-.app-modal-hero-inner {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.app-modal-hero-text h3 {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: var(--text-primary);
-  margin: 0 0 4px;
-  letter-spacing: -0.02em;
-}
-
-.app-modal-hero-text p {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-  margin: 0;
-  line-height: 1.5;
-  max-width: 420px;
-}
-
-.app-modal-hero-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  color: #fff;
-  box-shadow: 0 4px 16px var(--primary-glow);
-  flex-shrink: 0;
-}
-
-.app-modal-close {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-card2);
-  color: var(--text-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--transition);
-  flex-shrink: 0;
-}
-
-.app-modal-close:hover {
-  background: var(--bg-card);
-  color: var(--text-primary);
-  border-color: var(--border-active);
-}
-
 .app-modal-layout {
   display: flex;
   flex: 1;
@@ -6460,16 +6159,8 @@ textarea.form-control {
   color: var(--text-muted);
 }
 
-.app-modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-card2);
-}
-
+/* .app-modal-footer is gone — Modal.jsx renders the footer bar. The Help
+   dialog still passes this support line into that footer as its own node. */
 .app-modal-footer-support {
   display: flex;
   align-items: center;
@@ -6480,4 +6171,106 @@ textarea.form-control {
 
 .app-modal-footer-support strong {
   color: var(--text-secondary);
+}
+
+/* ============================================================
+   RESPONSIVE SHELL — 375px and up
+   The page-level grids already had breakpoints; the shell itself
+   had none, so a 260px fixed sidebar sat on top of a phone.
+   ============================================================ */
+
+/* Skip link — the sidebar puts 7–11 nav links ahead of the content on every
+   page. Off-screen until focused, then pinned over the header. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10000;
+  padding: 10px 16px;
+  border-radius: 0 0 var(--radius-md) 0;
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+/* Drawer backdrop. It is always rendered while the sidebar is open, so it must
+   stay hidden on the wide layout where the sidebar is a permanent rail. */
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  /* The sidebar becomes an overlay drawer: closed by default at this width,
+     which inverts the wide-screen behaviour. AppLayout already emits both
+     `open` and `closed`, so no JS branch is needed here. */
+  .app-sidebar {
+    transform: translateX(-260px);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .app-sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Content is never pushed off-screen by the drawer. */
+  .main-wrapper,
+  .main-wrapper.sidebar-open {
+    margin-left: 0;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+    border: none;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+  }
+}
+
+/* Tables scroll rather than compress. `.table` is width: 100% with no
+   min-width, so `overflow-x: auto` on the wrapper never had anything to
+   scroll — the columns just squeezed to unreadable. */
+.table-responsive > .table {
+  min-width: 720px;
+}
+
+.data-table-scroll > .data-table {
+  min-width: 720px;
+}
+
+/* Two inputs side by side at 375px is unusable; this grid is used 38 times
+   across seven pages and had no breakpoint. */
+@media (max-width: 640px) {
+  .form-group-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A 5x5 risk matrix loses its meaning as one column, and a 7-column month view
+   likewise — scroll them instead of reflowing. */
+.heat-map-wrapper {
+  overflow-x: auto;
+}
+
+.heat-map-grid {
+  min-width: 380px;
+}
+
+.calendar-grid {
+  min-width: 420px;
+}
+
+@media (max-width: 600px) {
+  .content-container {
+    padding: 16px;
+  }
 }

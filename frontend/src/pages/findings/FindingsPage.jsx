@@ -10,7 +10,7 @@ import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
-import { ShieldAlert, Plus, Layers, List, MessageCircle, FileText, ChevronRight, X } from 'lucide-react';
+import { ShieldAlert, Plus, Layers, List, MessageCircle, FileText, ChevronRight } from 'lucide-react';
 
 function FindingsPage() {
   const toast = useToast();
@@ -40,8 +40,8 @@ function FindingsPage() {
 
   const fetchEngagements = async () => {
     try {
-      const list = await planningApi.getEngagements();
-      const engList = Array.isArray(list) ? list : [];
+      const page = await planningApi.getEngagements();
+      const engList = page.items;
       setEngagements(engList);
       if (engList.length > 0) {
         setSelectedEngId(engList[0].id);
@@ -127,8 +127,8 @@ function FindingsPage() {
       {/* Top selector bar */}
       <div className="card mb-4 flex justify-between items-center flex-wrap gap-4">
         <div className="form-group mb-0 flex-grow max-w-md">
-          <label className="form-label font-bold">{t('selectAuditEngagement')}</label>
-          <select className="form-control" value={selectedEngId} onChange={handleEngChange}>
+          <label className="form-label font-bold" htmlFor="findings_engagement">{t('selectAuditEngagement')}</label>
+          <select id="findings_engagement" className="form-control" value={selectedEngId} onChange={handleEngChange}>
             {engagements.map(e => (
               <option key={e.id} value={e.id}>{e.engagement_number} - {e.title}</option>
             ))}
@@ -272,148 +272,138 @@ function FindingsPage() {
       )}
 
       {/* Add Finding Modal */}
-      {showAddModal && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setShowAddModal(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowAddModal(false); }}
-        >
-          <div
-            className="modal-card modal-large"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="finding-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="finding-modal-title">Log New Audit Finding</h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setShowAddModal(false)}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <form onSubmit={handleCreateFinding}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">Finding Title</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="e.g. Inadequate data replication verification logs"
-                    value={newFinding.title}
-                    onChange={(e) => setNewFinding({ ...newFinding, title: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label">Severity Level</label>
-                    <select
-                      className="form-control"
-                      value={newFinding.severity}
-                      onChange={(e) => setNewFinding({ ...newFinding, severity: e.target.value })}
-                    >
-                      <option value="critical">Critical</option>
-                      <option value="high">High</option>
-                      <option value="medium">Medium</option>
-                      <option value="low">Low</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Finding Category</label>
-                    <select
-                      className="form-control"
-                      value={newFinding.category}
-                      onChange={(e) => setNewFinding({ ...newFinding, category: e.target.value })}
-                    >
-                      <option value="control_deficiency">Control Deficiency</option>
-                      <option value="compliance">Compliance Issue</option>
-                      <option value="fraud">Fraud Risk</option>
-                      <option value="operational">Operational Weakness</option>
-                      <option value="it_security">IT/Security Issue</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Description (Summary)</label>
-                  <textarea
-                    rows="3"
-                    className="form-control"
-                    value={newFinding.description}
-                    onChange={(e) => setNewFinding({ ...newFinding, description: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label">Condition (Actual Situation)</label>
-                    <textarea
-                      rows="2"
-                      className="form-control"
-                      value={newFinding.condition}
-                      onChange={(e) => setNewFinding({ ...newFinding, condition: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Criteria (Policy / Policy Standard)</label>
-                    <textarea
-                      rows="2"
-                      className="form-control"
-                      value={newFinding.criteria}
-                      onChange={(e) => setNewFinding({ ...newFinding, criteria: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label">Root Cause (Why it happened?)</label>
-                    <textarea
-                      rows="2"
-                      className="form-control"
-                      value={newFinding.cause}
-                      onChange={(e) => setNewFinding({ ...newFinding, cause: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Effect & Risk (Impact)</label>
-                    <textarea
-                      rows="2"
-                      className="form-control"
-                      value={newFinding.effect}
-                      onChange={(e) => setNewFinding({ ...newFinding, effect: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Auditor Recommendation</label>
-                  <textarea
-                    rows="2"
-                    className="form-control"
-                    placeholder="Provide actionable correction advice..."
-                    value={newFinding.recommendation}
-                    onChange={(e) => setNewFinding({ ...newFinding, recommendation: e.target.value })}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowAddModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-accent">Save & Log Finding</button>
-              </div>
-            </form>
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Log New Audit Finding"
+        size="xl"
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={() => setShowAddModal(false)}>Cancel</button>
+            {/* `form=` because Modal renders the footer as a sibling of its
+                children, so the submit button sits outside the <form>. */}
+            <button type="submit" form="finding-form" className="btn btn-accent">Save &amp; Log Finding</button>
+          </>
+        )}
+      >
+        <form id="finding-form" onSubmit={handleCreateFinding}>
+          <div className="form-group">
+            <label className="form-label" htmlFor="finding_title">Finding Title</label>
+            <input
+              id="finding_title"
+              type="text"
+              className="form-control"
+              placeholder="e.g. Inadequate data replication verification logs"
+              value={newFinding.title}
+              onChange={(e) => setNewFinding({ ...newFinding, title: e.target.value })}
+              required
+            />
           </div>
-        </div>
-      )}
+
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="finding_severity">Severity Level</label>
+              <select
+                id="finding_severity"
+                className="form-control"
+                value={newFinding.severity}
+                onChange={(e) => setNewFinding({ ...newFinding, severity: e.target.value })}
+              >
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="finding_category">Finding Category</label>
+              <select
+                id="finding_category"
+                className="form-control"
+                value={newFinding.category}
+                onChange={(e) => setNewFinding({ ...newFinding, category: e.target.value })}
+              >
+                <option value="control_deficiency">Control Deficiency</option>
+                <option value="compliance">Compliance Issue</option>
+                <option value="fraud">Fraud Risk</option>
+                <option value="operational">Operational Weakness</option>
+                <option value="it_security">IT/Security Issue</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="finding_description">Description (Summary)</label>
+            <textarea
+              id="finding_description"
+              rows="3"
+              className="form-control"
+              value={newFinding.description}
+              onChange={(e) => setNewFinding({ ...newFinding, description: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="finding_condition">Condition (Actual Situation)</label>
+              <textarea
+                id="finding_condition"
+                rows="2"
+                className="form-control"
+                value={newFinding.condition}
+                onChange={(e) => setNewFinding({ ...newFinding, condition: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="finding_criteria">Criteria (Policy / Policy Standard)</label>
+              <textarea
+                id="finding_criteria"
+                rows="2"
+                className="form-control"
+                value={newFinding.criteria}
+                onChange={(e) => setNewFinding({ ...newFinding, criteria: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="finding_cause">Root Cause (Why it happened?)</label>
+              <textarea
+                id="finding_cause"
+                rows="2"
+                className="form-control"
+                value={newFinding.cause}
+                onChange={(e) => setNewFinding({ ...newFinding, cause: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="finding_effect">Effect &amp; Risk (Impact)</label>
+              <textarea
+                id="finding_effect"
+                rows="2"
+                className="form-control"
+                value={newFinding.effect}
+                onChange={(e) => setNewFinding({ ...newFinding, effect: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="finding_recommendation">Auditor Recommendation</label>
+            <textarea
+              id="finding_recommendation"
+              rows="2"
+              className="form-control"
+              placeholder="Provide actionable correction advice..."
+              value={newFinding.recommendation}
+              onChange={(e) => setNewFinding({ ...newFinding, recommendation: e.target.value })}
+              required
+            />
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

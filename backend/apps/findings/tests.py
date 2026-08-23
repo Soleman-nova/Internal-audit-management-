@@ -1,10 +1,11 @@
 """Role-by-role tests for the findings API.
 
 Covers finding-number generation, assignment notifications, the auditee's own
-workflow (comment, evidence, dispute — the actions a plain WRITE_AUDIT gate used
-to lock them out of), the resolve/close/reopen lifecycle, the read scoping that
-keeps one department's findings out of another's register, and the slim list
-payload that reports counts where the detail view nests collections.
+workflow (comment, evidence, management response, dispute — the actions a plain
+WRITE_AUDIT gate used to lock them out of), the resolve/close/reopen lifecycle,
+the read scoping that keeps one department's findings out of another's register,
+and the slim list payload that reports counts where the detail view nests
+collections.
 """
 import shutil
 import tempfile
@@ -197,9 +198,10 @@ class FindingUpdateTest(RoleFixtureMixin, TestCase):
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix='eeu-evidence-test-'))
 class FindingResponseTest(RoleFixtureMixin, TestCase):
-    """The auditee's side of the conversation: comments and evidence.
+    """The auditee's side of the conversation: comments, evidence, and their own
+    management response.
 
-    Both actions inherited the class-level WRITE_AUDIT gate, so the person being
+    All of these inherited the class-level WRITE_AUDIT gate, so the person being
     asked to respond to a finding got a 403 on their own record — they could
     only reject it.
     """
@@ -240,6 +242,12 @@ class FindingResponseTest(RoleFixtureMixin, TestCase):
                 'file': SimpleUploadedFile('log.txt', b'signed', content_type='text/plain'),
             },
             format='multipart',
+        )
+
+    def respond_as(self, user, text='Management accepts the finding and will act.'):
+        return self.as_user(user).post(
+            f'{FINDINGS_URL}{self.finding.id}/respond/',
+            {'management_response': text}, format='json',
         )
 
     def test_named_auditee_can_comment(self):
@@ -338,6 +346,89 @@ class FindingResponseTest(RoleFixtureMixin, TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Evidence.objects.get(pk=evidence_id).uploaded_by, self.auditee)
+
+    # ── Management response ──────────────────────────────────────────────
+    # `management_response` is the auditee's own formal position and it feeds the
+    # audit report, but the viewset's class-level CanWriteAudit gate meant only
+    # the audit team could write it — so the auditor typed the auditee's answer
+    # on their behalf. `respond` is the fourth involved-party action.
+
+    def test_named_auditee_can_record_a_management_response(self):
+        response = self.respond_as(self.auditee)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.finding.refresh_from_db()
+        self.assertEqual(
+            self.finding.management_response,
+            'Management accepts the finding and will act.',
+        )
+
+    def test_responding_again_replaces_the_previous_wording(self):
+        """The auditee revises their position while the finding is open; there
+        is no second field, so the endpoint is both create and update."""
+        self.respond_as(self.auditee, 'First draft of our position.')
+        self.respond_as(self.auditee, 'Revised: the control has been reinstated.')
+        self.finding.refresh_from_db()
+        self.assertEqual(
+            self.finding.management_response,
+            'Revised: the control has been reinstated.',
+        )
+
+    def test_the_response_does_not_move_the_finding_status(self):
+        """Responding is not a lifecycle event — `dispute` is the action for
+        disagreement, and status belongs to the audit team's transitions."""
+        self.respond_as(self.auditee)
+        self.finding.refresh_from_db()
+        self.assertEqual(self.finding.status, 'open')
+
+    def test_an_uninvolved_auditee_in_the_same_department_cannot_respond(self):
+        response = self.respond_as(self.bystander)
+        self.assertEqual(response.status_code, 403)
+        self.finding.refresh_from_db()
+        self.assertEqual(self.finding.management_response, '')
+
+    def test_an_auditee_elsewhere_cannot_respond(self):
+        self.assertEqual(self.respond_as(self.outsider).status_code, 404)
+
+    def test_capability_holders_can_record_a_response_on_any_finding(self):
+        """An auditor recording a response received by phone or letter is
+        legitimate, so the capability branch of the gate stays open."""
+        self.assertEqual(self.respond_as(self.auditor).status_code, 200)
+        self.assertEqual(self.respond_as(self.manager).status_code, 200)
+
+    def test_a_blank_response_is_refused(self):
+        for text in ('', '   \n  '):
+            with self.subTest(text=repr(text)):
+                response = self.respond_as(self.auditee, text)
+                self.assertEqual(response.status_code, 400)
+                self.finding.refresh_from_db()
+                self.assertEqual(self.finding.management_response, '')
+
+    def test_the_response_is_audit_logged_against_the_finding(self):
+        self.respond_as(self.auditee)
+        entry = AuditTrail.objects.filter(
+            model_name='AuditFinding', object_id=str(self.finding.id),
+        ).first()
+        self.assertIn('Management response recorded', entry.object_repr)
+        self.assertIn('management_response', entry.changes)
+
+    def test_the_response_notifies_the_audit_team_but_not_the_responder(self):
+        self.respond_as(self.auditee)
+        for recipient in (self.auditor, self.supervisor):
+            self.assertTrue(
+                Notification.objects.filter(
+                    user=recipient, notification_type='finding',
+                ).exists(),
+                f'{recipient.role} was not told about the management response',
+            )
+        self.assertEqual(notification_titles(self.auditee), [])
+
+    def test_a_closed_finding_no_longer_accepts_a_response(self):
+        self.finding.status = 'closed'
+        self.finding.save(update_fields=['status'])
+        response = self.respond_as(self.auditee)
+        self.assertEqual(response.status_code, 400)
+        self.finding.refresh_from_db()
+        self.assertEqual(self.finding.management_response, '')
 
     # ── Upload validation ────────────────────────────────────────────────
     # Evidence.file was a bare FileField, and `upload-evidence` is reachable by

@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import { unwrapPage } from './paginated';
 
 export const executionApi = {
   getPrograms: async (params = {}) => {
@@ -15,9 +16,11 @@ export const executionApi = {
     const res = await apiClient.post('/execution/programs/', data);
     return res.data;
   },
+  // Returns { items, count, hasMore } — ExecutionPage renders both totals in
+  // its section headings, where a bare array capped them at PAGE_SIZE.
   getProcedures: async (params = {}) => {
     const res = await apiClient.get('/execution/procedures/', { params });
-    return res.data?.results ?? res.data;
+    return unwrapPage(res.data);
   },
   createProcedure: async (data) => {
     const res = await apiClient.post('/execution/procedures/', data);
@@ -40,7 +43,7 @@ export const executionApi = {
   },
   getWorkingPapers: async (params = {}) => {
     const res = await apiClient.get('/execution/working-papers/', { params });
-    return res.data?.results ?? res.data;
+    return unwrapPage(res.data);
   },
   uploadWorkingPaper: async (formData) => {
     const res = await apiClient.post('/execution/working-papers/', formData, {
