@@ -31,6 +31,12 @@ function FindingDetailPage() {
     const [evFile, setEvFile] = useState(null);
     const [uploading, setUploading] = useState(false);
 
+    // Management response — the auditee's own position on the finding. Seeded
+    // from the record on every fetch so the textarea opens pre-filled and a
+    // revision edits the existing wording rather than retyping it.
+    const [responseText, setResponseText] = useState('');
+    const [savingResponse, setSavingResponse] = useState(false);
+
     // Lifecycle
     const [actionBusy, setActionBusy] = useState('');
 
@@ -44,6 +50,7 @@ function FindingDetailPage() {
             // every record past page 1 render as "not found".
             const data = await findingsApi.getFinding(id);
             setFinding(data);
+            setResponseText(data?.management_response || '');
             setError(null);
         } catch (err) {
             const notFound = err.response?.status === 404 || err.response?.status === 403;
@@ -116,6 +123,23 @@ function FindingDetailPage() {
             toast.error(msg);
         } finally {
             setUploading(false);
+        }
+    };
+
+    const handleSaveResponse = async (e) => {
+        e.preventDefault();
+        if (!responseText.trim()) return;
+        setSavingResponse(true);
+        try {
+            await findingsApi.respondToFinding(id, responseText.trim());
+            await fetchFinding();
+            toast.success('Management response saved');
+        } catch (err) {
+            const msg = typeof err.response?.data === 'object'
+                ? JSON.stringify(err.response.data) : 'Failed to save the management response';
+            toast.error(msg);
+        } finally {
+            setSavingResponse(false);
         }
     };
 
@@ -192,8 +216,9 @@ function FindingDetailPage() {
         { key: 'cause', icon: <XCircle className="w-4 h-4 text-rose-500" />, label: t('causeLabel'), value: finding.cause },
         { key: 'effect', icon: <AlertTriangle className="w-4 h-4 text-orange-500" />, label: t('effectLabel'), value: finding.effect },
         { key: 'recommendation', icon: <MessageCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />, label: t('recommendationLabel'), value: finding.recommendation },
-        { key: 'management_response', icon: <UserIcon className="w-4 h-4 text-indigo-500" />, label: t('managementResponse'), value: finding.management_response },
     ];
+    // `management_response` is deliberately not in `sections`: every entry there
+    // is pure display, and this one carries a form for the auditee to write it.
 
     return (
         <div className="space-y-6">
@@ -307,6 +332,38 @@ function FindingDetailPage() {
                         <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-line">{value || '—'}</p>
                     </div>
                 ))}
+            </div>
+
+            {/* Management Response — the auditee's own position, not the audit
+                team's summary of it. Gated on the same canDiscuss && !isClosed
+                as the evidence and comment forms below, which mirrors the
+                backend's InvolvedPartyOrCapability gate, so the form is never
+                offered to someone whose POST would 403. */}
+            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <UserIcon className="w-4 h-4 text-indigo-500" />{t('managementResponse')}
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-line">
+                    {finding.management_response || '—'}
+                </p>
+                {canDiscuss && !isClosed && (
+                    <form onSubmit={handleSaveResponse} className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-800 space-y-3">
+                        <textarea
+                            className="form-input w-full"
+                            rows={4}
+                            placeholder={t('writeResponse')}
+                            value={responseText}
+                            onChange={(e) => setResponseText(e.target.value)}
+                        />
+                        <button
+                            type="submit"
+                            className="btn btn-primary btn-sm inline-flex items-center gap-2"
+                            disabled={savingResponse || !responseText.trim()}
+                        >
+                            <Send className="w-4 h-4" /> {savingResponse ? t('loading') : t('saveResponse')}
+                        </button>
+                    </form>
+                )}
             </div>
 
             {/* Evidence + Discussion */}

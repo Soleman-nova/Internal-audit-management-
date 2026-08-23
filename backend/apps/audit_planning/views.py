@@ -19,6 +19,28 @@ from apps.common.request_utils import with_parent
 from apps.notifications.services import notify, notify_roles
 
 
+# Finding statuses that block an engagement from being marked completed.
+#
+# `update_status` used to validate only that the incoming string was a member of
+# STATUS_CHOICES, then stamp `actual_end` and back-fill
+# AuditUniverse.last_audited — so an engagement could be signed off as complete,
+# and its entity recorded as recently audited, with every one of its findings
+# still in draft.
+#
+# This is the complement of the settled set DashboardStatsView uses
+# (SETTLED_FINDING_STATUSES in apps/accounts/views.py) — duplicated rather than
+# imported, because a view class in another app is not a home for shared policy.
+#
+# Narrow this to ('draft', 'disputed') if findings should be allowed to carry
+# forward into CAPA follow-up after the engagement closes, which is how many
+# internal audit functions work in practice.
+BLOCKS_COMPLETION = ('draft', 'open', 'in_progress', 'disputed')
+# How many finding numbers to name in the refusal before eliding the rest: enough
+# to act on, short enough that an engagement with fifty open findings does not
+# return a wall of text.
+BLOCKERS_NAMED = 10
+
+
 class AuditUniverseViewSet(viewsets.ModelViewSet):
     queryset = AuditUniverse.objects.select_related('department', 'directorate').all()
     serializer_class = AuditUniverseSerializer
@@ -234,7 +256,31 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
         engagement = self.get_object()
         new_status = request.data.get('status')
         if new_status not in dict(AuditEngagement.STATUS_CHOICES):
-            return Response({'detail': 'Invalid status.'}, status=400)
+            return Response({'detail': 'Invalid status.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        # Completion is a sign-off, so it has a precondition. Checked *before*
+        # the transaction opens, so a refusal writes nothing at all — no status
+        # change, no actual_end, no last_audited back-fill, no audit-trail entry
+        # and no notifications.
+        #
+        # Only `completed` is guarded: `cancelled` may legitimately be applied to
+        # an engagement that still has open findings, and `reporting` is exactly
+        # when findings are being worked.
+        if new_status == 'completed':
+            unresolved = engagement.findings.filter(status__in=BLOCKS_COMPLETION)
+            total = unresolved.count()
+            if total:
+                named = list(
+                    unresolved.order_by('finding_number')
+                    .values_list('finding_number', flat=True)[:BLOCKERS_NAMED]
+                )
+                listed = ', '.join(named) + (', …' if total > len(named) else '')
+                return Response(
+                    {'detail': f'Cannot complete this engagement: {total} finding(s) are '
+                               f'not yet resolved or closed ({listed}). Resolve or close '
+                               f'them first.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         old_status = engagement.status
         with transaction.atomic():
             engagement.status = new_status

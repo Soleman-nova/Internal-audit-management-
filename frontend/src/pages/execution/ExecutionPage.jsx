@@ -12,7 +12,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
 import {
   ListTodo, Plus, Paperclip, Upload, Eye, CheckCircle2,
-  ClipboardList, ShieldCheck, Edit3, Trash2, ChevronDown, X, Download
+  ClipboardList, ShieldCheck, Edit3, Trash2, ChevronDown, Download
 } from 'lucide-react';
 
 function ExecutionPage() {
@@ -26,6 +26,10 @@ function ExecutionPage() {
   const [selectedEngId, setSelectedEngId] = useState('');
   const [program, setProgram] = useState(null);
   const [procedures, setProcedures] = useState([]);
+  // Server totals rather than this page's slice — the section headings show
+  // them, and `procedures.length` stops at DRF's PAGE_SIZE.
+  const [procedureCount, setProcedureCount] = useState(0);
+  const [proceduresTruncated, setProceduresTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
 
@@ -40,6 +44,8 @@ function ExecutionPage() {
   const [wpRef, setWpRef] = useState('');
   const [uploading, setUploading] = useState(false);
   const [workingPapers, setWorkingPapers] = useState([]);
+  const [workingPaperCount, setWorkingPaperCount] = useState(0);
+  const [workingPapersTruncated, setWorkingPapersTruncated] = useState(false);
 
   // ── Audit Program Modal ──
   const [showProgramModal, setShowProgramModal] = useState(false);
@@ -72,8 +78,8 @@ function ExecutionPage() {
 
   const fetchEngagements = async () => {
     try {
-      const list = await planningApi.getEngagements();
-      const engList = Array.isArray(list) ? list : [];
+      const page = await planningApi.getEngagements();
+      const engList = page.items;
       setEngagements(engList);
       if (engList.length === 0) return;
       // Notifications deep-link here as /execution?program=<id> or
@@ -116,12 +122,22 @@ function ExecutionPage() {
           executionApi.getProcedures({ program: prog.id }),
           executionApi.getWorkingPapers({ engagement: engId }),
         ]);
-        setProcedures(Array.isArray(procs) ? procs : []);
-        setWorkingPapers(Array.isArray(wps) ? wps : []);
+        // Both return { items, count, hasMore } — the headings below render the
+        // server's total, which a bare array capped at PAGE_SIZE.
+        setProcedures(procs.items);
+        setProcedureCount(procs.count);
+        setProceduresTruncated(procs.hasMore);
+        setWorkingPapers(wps.items);
+        setWorkingPaperCount(wps.count);
+        setWorkingPapersTruncated(wps.hasMore);
       } else {
         setProgram(null);
         setProcedures([]);
+        setProcedureCount(0);
+        setProceduresTruncated(false);
         setWorkingPapers([]);
+        setWorkingPaperCount(0);
+        setWorkingPapersTruncated(false);
       }
     } catch (err) {
       toast.error('Failed to load execution program');
@@ -231,6 +247,7 @@ function ExecutionPage() {
         const payload = { ...procForm, program: program.id };
         const res = await executionApi.createProcedure(payload);
         setProcedures([...procedures, res]);
+        setProcedureCount(c => c + 1);
         toast.success('Procedure created successfully');
       }
       setShowProcModal(false);
@@ -247,6 +264,7 @@ function ExecutionPage() {
     try {
       await executionApi.deleteProcedure(procId);
       setProcedures(procedures.filter(p => p.id !== procId));
+      setProcedureCount(c => Math.max(0, c - 1));
       toast.success('Procedure removed');
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to delete procedure';
@@ -318,6 +336,7 @@ function ExecutionPage() {
     try {
       const response = await executionApi.uploadWorkingPaper(formData);
       setWorkingPapers([response, ...workingPapers]);
+      setWorkingPaperCount(c => c + 1);
       setWpTitle(''); setWpRef(''); setUploadFile(null);
       toast.success('Working paper uploaded successfully!');
     } catch (err) {
@@ -333,6 +352,7 @@ function ExecutionPage() {
     try {
       await executionApi.deleteWorkingPaper(wp.id);
       setWorkingPapers(workingPapers.filter(x => x.id !== wp.id));
+      setWorkingPaperCount(c => Math.max(0, c - 1));
       toast.success('Working paper removed from registry');
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to remove working paper';
@@ -398,8 +418,8 @@ function ExecutionPage() {
       {/* Engagement Selector */}
       <div className="card mb-4">
         <div className="form-group mb-0">
-          <label className="form-label font-bold text-lg">{t('selectActiveEngagement')}</label>
-          <select className="form-control" value={selectedEngId} onChange={handleEngChange}>
+          <label className="form-label font-bold text-lg" htmlFor="active_engagement">{t('selectActiveEngagement')}</label>
+          <select id="active_engagement" className="form-control" value={selectedEngId} onChange={handleEngChange}>
             {engagements.map(e => (
               <option key={e.id} value={e.id}>{e.engagement_number} — {e.title}</option>
             ))}
@@ -460,7 +480,12 @@ function ExecutionPage() {
             {/* Procedures List */}
             <div className="procedure-list-section">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="section-title">{t('fieldworkProcedures')} ({procedures.length})</h3>
+                <div>
+                  <h3 className="section-title">{t('fieldworkProcedures')} ({procedureCount})</h3>
+                  {proceduresTruncated && (
+                    <p className="text-xs text-muted">{t('showingFirstOf', procedures.length, procedureCount)}</p>
+                  )}
+                </div>
                 {/* Auditor: Add procedure if program is draft */}
                 {canWriteAudit && (program.status === 'draft' || program.status === 'active') && (
                   <button className="btn btn-sm btn-primary flex items-center gap-1" onClick={openNewProc}>
@@ -543,18 +568,18 @@ function ExecutionPage() {
                 <p className="card-subtitle mb-4">{t('uploadEvidence')}</p>
                 <form onSubmit={handleUploadWp}>
                   <div className="form-group">
-                    <label className="form-label">{t('docReference')}</label>
-                    <input type="text" className="form-control" placeholder="e.g. WP-A.1.1"
+                    <label className="form-label" htmlFor="wp_reference">{t('docReference')}</label>
+                    <input id="wp_reference" type="text" className="form-control" placeholder="e.g. WP-A.1.1"
                       value={wpRef} onChange={(e) => setWpRef(e.target.value)} required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">{t('documentTitle')}</label>
-                    <input type="text" className="form-control" placeholder="e.g. Access Rights Mapping Sheet"
+                    <label className="form-label" htmlFor="wp_title">{t('documentTitle')}</label>
+                    <input id="wp_title" type="text" className="form-control" placeholder="e.g. Access Rights Mapping Sheet"
                       value={wpTitle} onChange={(e) => setWpTitle(e.target.value)} required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">{t('selectFile')}</label>
-                    <input type="file" className="form-control" onChange={(e) => setUploadFile(e.target.files[0])} required />
+                    <label className="form-label" htmlFor="wp_file">{t('selectFile')}</label>
+                    <input id="wp_file" type="file" className="form-control" onChange={(e) => setUploadFile(e.target.files[0])} required />
                   </div>
                   <button type="submit" className="btn btn-primary btn-block flex items-center justify-center gap-2" disabled={uploading}>
                     <Upload size={16} /> {uploading ? 'Uploading...' : t('uploadWorkpaper')}
@@ -565,7 +590,10 @@ function ExecutionPage() {
 
             {/* Working Papers Registry */}
             <div className="card">
-              <h3>{t('workingPapersRegistry')} ({workingPapers.length})</h3>
+              <h3>{t('workingPapersRegistry')} ({workingPaperCount})</h3>
+              {workingPapersTruncated && (
+                <p className="text-xs text-muted">{t('showingFirstOf', workingPapers.length, workingPaperCount)}</p>
+              )}
               <div className="wp-registry mt-3">
                 {workingPapers.length === 0 ? (
                   <p className="text-muted text-center py-4">{t('noWorkingPapers')}</p>
@@ -626,211 +654,164 @@ function ExecutionPage() {
       {/* ===================== MODALS ===================== */}
 
       {/* Create Audit Program Modal */}
-      {showProgramModal && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setShowProgramModal(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowProgramModal(false); }}
-        >
-          <div
-            className="modal-card modal-large"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="program-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="program-modal-title">{t('createProgramTitle')}</h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setShowProgramModal(false)}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <form onSubmit={handleCreateProgram}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">{t('programTitle')}</label>
-                  <input type="text" className="form-control"
-                    placeholder="e.g. Payroll Compliance Audit Program"
-                    value={programForm.title}
-                    onChange={(e) => setProgramForm({ ...programForm, title: e.target.value })}
-                    required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">{t('auditObjectives')}</label>
-                  <textarea rows="3" className="form-control"
-                    placeholder="Describe the objectives of this audit engagement..."
-                    value={programForm.objectives}
-                    onChange={(e) => setProgramForm({ ...programForm, objectives: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">{t('auditScope')}</label>
-                  <textarea rows="3" className="form-control"
-                    placeholder="Define the boundaries and scope of this audit..."
-                    value={programForm.scope}
-                    onChange={(e) => setProgramForm({ ...programForm, scope: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowProgramModal(false)}>{t('cancel')}</button>
-                <button type="submit" className="btn btn-primary" disabled={savingProgram}>
-                  {savingProgram ? 'Creating...' : t('createProgram')}
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={showProgramModal}
+        onClose={() => setShowProgramModal(false)}
+        title={t('createProgramTitle')}
+        size="xl"
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={() => setShowProgramModal(false)}>{t('cancel')}</button>
+            {/* `form=` because Modal renders the footer as a sibling of its
+                children, so the submit button sits outside the <form>. */}
+            <button type="submit" form="program-form" className="btn btn-primary" disabled={savingProgram}>
+              {savingProgram ? 'Creating...' : t('createProgram')}
+            </button>
+          </>
+        )}
+      >
+        <form id="program-form" onSubmit={handleCreateProgram}>
+          <div className="form-group">
+            <label className="form-label" htmlFor="program_title">{t('programTitle')}</label>
+            <input id="program_title" type="text" className="form-control"
+              placeholder="e.g. Payroll Compliance Audit Program"
+              value={programForm.title}
+              onChange={(e) => setProgramForm({ ...programForm, title: e.target.value })}
+              required />
           </div>
-        </div>
-      )}
+          <div className="form-group">
+            <label className="form-label" htmlFor="program_objectives">{t('auditObjectives')}</label>
+            <textarea id="program_objectives" rows="3" className="form-control"
+              placeholder="Describe the objectives of this audit engagement..."
+              value={programForm.objectives}
+              onChange={(e) => setProgramForm({ ...programForm, objectives: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="program_scope">{t('auditScope')}</label>
+            <textarea id="program_scope" rows="3" className="form-control"
+              placeholder="Define the boundaries and scope of this audit..."
+              value={programForm.scope}
+              onChange={(e) => setProgramForm({ ...programForm, scope: e.target.value })}
+            />
+          </div>
+        </form>
+      </Modal>
 
       {/* Add / Edit Procedure Modal */}
-      {showProcModal && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setShowProcModal(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowProcModal(false); }}
-        >
-          <div
-            className="modal-card modal-large"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="proc-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="proc-modal-title">{editingProc ? t('editProcedureTitle') : t('addProcedureTitle')}</h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setShowProcModal(false)}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
+      <Modal
+        isOpen={showProcModal}
+        onClose={() => setShowProcModal(false)}
+        title={editingProc ? t('editProcedureTitle') : t('addProcedureTitle')}
+        size="xl"
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={() => setShowProcModal(false)}>{t('cancel')}</button>
+            <button type="submit" form="procedure-form" className="btn btn-primary" disabled={savingProc}>
+              {savingProc ? 'Saving...' : editingProc ? t('updateProcedure') : t('addProcedureBtn')}
+            </button>
+          </>
+        )}
+      >
+        <form id="procedure-form" onSubmit={handleSaveProc}>
+          <div className="form-group-row">
+            <div className="form-group" style={{ flex: '0 0 120px' }}>
+              <label className="form-label" htmlFor="proc_step_number">{t('stepNumber')}</label>
+              <input id="proc_step_number" type="text" className="form-control" placeholder="e.g. 1.1"
+                value={procForm.step_number}
+                onChange={(e) => setProcForm({ ...procForm, step_number: e.target.value })} required />
             </div>
-            <form onSubmit={handleSaveProc}>
-              <div className="modal-body">
-                <div className="form-group-row">
-                  <div className="form-group" style={{ flex: '0 0 120px' }}>
-                    <label className="form-label">{t('stepNumber')}</label>
-                    <input type="text" className="form-control" placeholder="e.g. 1.1"
-                      value={procForm.step_number}
-                      onChange={(e) => setProcForm({ ...procForm, step_number: e.target.value })} required />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">{t('procedureTitle')}</label>
-                    <input type="text" className="form-control" placeholder="e.g. Verify payroll authorizations"
-                      value={procForm.title}
-                      onChange={(e) => setProcForm({ ...procForm, title: e.target.value })} required />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">{t('descriptionInstructions')}</label>
-                  <textarea rows="3" className="form-control"
-                    placeholder="Describe the fieldwork steps to be performed..."
-                    value={procForm.description}
-                    onChange={(e) => setProcForm({ ...procForm, description: e.target.value })} required />
-                </div>
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label">{t('procedureType')}</label>
-                    <select className="form-control" value={procForm.procedure_type}
-                      onChange={(e) => setProcForm({ ...procForm, procedure_type: e.target.value })}>
-                      <option value="test_of_controls">Test of Controls</option>
-                      <option value="substantive">Substantive Testing</option>
-                      <option value="analytical">Analytical Procedures</option>
-                      <option value="inquiry">Inquiry</option>
-                      <option value="observation">Observation</option>
-                      <option value="inspection">Inspection & Re-performance</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">{t('assertion')}</label>
-                    <input type="text" className="form-control"
-                      placeholder="e.g. Completeness, Accuracy, Existence"
-                      value={procForm.assertion}
-                      onChange={(e) => setProcForm({ ...procForm, assertion: e.target.value })} />
-                  </div>
-                </div>
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label">{t('riskArea')}</label>
-                    <input type="text" className="form-control"
-                      placeholder="e.g. Payroll Fraud Risk"
-                      value={procForm.risk_area}
-                      onChange={(e) => setProcForm({ ...procForm, risk_area: e.target.value })} />
-                  </div>
-                  <div className="form-group" style={{ flex: '0 0 80px' }}>
-                    <label className="form-label">{t('order')}</label>
-                    <input type="number" min="0" className="form-control"
-                      value={procForm.order}
-                      onChange={(e) => setProcForm({ ...procForm, order: parseInt(e.target.value) || 0 })} />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">{t('expectedEvidence')}</label>
-                  <textarea rows="2" className="form-control"
-                    placeholder="Describe the evidence that should support this procedure..."
-                    value={procForm.expected_evidence}
-                    onChange={(e) => setProcForm({ ...procForm, expected_evidence: e.target.value })} />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowProcModal(false)}>{t('cancel')}</button>
-                <button type="submit" className="btn btn-primary" disabled={savingProc}>
-                  {savingProc ? 'Saving...' : editingProc ? t('updateProcedure') : t('addProcedureBtn')}
-                </button>
-              </div>
-            </form>
+            <div className="form-group">
+              <label className="form-label" htmlFor="proc_title">{t('procedureTitle')}</label>
+              <input id="proc_title" type="text" className="form-control" placeholder="e.g. Verify payroll authorizations"
+                value={procForm.title}
+                onChange={(e) => setProcForm({ ...procForm, title: e.target.value })} required />
+            </div>
           </div>
-        </div>
-      )}
+          <div className="form-group">
+            <label className="form-label" htmlFor="proc_description">{t('descriptionInstructions')}</label>
+            <textarea id="proc_description" rows="3" className="form-control"
+              placeholder="Describe the fieldwork steps to be performed..."
+              value={procForm.description}
+              onChange={(e) => setProcForm({ ...procForm, description: e.target.value })} required />
+          </div>
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="proc_type">{t('procedureType')}</label>
+              <select id="proc_type" className="form-control" value={procForm.procedure_type}
+                onChange={(e) => setProcForm({ ...procForm, procedure_type: e.target.value })}>
+                <option value="test_of_controls">Test of Controls</option>
+                <option value="substantive">Substantive Testing</option>
+                <option value="analytical">Analytical Procedures</option>
+                <option value="inquiry">Inquiry</option>
+                <option value="observation">Observation</option>
+                <option value="inspection">Inspection &amp; Re-performance</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="proc_assertion">{t('assertion')}</label>
+              <input id="proc_assertion" type="text" className="form-control"
+                placeholder="e.g. Completeness, Accuracy, Existence"
+                value={procForm.assertion}
+                onChange={(e) => setProcForm({ ...procForm, assertion: e.target.value })} />
+            </div>
+          </div>
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="proc_risk_area">{t('riskArea')}</label>
+              <input id="proc_risk_area" type="text" className="form-control"
+                placeholder="e.g. Payroll Fraud Risk"
+                value={procForm.risk_area}
+                onChange={(e) => setProcForm({ ...procForm, risk_area: e.target.value })} />
+            </div>
+            <div className="form-group" style={{ flex: '0 0 80px' }}>
+              <label className="form-label" htmlFor="proc_order">{t('order')}</label>
+              <input id="proc_order" type="number" min="0" className="form-control"
+                value={procForm.order}
+                onChange={(e) => setProcForm({ ...procForm, order: parseInt(e.target.value) || 0 })} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="proc_expected_evidence">{t('expectedEvidence')}</label>
+            <textarea id="proc_expected_evidence" rows="2" className="form-control"
+              placeholder="Describe the evidence that should support this procedure..."
+              value={procForm.expected_evidence}
+              onChange={(e) => setProcForm({ ...procForm, expected_evidence: e.target.value })} />
+          </div>
+        </form>
+      </Modal>
 
       {/* Supervisor Review & Approve Modal */}
-      {showReviewModal && program && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setShowReviewModal(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowReviewModal(false); }}
-        >
-          <div
-            className="modal-card modal-large"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="review-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="review-modal-title"><ShieldCheck size={18} className="inline mr-2" />{t('supervisorReview')}</h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setShowReviewModal(false)}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
+      <Modal
+        isOpen={Boolean(showReviewModal && program)}
+        onClose={() => setShowReviewModal(false)}
+        title={t('supervisorReview')}
+        size="xl"
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={() => setShowReviewModal(false)}>{t('cancel')}</button>
+            <button type="button" className="btn btn-primary flex items-center gap-2" onClick={handleApproveProgram}>
+              <CheckCircle2 size={16} /> {t('approveProgram')}
+            </button>
+          </>
+        )}
+      >
+        {program && (
+          <>
+            {/* Program Summary */}
+            <div className="review-program-summary mb-4" style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', borderLeft: '3px solid var(--primary)' }}>
+              <h4 className="mb-1">{program.title}</h4>
+              <p className="text-sm"><strong>{t('objectivesLabel')}</strong> {program.objectives || '—'}</p>
+              <p className="text-sm"><strong>{t('scopeLabel')}</strong> {program.scope || '—'}</p>
+              <p className="text-sm mt-2"><strong>{t('totalProcedures')}</strong> {procedureCount}</p>
             </div>
-            <div className="modal-body">
-              {/* Program Summary */}
-              <div className="review-program-summary mb-4" style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', borderLeft: '3px solid var(--primary)' }}>
-                <h4 className="mb-1">{program.title}</h4>
-                <p className="text-sm"><strong>{t('objectivesLabel')}</strong> {program.objectives || '—'}</p>
-                <p className="text-sm"><strong>{t('scopeLabel')}</strong> {program.scope || '—'}</p>
-                <p className="text-sm mt-2"><strong>{t('totalProcedures')}</strong> {procedures.length}</p>
-              </div>
 
-              {/* Procedures Summary */}
-              <div className="mb-4">
-                <h4 className="mb-2">{t('fieldworkProceduresReview')}</h4>
+            {/* Procedures Summary */}
+            <div className="mb-4">
+              <h4 className="mb-2">{t('fieldworkProceduresReview')}</h4>
+              {/* .table has no min-width of its own, so without this wrapper the
+                  columns compress instead of scrolling on a narrow screen. */}
+              <div className="table-responsive">
                 <table className="table">
                   <thead>
                     <tr>
@@ -858,91 +839,68 @@ function ExecutionPage() {
                   </tbody>
                 </table>
               </div>
+            </div>
 
-              <div className="form-group">
-                <label className="form-label">{t('reviewNotes')}</label>
-                <textarea rows="3" className="form-control"
-                  placeholder="Add any review comments or observations..."
-                  value={reviewNotes}
-                  onChange={(e) => setReviewNotes(e.target.value)} />
-              </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="program_review_notes">{t('reviewNotes')}</label>
+              <textarea id="program_review_notes" rows="3" className="form-control"
+                placeholder="Add any review comments or observations..."
+                value={reviewNotes}
+                onChange={(e) => setReviewNotes(e.target.value)} />
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-outline" onClick={() => setShowReviewModal(false)}>{t('cancel')}</button>
-              <button className="btn btn-primary flex items-center gap-2" onClick={handleApproveProgram}>
-                <CheckCircle2 size={16} /> {t('approveProgram')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
       {/* Working Paper Review Modal */}
-      {showReviewWpModal && reviewingWp && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setShowReviewWpModal(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowReviewWpModal(false); }}
-        >
-          <div
-            className="modal-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="review-wp-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="review-wp-modal-title">
-                <CheckCircle2 size={18} className="inline mr-2" />
-                {t('reviewWorkingPaper')}
-              </h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setShowReviewWpModal(false)}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
+      <Modal
+        isOpen={Boolean(showReviewWpModal && reviewingWp)}
+        onClose={() => setShowReviewWpModal(false)}
+        title={t('reviewWorkingPaper')}
+        size="lg"
+        footer={(
+          <>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setShowReviewWpModal(false)}
+            >
+              {t('cancel')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary flex items-center gap-2"
+              onClick={handleReviewWp}
+              disabled={submittingReview}
+            >
+              <CheckCircle2 size={16} />
+              {submittingReview ? 'Submitting...' : t('markAsReviewed')}
+            </button>
+          </>
+        )}
+      >
+        {reviewingWp && (
+          <>
+            <div className="mb-4" style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px' }}>
+              <p className="text-sm mb-1"><strong>{t('docReference')}:</strong> {reviewingWp.reference}</p>
+              <p className="text-sm mb-1"><strong>{t('documentTitle')}:</strong> {reviewingWp.title}</p>
+              <p className="text-sm"><strong>{t('preparedBy')}:</strong> {reviewingWp.prepared_by_name || '—'}</p>
             </div>
-            <div className="modal-body">
-              <div className="mb-4" style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px' }}>
-                <p className="text-sm mb-1"><strong>{t('docReference')}:</strong> {reviewingWp.reference}</p>
-                <p className="text-sm mb-1"><strong>{t('documentTitle')}:</strong> {reviewingWp.title}</p>
-                <p className="text-sm"><strong>{t('preparedBy')}:</strong> {reviewingWp.prepared_by_name || '—'}</p>
-              </div>
 
-              <div className="form-group">
-                <label className="form-label">{t('reviewNotesLabel')}</label>
-                <textarea
-                  rows="4"
-                  className="form-control"
-                  placeholder={t('addReviewNotes')}
-                  value={wpReviewNotes}
-                  onChange={(e) => setWpReviewNotes(e.target.value)}
-                />
-              </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="wp_review_notes">{t('reviewNotesLabel')}</label>
+              <textarea
+                id="wp_review_notes"
+                rows="4"
+                className="form-control"
+                placeholder={t('addReviewNotes')}
+                value={wpReviewNotes}
+                onChange={(e) => setWpReviewNotes(e.target.value)}
+              />
             </div>
-            <div className="modal-footer">
-              <button
-                className="btn btn-outline"
-                onClick={() => setShowReviewWpModal(false)}
-              >
-                {t('cancel')}
-              </button>
-              <button
-                className="btn btn-primary flex items-center gap-2"
-                onClick={handleReviewWp}
-                disabled={submittingReview}
-              >
-                <CheckCircle2 size={16} />
-                {submittingReview ? 'Submitting...' : t('markAsReviewed')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
     </div>
   );

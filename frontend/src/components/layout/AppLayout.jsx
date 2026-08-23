@@ -6,6 +6,7 @@ import { hasCapability, CAPABILITIES } from '../../hooks/usePermissions';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
+import Modal from '../ui/Modal';
 import {
   LayoutDashboard,
   Calendar,
@@ -46,7 +47,9 @@ function AppLayout() {
   const { setLanguage, setTheme } = auth;
   const toast = useToast();
   const user = auth.user || { email: '', role: 'auditor', first_name: 'Auditor' };
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Below 900px the sidebar is a drawer over the content, so it must start
+  // closed — defaulting to open put a 260px panel across a phone on first paint.
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 900);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -123,18 +126,17 @@ function AppLayout() {
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [showNotifications]);
 
-  // Close Settings / Help modals on Escape key
+  // Close the notifications popover on Escape. Settings and Help are <Modal>s
+  // now and handle their own Escape, focus trap and scroll lock — the popover is
+  // not a modal, so it still needs this.
   useEffect(() => {
+    if (!showNotifications) return undefined;
     const handleEscape = (e) => {
-      if (e.key === 'Escape') {
-        if (showSettings) closeSettingsModal();
-        if (showHelp) setShowHelp(false);
-        if (showNotifications) setShowNotifications(false);
-      }
+      if (e.key === 'Escape') setShowNotifications(false);
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [showSettings, showHelp, showNotifications]);
+  }, [showNotifications]);
 
   const handleSaveSettings = (e) => {
     e.preventDefault();
@@ -202,6 +204,13 @@ function AppLayout() {
 
   const location = useLocation();
   const navigate = useNavigate();
+
+  // On a narrow viewport the drawer sits on top of the page, so tapping a nav
+  // link would otherwise leave it covering the page it just opened. Checked at
+  // navigation time rather than through a resize listener.
+  useEffect(() => {
+    if (window.innerWidth <= 900) setSidebarOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (user) {
@@ -309,6 +318,10 @@ function AppLayout() {
 
   return (
     <div className="app-container">
+      {/* The sidebar puts 7–11 links ahead of the content on every page, so a
+          keyboard user needs a way past them. Off-screen until focused. */}
+      <a href="#main-content" className="skip-link">{t('skipToContent')}</a>
+
       {/* Sidebar */}
       <aside className={`app-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
@@ -352,12 +365,28 @@ function AppLayout() {
         </div>
       </aside>
 
+      {/* Drawer backdrop — CSS hides it above 900px, where the sidebar is a
+          permanent rail rather than an overlay. */}
+      {sidebarOpen && (
+        <button
+          type="button"
+          className="sidebar-backdrop"
+          onClick={() => setSidebarOpen(false)}
+          aria-label={t('closeNavigation')}
+        />
+      )}
+
       {/* Main Content Area */}
       <div className={`main-wrapper ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
         {/* Top Header */}
         <header className="app-header">
           <div className="header-left">
-            <button className="sidebar-toggle-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
+            <button
+              className="sidebar-toggle-btn"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label={t('toggleSidebar')}
+              aria-expanded={sidebarOpen}
+            >
               <Menu size={22} />
             </button>
             <h2 className="header-title">{activeNavItem.label}</h2>
@@ -417,6 +446,7 @@ function AppLayout() {
               className="header-action-btn"
               onClick={() => setShowHelp(true)}
               title="Help & Support"
+              aria-label="Help and support"
             >
               <HelpCircle size={20} />
             </button>
@@ -426,6 +456,7 @@ function AppLayout() {
               className="header-action-btn"
               onClick={() => setShowSettings(true)}
               title="System Settings"
+              aria-label={t('systemSettings')}
             >
               <Settings size={20} />
             </button>
@@ -445,44 +476,28 @@ function AppLayout() {
         </header>
 
         {/* Dynamic Route Content */}
-        <main className="content-container">
+        <main className="content-container" id="main-content">
           <Outlet />
         </main>
       </div>
 
       {/* Settings Modal */}
-      {showSettings && (
-        <div
-          className="app-modal-overlay"
-          onClick={closeSettingsModal}
-          onKeyDown={(e) => { if (e.key === 'Escape') closeSettingsModal(); }}
-          role="presentation"
-        >
-          <div
-            className="app-modal app-modal-settings"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="settings-modal-title"
-          >
-            <div className="app-modal-hero">
-              <div className="app-modal-hero-inner">
-                <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-                  <div className="app-modal-hero-icon">
-                    <Settings size={22} />
-                  </div>
-                  <div className="app-modal-hero-text">
-                    <h3 id="settings-modal-title">{t('systemSettings')}</h3>
-                    <p>Customize your experience — language, appearance, security, and profile preferences.</p>
-                  </div>
-                </div>
-                <button type="button" className="app-modal-close" onClick={closeSettingsModal} aria-label="Close settings">
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-
-            <div className="app-modal-layout">
+      <Modal
+        isOpen={showSettings}
+        onClose={closeSettingsModal}
+        title={(
+          <span className="flex items-center gap-2">
+            <Settings size={18} /> {t('systemSettings')}
+          </span>
+        )}
+        subtitle="Customize your experience — language, appearance, security, and profile preferences."
+        size="lg"
+      >
+        {/* Modal pads its body with p-6, but this layout is a full-bleed nav
+            rail beside a content pane and supplies its own padding — cancel the
+            gutter so the rail still meets the dialog edge. */}
+        <div className="-m-6">
+          <div className="app-modal-layout">
               <nav className="app-modal-nav" aria-label="Settings sections">
                 {settingsTabs.map((tab) => {
                   const TabIcon = tab.icon;
@@ -776,42 +791,35 @@ function AppLayout() {
               </div>
             </div>
           </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Help Modal */}
-      {showHelp && (
-        <div
-          className="app-modal-overlay"
-          onClick={() => setShowHelp(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowHelp(false); }}
-          role="presentation"
-        >
-          <div
-            className="app-modal app-modal-help"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="help-modal-title"
-          >
-            <div className="app-modal-hero">
-              <div className="app-modal-hero-inner">
-                <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-                  <div className="app-modal-hero-icon">
-                    <HelpCircle size={22} />
-                  </div>
-                  <div className="app-modal-hero-text">
-                    <h3 id="help-modal-title">Workflow & Support Center</h3>
-                    <p>Guides, role responsibilities, and step-by-step checklists for the EEU Internal Audit system.</p>
-                  </div>
-                </div>
-                <button type="button" className="app-modal-close" onClick={() => setShowHelp(false)} aria-label="Close help">
-                  <X size={18} />
-                </button>
-              </div>
+      <Modal
+        isOpen={showHelp}
+        onClose={() => setShowHelp(false)}
+        title={(
+          <span className="flex items-center gap-2">
+            <HelpCircle size={18} /> Workflow &amp; Support Center
+          </span>
+        )}
+        subtitle="Guides, role responsibilities, and step-by-step checklists for the EEU Internal Audit system."
+        size="xl"
+        footer={(
+          /* Modal's footer is justify-end; this one wants the support line on
+             the left, so it takes the full width and spaces itself. */
+          <div className="flex flex-1 items-center justify-between gap-3">
+            <div className="app-modal-footer-support">
+              <Mail size={14} />
+              <span>IT Help Desk: <strong>audit.support@eeu.gov.et</strong></span>
             </div>
-
-            <div className="app-modal-layout">
+            <button type="button" className="app-modal-btn app-modal-btn-secondary" onClick={() => setShowHelp(false)}>
+              Close Guide
+            </button>
+          </div>
+        )}
+      >
+        <div className="-m-6">
+          <div className="app-modal-layout">
               <nav className="app-modal-nav" aria-label="Help sections">
                 {helpTabs.map((tab) => {
                   const TabIcon = tab.icon;
@@ -979,19 +987,8 @@ function AppLayout() {
                 )}
               </div>
             </div>
-
-            <div className="app-modal-footer">
-              <div className="app-modal-footer-support">
-                <Mail size={14} />
-                <span>IT Help Desk: <strong>audit.support@eeu.gov.et</strong></span>
-              </div>
-              <button type="button" className="app-modal-btn app-modal-btn-secondary" onClick={() => setShowHelp(false)}>
-                Close Guide
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

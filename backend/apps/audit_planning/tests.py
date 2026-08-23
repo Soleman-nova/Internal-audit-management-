@@ -3,7 +3,8 @@
 Covers the universe register, the re-audit due list, the plan submit/approve
 workflow (including the ownership gate added so an auditor cannot submit a
 colleague's plan under their own name), engagement creation and status
-transitions, and the auditee read scoping on the engagement calendar.
+transitions (including the guard that refuses completion while findings are
+unresolved), and the auditee read scoping on the engagement calendar.
 """
 import datetime
 
@@ -14,8 +15,9 @@ from apps.accounts.models import AuditTrail, Role
 from apps.audit_planning.models import (
     AuditEngagement, AuditPlan, AuditTeamMember, AuditUniverse,
 )
+from apps.audit_planning.views import BLOCKS_COMPLETION
 from apps.common.role_fixtures import (
-    RoleFixtureMixin, make_engagement, make_plan, make_universe,
+    RoleFixtureMixin, make_engagement, make_finding, make_plan, make_universe,
     notification_titles, next_seq,
 )
 from apps.notifications.models import Notification
@@ -395,6 +397,124 @@ class AuditEngagementTest(RoleFixtureMixin, TestCase):
         )
         self.assertTrue(notification_titles(self.manager))
         self.assertEqual(notification_titles(self.supervisor), [])
+
+    # ── Completion guard ──────────────────────────────────────────────────
+    # Completing an engagement stamps `actual_end` and back-fills
+    # AuditUniverse.last_audited, which is what tells the re-audit due list the
+    # entity has been covered. Before the guard, all of that could happen with
+    # every finding still in draft. The four tests above use engagements with no
+    # findings at all and must keep passing — they are the regression guard that
+    # the new check only bites when there is something to bite on.
+
+    def set_status(self, engagement, new_status):
+        return self.as_user(self.supervisor).post(
+            f'{ENGAGEMENTS_URL}{engagement.id}/update-status/',
+            {'status': new_status}, format='json',
+        )
+
+    def test_an_open_finding_blocks_completion_and_writes_nothing(self):
+        entry = make_universe(department=self.department, last_audited=None)
+        engagement = make_engagement(
+            plan=self.plan, lead_auditor=self.auditor, audit_universe=entry,
+        )
+        make_finding(engagement=engagement, identified_by=self.auditor, status='open')
+
+        response = self.set_status(engagement, 'completed')
+
+        self.assertEqual(response.status_code, 400, response.data)
+        engagement.refresh_from_db()
+        entry.refresh_from_db()
+        # The refusal returns before the transaction opens, so none of the five
+        # side effects of a completion happened.
+        self.assertEqual(engagement.status, 'planned')
+        self.assertIsNone(engagement.actual_end)
+        self.assertIsNone(entry.last_audited)
+        self.assertEqual(Notification.objects.count(), 0)
+        self.assertFalse(
+            AuditTrail.objects.filter(
+                model_name='AuditEngagement', object_id=str(engagement.id),
+            ).exists(),
+            'a refused completion should not leave an audit-trail entry',
+        )
+
+    def test_the_refusal_names_the_blocking_findings(self):
+        engagement = make_engagement(plan=self.plan, lead_auditor=self.auditor)
+        blocker = make_finding(
+            engagement=engagement, identified_by=self.auditor, status='open',
+        )
+        settled = make_finding(
+            engagement=engagement, identified_by=self.auditor, status='closed',
+        )
+
+        response = self.set_status(engagement, 'completed')
+
+        self.assertEqual(response.status_code, 400)
+        detail = response.data['detail']
+        self.assertIn(blocker.finding_number, detail)
+        # Only the blockers are named — a settled finding is not the auditor's problem.
+        self.assertNotIn(settled.finding_number, detail)
+        self.assertIn('1 finding(s)', detail)
+
+    def test_every_unsettled_status_blocks_completion(self):
+        """`draft`, `open`, `in_progress` and `disputed` all block.
+
+        Driven off BLOCKS_COMPLETION itself, so narrowing that constant
+        narrows this test with it rather than leaving a stale assertion.
+        """
+        for finding_status in BLOCKS_COMPLETION:
+            with self.subTest(finding_status=finding_status):
+                engagement = make_engagement(
+                    plan=self.plan, lead_auditor=self.auditor,
+                )
+                make_finding(
+                    engagement=engagement, identified_by=self.auditor,
+                    status=finding_status,
+                )
+                response = self.set_status(engagement, 'completed')
+                self.assertEqual(response.status_code, 400, response.data)
+                engagement.refresh_from_db()
+                self.assertEqual(engagement.status, 'planned')
+
+    def test_settled_findings_let_the_engagement_complete(self):
+        entry = make_universe(department=self.department, last_audited=None)
+        engagement = make_engagement(
+            plan=self.plan, lead_auditor=self.auditor, audit_universe=entry,
+        )
+        make_finding(engagement=engagement, identified_by=self.auditor, status='resolved')
+        make_finding(engagement=engagement, identified_by=self.auditor, status='closed')
+
+        response = self.set_status(engagement, 'completed')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        engagement.refresh_from_db()
+        entry.refresh_from_db()
+        self.assertEqual(engagement.status, 'completed')
+        self.assertEqual(engagement.actual_end, timezone.now().date())
+        self.assertEqual(entry.last_audited, timezone.now().date())
+
+    def test_reporting_still_succeeds_with_an_open_finding(self):
+        """The guard is completion-only — reporting is when findings are worked."""
+        engagement = make_engagement(plan=self.plan, lead_auditor=self.auditor)
+        make_finding(engagement=engagement, identified_by=self.auditor, status='open')
+
+        response = self.set_status(engagement, 'reporting')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        engagement.refresh_from_db()
+        self.assertEqual(engagement.status, 'reporting')
+
+    def test_cancelling_still_succeeds_with_an_open_finding(self):
+        """Abandoning an engagement mid-flight is legitimate and must not
+        require resolving the findings it already raised first."""
+        engagement = make_engagement(plan=self.plan, lead_auditor=self.auditor)
+        make_finding(engagement=engagement, identified_by=self.auditor, status='draft')
+
+        response = self.set_status(engagement, 'cancelled')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        engagement.refresh_from_db()
+        self.assertEqual(engagement.status, 'cancelled')
+        self.assertIsNone(engagement.actual_end)
 
 
 class AuditEngagementScopingTest(RoleFixtureMixin, TestCase):

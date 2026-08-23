@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import { unwrapPage } from './paginated';
 
 export const planningApi = {
   getUniverse: async (params = {}) => {
@@ -37,9 +38,11 @@ export const planningApi = {
     const res = await apiClient.post(`/planning/plans/${id}/approve/`);
     return res.data;
   },
+  // Returns { items, count, hasMore } rather than a bare array: PlanningPage
+  // shows the engagement total, which was capped at PAGE_SIZE before.
   getEngagements: async (params = {}) => {
     const res = await apiClient.get('/planning/engagements/', { params });
-    return res.data?.results ?? res.data;
+    return unwrapPage(res.data);
   },
   getEngagement: async (id) => {
     const res = await apiClient.get(`/planning/engagements/${id}/`);

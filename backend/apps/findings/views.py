@@ -269,6 +269,66 @@ class AuditFindingViewSet(viewsets.ModelViewSet):
                 )
         return Response({'detail': 'Finding marked as resolved.'})
 
+    @action(detail=True, methods=['post'], url_path='respond',
+            permission_classes=[InvolvedPartyOrCapability.for_('auditee', 'assigned_to')])
+    def respond(self, request, pk=None):
+        """The auditee's own formal position on the finding.
+
+        `management_response` feeds the audit report, and the class-level
+        CanWriteAudit gate meant only the audit team could write it — an auditee
+        holds no capabilities, so they could not even PATCH the finding that is
+        about them. The auditor therefore typed the auditee's response on their
+        behalf, which inverts the workflow. This is the fourth involved-party
+        action, alongside add_comment / upload_evidence / dispute.
+
+        Re-posting replaces the text, so an auditee can revise their response
+        while the finding is open; the previous wording is kept in the audit
+        trail rather than in a second field.
+
+        Deliberately does *not* touch `status`: responding is not a lifecycle
+        event — `dispute` is the action for disagreement — and ALLOWED_TRANSITIONS
+        has no path into `in_progress` from `open` in any case.
+        """
+        finding = self.get_object()
+        text = (request.data.get('management_response') or '').strip()
+        if not text:
+            return Response({'management_response': ['This field may not be blank.']},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if finding.status == 'closed':
+            return Response(
+                {'detail': 'This finding is closed and no longer accepts a management response.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        previous = finding.management_response
+        with transaction.atomic():
+            finding.management_response = text
+            finding.save(update_fields=['management_response', 'updated_at'])
+            # Truncated to 300 in `changes` for the same reason log_audit
+            # truncates object_repr: a long response should not bloat every
+            # audit-trail row that records one.
+            log_audit(request, 'UPDATE', finding,
+                      object_repr=f'Management response recorded on {finding.finding_number}',
+                      changes={'management_response': [previous[:300], text[:300]]})
+            # Whoever raised it and whoever owns it need to read the response;
+            # the responder does not need telling. 'finding' rather than a new
+            # type: upload_evidence already uses it for the same
+            # "the auditee did something on your finding" case, and it is a
+            # declared TYPE_CHOICES member, so no migration.
+            recipients = {finding.identified_by, finding.assigned_to}
+            recipients.discard(None)
+            recipients.discard(request.user)
+            for recipient in recipients:
+                notify(
+                    recipient,
+                    'finding',
+                    f'Management response on {finding.finding_number}',
+                    f'{request.user.get_full_name() or request.user.email} responded: '
+                    f'{text[:120]}',
+                    f'/findings/{finding.id}',
+                )
+        return Response({'detail': 'Management response recorded.',
+                         'management_response': finding.management_response})
+
     @action(detail=True, methods=['post'], url_path='dispute',
             permission_classes=[InvolvedPartyOrCapability.for_('auditee', 'assigned_to')])
     def dispute(self, request, pk=None):

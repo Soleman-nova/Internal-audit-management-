@@ -11,7 +11,7 @@ import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
 import OrgUnitSelect from '../../components/ui/OrgUnitSelect';
-import { TrendingUp, Sliders, Plus, RefreshCw, AlertOctagon, ClipboardList, CheckCircle2, Star, X } from 'lucide-react';
+import { TrendingUp, Sliders, Plus, RefreshCw, AlertOctagon, ClipboardList, CheckCircle2, Star } from 'lucide-react';
 
 function RiskAssessmentPage() {
   const toast = useToast();
@@ -562,261 +562,207 @@ function RiskAssessmentPage() {
       )}
 
       {/* New Assessment Modal (For Managers) */}
-      {showModal && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setShowModal(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowModal(false); }}
-        >
-          <div
-            className="modal-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="assessment-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="assessment-modal-title">{t('recordRiskAssessment')}</h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setShowModal(false)}
-                aria-label="Close dialog"
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={t('recordRiskAssessment')}
+        size="lg"
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>Cancel</button>
+            {/* `form=` because Modal renders the footer as a sibling of its
+                children, so the submit button sits outside the <form>. */}
+            <button type="submit" form="assessment-form" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Assessment'}
+            </button>
+          </>
+        )}
+      >
+        <form id="assessment-form" onSubmit={handleCreateAssessment}>
+          <div className="form-group-row">
+            <OrgUnitSelect
+              idPrefix="assessment_dept"
+              label="Department"
+              value={newAssessment.department}
+              onChange={(id) => setNewAssessment({ ...newAssessment, department: id })}
+              required
+            />
+            <div className="form-group">
+              <label className="form-label" htmlFor="assessment_universe">Audit Universe Entry</label>
+              <select
+                id="assessment_universe"
+                className="form-control"
+                value={newAssessment.audit_universe}
+                onChange={e => setNewAssessment({ ...newAssessment, audit_universe: e.target.value })}
               >
-                <X size={16} />
-              </button>
+                <option value="">Auto (by department)</option>
+                {universe
+                  .filter(u => !newAssessment.department || String(u.department) === String(newAssessment.department))
+                  .map(u => (
+                    <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
+                  ))}
+              </select>
             </div>
-            <form onSubmit={handleCreateAssessment}>
-              <div className="modal-body">
-                <div className="form-group-row">
-                  <OrgUnitSelect
-                    label="Department"
-                    value={newAssessment.department}
-                    onChange={(id) => setNewAssessment({ ...newAssessment, department: id })}
-                    required
-                  />
-                  <div className="form-group">
-                    <label className="form-label">Audit Universe Entry</label>
-                    <select
-                      className="form-control"
-                      value={newAssessment.audit_universe}
-                      onChange={e => setNewAssessment({ ...newAssessment, audit_universe: e.target.value })}
-                    >
-                      <option value="">Auto (by department)</option>
-                      {universe
-                        .filter(u => !newAssessment.department || String(u.department) === String(newAssessment.department))
-                        .map(u => (
-                          <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
-                        ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Period</label>
-                    <select
-                      className="form-control"
-                      value={newAssessment.assessment_period}
-                      onChange={e => setNewAssessment({ ...newAssessment, assessment_period: e.target.value })}
-                    >
-                      <option value="Q1">Q1</option>
-                      <option value="Q2">Q2</option>
-                      <option value="Q3">Q3</option>
-                      <option value="Q4">Q4</option>
-                      <option value="Annual">Annual</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Year</label>
-                    <input type="number" className="form-control" value={newAssessment.year}
-                      onChange={e => setNewAssessment({ ...newAssessment, year: parseInt(e.target.value) })} />
-                  </div>
-                </div>
-
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label">Likelihood (1–5)</label>
-                    <input type="range" min="1" max="5" className="form-control"
-                      value={newAssessment.likelihood}
-                      onChange={e => setNewAssessment({ ...newAssessment, likelihood: parseInt(e.target.value) })} />
-                    <span className="text-center block font-bold">{newAssessment.likelihood}</span>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Impact (1–5)</label>
-                    <input type="range" min="1" max="5" className="form-control"
-                      value={newAssessment.impact}
-                      onChange={e => setNewAssessment({ ...newAssessment, impact: parseInt(e.target.value) })} />
-                    <span className="text-center block font-bold">{newAssessment.impact}</span>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Control Effectiveness (1–5)</label>
-                    <input type="range" min="1" max="5" className="form-control"
-                      value={newAssessment.control_effectiveness}
-                      onChange={e => setNewAssessment({ ...newAssessment, control_effectiveness: parseInt(e.target.value) })} />
-                    <span className="text-center block font-bold">{newAssessment.control_effectiveness}</span>
-                  </div>
-                </div>
-
-                <div className="risk-score-preview mb-3 p-3 rounded" style={{ background: 'var(--bg-card-secondary)', textAlign: 'center' }}>
-                  <span className="text-sm text-muted">Calculated Risk Score: </span>
-                  <strong className="text-lg" style={{ color: newAssessment.likelihood * newAssessment.impact >= 12 ? 'var(--color-danger)' : newAssessment.likelihood * newAssessment.impact >= 6 ? 'var(--color-warning)' : 'var(--color-success)' }}>
-                    {newAssessment.likelihood * newAssessment.impact} / 25
-                  </strong>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Assessment Notes</label>
-                  <textarea rows="3" className="form-control" placeholder="Key observations, context, or control details..."
-                    value={newAssessment.notes}
-                    onChange={e => setNewAssessment({ ...newAssessment, notes: e.target.value })} />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? 'Saving...' : 'Save Assessment'}
-                </button>
-              </div>
-            </form>
+            <div className="form-group">
+              <label className="form-label" htmlFor="assessment_period">Period</label>
+              <select
+                id="assessment_period"
+                className="form-control"
+                value={newAssessment.assessment_period}
+                onChange={e => setNewAssessment({ ...newAssessment, assessment_period: e.target.value })}
+              >
+                <option value="Q1">Q1</option>
+                <option value="Q2">Q2</option>
+                <option value="Q3">Q3</option>
+                <option value="Q4">Q4</option>
+                <option value="Annual">Annual</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="assessment_year">Year</label>
+              <input id="assessment_year" type="number" className="form-control" value={newAssessment.year}
+                onChange={e => setNewAssessment({ ...newAssessment, year: parseInt(e.target.value) })} />
+            </div>
           </div>
-        </div>
-      )}
+
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="assessment_likelihood">Likelihood (1–5)</label>
+              <input id="assessment_likelihood" type="range" min="1" max="5" className="form-control"
+                value={newAssessment.likelihood}
+                onChange={e => setNewAssessment({ ...newAssessment, likelihood: parseInt(e.target.value) })} />
+              <span className="text-center block font-bold">{newAssessment.likelihood}</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="assessment_impact">Impact (1–5)</label>
+              <input id="assessment_impact" type="range" min="1" max="5" className="form-control"
+                value={newAssessment.impact}
+                onChange={e => setNewAssessment({ ...newAssessment, impact: parseInt(e.target.value) })} />
+              <span className="text-center block font-bold">{newAssessment.impact}</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="assessment_control">Control Effectiveness (1–5)</label>
+              <input id="assessment_control" type="range" min="1" max="5" className="form-control"
+                value={newAssessment.control_effectiveness}
+                onChange={e => setNewAssessment({ ...newAssessment, control_effectiveness: parseInt(e.target.value) })} />
+              <span className="text-center block font-bold">{newAssessment.control_effectiveness}</span>
+            </div>
+          </div>
+
+          <div className="risk-score-preview mb-3 p-3 rounded" style={{ background: 'var(--bg-card-secondary)', textAlign: 'center' }}>
+            <span className="text-sm text-muted">Calculated Risk Score: </span>
+            <strong className="text-lg" style={{ color: newAssessment.likelihood * newAssessment.impact >= 12 ? 'var(--color-danger)' : newAssessment.likelihood * newAssessment.impact >= 6 ? 'var(--color-warning)' : 'var(--color-success)' }}>
+              {newAssessment.likelihood * newAssessment.impact} / 25
+            </strong>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="assessment_notes">Assessment Notes</label>
+            <textarea id="assessment_notes" rows="3" className="form-control" placeholder="Key observations, context, or control details..."
+              value={newAssessment.notes}
+              onChange={e => setNewAssessment({ ...newAssessment, notes: e.target.value })} />
+          </div>
+        </form>
+      </Modal>
 
       {/* Auditee Survey Response Modal */}
-      {showSurveyModal && selectedAssessment && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setShowSurveyModal(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowSurveyModal(false); }}
-        >
-          <div
-            className="modal-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="survey-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="survey-modal-title">{t('submitRiskSelfAssessment')}</h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setShowSurveyModal(false)}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
+      <Modal
+        isOpen={Boolean(showSurveyModal && selectedAssessment)}
+        onClose={() => setShowSurveyModal(false)}
+        title={t('submitRiskSelfAssessment')}
+        size="lg"
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={() => setShowSurveyModal(false)}>Cancel</button>
+            <button type="submit" form="survey-form" className="btn btn-primary" disabled={submittingSurvey}>
+              {submittingSurvey ? 'Submitting...' : 'Submit Survey'}
+            </button>
+          </>
+        )}
+      >
+        {selectedAssessment && (
+          <form id="survey-form" onSubmit={handleSubmitSurvey}>
+            <div className="mb-4 p-3 rounded" style={{ background: 'var(--bg-card-secondary)' }}>
+              <p className="text-sm font-semibold">Survey Period: {selectedAssessment.year} {selectedAssessment.assessment_period}</p>
+              <p className="text-xs text-muted">Current Inherent Risk Level: {selectedAssessment.risk_score} ({selectedAssessment.risk_rating?.toUpperCase()})</p>
             </div>
-            <form onSubmit={handleSubmitSurvey}>
-              <div className="modal-body">
-                <div className="mb-4 p-3 rounded" style={{ background: 'var(--bg-card-secondary)' }}>
-                  <p className="text-sm font-semibold">Survey Period: {selectedAssessment.year} {selectedAssessment.assessment_period}</p>
-                  <p className="text-xs text-muted">Current Inherent Risk Level: {selectedAssessment.risk_score} ({selectedAssessment.risk_rating?.toUpperCase()})</p>
-                </div>
 
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label">Likelihood (1–5)</label>
-                    <input type="range" min="1" max="5" className="form-control"
-                      value={surveyResponse.likelihood_self}
-                      onChange={e => setSurveyResponse({ ...surveyResponse, likelihood_self: parseInt(e.target.value) })} />
-                    <span className="text-center block font-bold">{surveyResponse.likelihood_self}</span>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Impact (1–5)</label>
-                    <input type="range" min="1" max="5" className="form-control"
-                      value={surveyResponse.impact_self}
-                      onChange={e => setSurveyResponse({ ...surveyResponse, impact_self: parseInt(e.target.value) })} />
-                    <span className="text-center block font-bold">{surveyResponse.impact_self}</span>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Control Effectiveness (1–5)</label>
-                    <input type="range" min="1" max="5" className="form-control"
-                      value={surveyResponse.control_effectiveness_self}
-                      onChange={e => setSurveyResponse({ ...surveyResponse, control_effectiveness_self: parseInt(e.target.value) })} />
-                    <span className="text-center block font-bold">{surveyResponse.control_effectiveness_self}</span>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Justification / Self-Assessment Notes</label>
-                  <textarea rows="3" className="form-control" placeholder="Provide background on why these scores represent your department..."
-                    value={surveyResponse.justification}
-                    onChange={e => setSurveyResponse({ ...surveyResponse, justification: e.target.value })} required />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Mitigating Controls Implemented</label>
-                  <textarea rows="2" className="form-control" placeholder="Describe policies, technologies, or manual controls that reduce this risk..."
-                    value={surveyResponse.mitigating_controls}
-                    onChange={e => setSurveyResponse({ ...surveyResponse, mitigating_controls: e.target.value })} />
-                </div>
+            <div className="form-group-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="survey_likelihood">Likelihood (1–5)</label>
+                <input id="survey_likelihood" type="range" min="1" max="5" className="form-control"
+                  value={surveyResponse.likelihood_self}
+                  onChange={e => setSurveyResponse({ ...surveyResponse, likelihood_self: parseInt(e.target.value) })} />
+                <span className="text-center block font-bold">{surveyResponse.likelihood_self}</span>
               </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowSurveyModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={submittingSurvey}>
-                  {submittingSurvey ? 'Submitting...' : 'Submit Survey'}
-                </button>
+              <div className="form-group">
+                <label className="form-label" htmlFor="survey_impact">Impact (1–5)</label>
+                <input id="survey_impact" type="range" min="1" max="5" className="form-control"
+                  value={surveyResponse.impact_self}
+                  onChange={e => setSurveyResponse({ ...surveyResponse, impact_self: parseInt(e.target.value) })} />
+                <span className="text-center block font-bold">{surveyResponse.impact_self}</span>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+              <div className="form-group">
+                <label className="form-label" htmlFor="survey_control">Control Effectiveness (1–5)</label>
+                <input id="survey_control" type="range" min="1" max="5" className="form-control"
+                  value={surveyResponse.control_effectiveness_self}
+                  onChange={e => setSurveyResponse({ ...surveyResponse, control_effectiveness_self: parseInt(e.target.value) })} />
+                <span className="text-center block font-bold">{surveyResponse.control_effectiveness_self}</span>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="survey_justification">Justification / Self-Assessment Notes</label>
+              <textarea id="survey_justification" rows="3" className="form-control" placeholder="Provide background on why these scores represent your department..."
+                value={surveyResponse.justification}
+                onChange={e => setSurveyResponse({ ...surveyResponse, justification: e.target.value })} required />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="survey_mitigating">Mitigating Controls Implemented</label>
+              <textarea id="survey_mitigating" rows="2" className="form-control" placeholder="Describe policies, technologies, or manual controls that reduce this risk..."
+                value={surveyResponse.mitigating_controls}
+                onChange={e => setSurveyResponse({ ...surveyResponse, mitigating_controls: e.target.value })} />
+            </div>
+          </form>
+        )}
+      </Modal>
 
       {/* Manager Review Modal */}
-      {showReviewModal && selectedSelfAss && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setShowReviewModal(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowReviewModal(false); }}
-        >
-          <div
-            className="modal-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="review-mgr-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="review-mgr-modal-title">{t('reviewAuditeeSelfAssessment')}</h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setShowReviewModal(false)}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
+      <Modal
+        isOpen={Boolean(showReviewModal && selectedSelfAss)}
+        onClose={() => setShowReviewModal(false)}
+        title={t('reviewAuditeeSelfAssessment')}
+        size="lg"
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={() => setShowReviewModal(false)}>Cancel</button>
+            <button type="submit" form="mgr-review-form" className="btn btn-primary" disabled={submittingReview}>
+              {submittingReview ? 'Submitting Review...' : 'Approve & Mark Reviewed'}
+            </button>
+          </>
+        )}
+      >
+        {selectedSelfAss && (
+          <form id="mgr-review-form" onSubmit={handleSubmitReview}>
+            <div className="mb-4 p-3 rounded" style={{ background: 'var(--bg-card-secondary)' }}>
+              <p className="text-sm font-semibold">Department: {selectedSelfAss.risk_assessment?.department_name || `Dept #${selectedSelfAss.risk_assessment?.department}`}</p>
+              <p className="text-xs text-muted">Auditee Proposed Scores: L={selectedSelfAss.likelihood_self} | I={selectedSelfAss.impact_self} | C={selectedSelfAss.control_effectiveness_self}</p>
+              <p className="text-xs text-muted mt-2">Justification: &quot;{selectedSelfAss.justification}&quot;</p>
+              {selectedSelfAss.mitigating_controls && (
+                <p className="text-xs text-muted mt-1">Mitigating: &quot;{selectedSelfAss.mitigating_controls}&quot;</p>
+              )}
             </div>
-            <form onSubmit={handleSubmitReview}>
-              <div className="modal-body">
-                <div className="mb-4 p-3 rounded" style={{ background: 'var(--bg-card-secondary)' }}>
-                  <p className="text-sm font-semibold">Department: {selectedSelfAss.risk_assessment?.department_name || `Dept #${selectedSelfAss.risk_assessment?.department}`}</p>
-                  <p className="text-xs text-muted">Auditee Proposed Scores: L={selectedSelfAss.likelihood_self} | I={selectedSelfAss.impact_self} | C={selectedSelfAss.control_effectiveness_self}</p>
-                  <p className="text-xs text-muted mt-2">Justification: "{selectedSelfAss.justification}"</p>
-                  {selectedSelfAss.mitigating_controls && (
-                    <p className="text-xs text-muted mt-1">Mitigating: "{selectedSelfAss.mitigating_controls}"</p>
-                  )}
-                </div>
 
-                <div className="form-group">
-                  <label className="form-label">Reviewer Notes / Feedback</label>
-                  <textarea rows="4" className="form-control" placeholder="Type feedback or adjustment rationale..."
-                    value={reviewerNotes}
-                    onChange={e => setReviewerNotes(e.target.value)} required />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowReviewModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={submittingReview}>
-                  {submittingReview ? 'Submitting Review...' : 'Approve & Mark Reviewed'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <div className="form-group">
+              <label className="form-label" htmlFor="mgr_reviewer_notes">Reviewer Notes / Feedback</label>
+              <textarea id="mgr_reviewer_notes" rows="4" className="form-control" placeholder="Type feedback or adjustment rationale..."
+                value={reviewerNotes}
+                onChange={e => setReviewerNotes(e.target.value)} required />
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

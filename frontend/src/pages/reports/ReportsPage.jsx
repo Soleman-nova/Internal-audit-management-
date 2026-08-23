@@ -9,7 +9,7 @@ import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
-import { FileText, Download, Plus, RefreshCw, BarChart2, X } from 'lucide-react';
+import { FileText, Download, Plus, RefreshCw, BarChart2 } from 'lucide-react';
 
 function ReportsPage() {
   const toast = useToast();
@@ -86,7 +86,7 @@ function ReportsPage() {
         reportsApi.getGeneratedReports(),
       ]);
       const templateList = Array.isArray(tempRes) ? tempRes : [];
-      const engList = Array.isArray(engRes) ? engRes : [];
+      const engList = engRes.items;
       const genList = Array.isArray(genRes) ? genRes : [];
 
       setTemplates(templateList);
@@ -262,98 +262,83 @@ function ReportsPage() {
       </div>
 
       {/* Generate Report Modal */}
-      {showGenModal && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setShowGenModal(false)}
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowGenModal(false); }}
-        >
-          <div
-            className="modal-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="report-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 id="report-modal-title">{t('compileExport')}</h3>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setShowGenModal(false)}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <form onSubmit={handleGenerateReport}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">{t('reportDocumentTitle')}</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={reportTitle}
-                    onChange={(e) => setReportTitle(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">{t('selectAuditEngagement')}</label>
-                  <select
-                    className="form-control"
-                    value={selectedEngId}
-                    onChange={(e) => {
-                      setSelectedEngId(e.target.value);
-                      const engObj = engagements.find(eng => eng.id.toString() === e.target.value.toString());
-                      if (engObj) setReportTitle(`Audit Report for ${engObj.title}`);
-                    }}
-                  >
-                    {engagements.map(e => (
-                      <option key={e.id} value={e.id}>{e.engagement_number} - {e.title}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group-row">
-                  <div className="form-group">
-                    <label className="form-label">{t('selectTemplateLayout')}</label>
-                    <select
-                      className="form-control"
-                      value={selectedTemplateId}
-                      onChange={(e) => setSelectedTemplateId(e.target.value)}
-                    >
-                      {templates.map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">{t('format')}</label>
-                    <select
-                      className="form-control"
-                      value={selectedFormat}
-                      onChange={(e) => setSelectedFormat(e.target.value)}
-                    >
-                      <option value="pdf">{t('pdfDocument')}</option>
-                      <option value="excel">{t('excelSheet')}</option>
-                      <option value="word">{t('wordDocx')}</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowGenModal(false)}>{t('cancel')}</button>
-                <button type="submit" className="btn btn-primary" disabled={generating}>
-                  {generating ? 'Compiling...' : t('generateDocument')}
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={showGenModal}
+        onClose={() => setShowGenModal(false)}
+        title={t('compileExport')}
+        size="lg"
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={() => setShowGenModal(false)}>{t('cancel')}</button>
+            {/* `form=` because Modal renders the footer as a sibling of its
+                children, so the submit button sits outside the <form>. */}
+            <button type="submit" form="report-form" className="btn btn-primary" disabled={generating}>
+              {generating ? 'Compiling...' : t('generateDocument')}
+            </button>
+          </>
+        )}
+      >
+        <form id="report-form" onSubmit={handleGenerateReport}>
+          <div className="form-group">
+            <label className="form-label" htmlFor="report_title">{t('reportDocumentTitle')}</label>
+            <input
+              id="report_title"
+              type="text"
+              className="form-control"
+              value={reportTitle}
+              onChange={(e) => setReportTitle(e.target.value)}
+              required
+            />
           </div>
-        </div>
-      )}
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="report_engagement">{t('selectAuditEngagement')}</label>
+            <select
+              id="report_engagement"
+              className="form-control"
+              value={selectedEngId}
+              onChange={(e) => {
+                setSelectedEngId(e.target.value);
+                const engObj = engagements.find(eng => eng.id.toString() === e.target.value.toString());
+                if (engObj) setReportTitle(`Audit Report for ${engObj.title}`);
+              }}
+            >
+              {engagements.map(e => (
+                <option key={e.id} value={e.id}>{e.engagement_number} - {e.title}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="report_template">{t('selectTemplateLayout')}</label>
+              <select
+                id="report_template"
+                className="form-control"
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+              >
+                {templates.map(tpl => (
+                  <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="report_format">{t('format')}</label>
+              <select
+                id="report_format"
+                className="form-control"
+                value={selectedFormat}
+                onChange={(e) => setSelectedFormat(e.target.value)}
+              >
+                <option value="pdf">{t('pdfDocument')}</option>
+                <option value="excel">{t('excelSheet')}</option>
+                <option value="word">{t('wordDocx')}</option>
+              </select>
+            </div>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

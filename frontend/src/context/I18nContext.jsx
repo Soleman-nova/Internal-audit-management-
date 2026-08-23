@@ -19,6 +19,15 @@ const TRANSLATIONS = {
         filter: 'Filter',
         loading: 'Loading...',
         noRecords: 'No records found',
+        // ── Accessibility & pagination ──
+        // Shown when a list is longer than the server's page, so the heading
+        // count is the real total rather than the number of rows on screen.
+        showingFirstOf: (shown, total) =>
+            `Showing the first ${shown} of ${total} — narrow the filters to see the rest.`,
+        skipToContent: 'Skip to main content',
+        dismissNotification: 'Dismiss notification',
+        toggleSidebar: 'Toggle navigation',
+        closeNavigation: 'Close navigation',
         actions: 'Actions',
         status: 'Status',
         date: 'Date',
@@ -505,6 +514,8 @@ const TRANSLATIONS = {
         dispute: 'Dispute',
         reopen: 'Reopen',
         managementResponse: 'Management Response',
+        writeResponse: 'Write the management response to this finding…',
+        saveResponse: 'Save Response',
         identifiedBy: 'Identified By',
         assignedTo: 'Assigned To',
         auditeeContact: 'Auditee Contact',
@@ -539,6 +550,13 @@ const TRANSLATIONS = {
         filter: 'አጣራ',
         loading: 'በመጫን ላይ...',
         noRecords: 'ምንም መዝገብ አልተገኘም',
+        // ── Accessibility & pagination ──
+        showingFirstOf: (shown, total) =>
+            `ከ${total} ውስጥ የመጀመሪያዎቹ ${shown} ይታያሉ — ቀሪውን ለማየት ማጣሪያዎቹን ያጥሩ።`,
+        skipToContent: 'ወደ ዋና ይዘት ዘልል',
+        dismissNotification: 'ማሳወቂያውን ዝጋ',
+        toggleSidebar: 'ዳሰሳ ክፈት/ዝጋ',
+        closeNavigation: 'ዳሰሳውን ዝጋ',
         actions: 'እርምጃዎች',
         status: 'ሁኔታ',
         date: 'ቀን',
@@ -1025,6 +1043,8 @@ const TRANSLATIONS = {
         dispute: 'ተቃውሞ አቅርብ',
         reopen: 'እንደገና ክፈት',
         managementResponse: 'የአመራር ምላሽ',
+        writeResponse: 'ለዚህ ግኝት የአመራር ምላሽ ይጻፉ…',
+        saveResponse: 'ምላሽ አስቀምጥ',
         identifiedBy: 'ያገኘው',
         assignedTo: 'የተመደበለት',
         auditeeContact: 'የኦዲቲ ተወካይ',
