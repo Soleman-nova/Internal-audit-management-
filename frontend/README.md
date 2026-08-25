@@ -1,16 +1,50 @@
-# React + Vite
+# Frontend — EEU Internal Audit Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite 8 single-page application for the [EEU Internal Audit Management System](../README.md). It talks to the Django REST API in [`../backend`](../backend).
 
-Currently, two official plugins are available:
+Start with the [root README](../README.md) for the full stack, API reference and deployment notes, and the [user manual](../USER_MANUAL.md) for what the screens do.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Scripts
 
-## React Compiler
+```bash
+npm install
+npm run dev       # dev server with HMR on http://localhost:5173
+npm run build     # production bundle into dist/
+npm run preview   # serve the built bundle locally
+npm run lint      # eslint — see "Known limitations" in the root README; not currently clean
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+There is no JS test runner installed; UI behaviour is covered by the manual walkthrough in [../TESTING.md](../TESTING.md).
 
-## Expanding the ESLint configuration
+## Configuration
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Copy [.env.example](.env.example) to `.env`. The only variable is `VITE_API_BASE_URL` — the API base URL **including** the `/api` prefix.
+
+Vite inlines it at build time, so it must be set before `npm run build`; a production build without it is pinned to `localhost:8000`. The client resolves the base URL in this order: the value saved in the in-app Settings modal (localStorage) → `VITE_API_BASE_URL` → `http://localhost:8000/api`.
+
+## Layout
+
+```
+src/
+├── api/                 axios client + one module per domain
+│   ├── apiClient.js     JWT interceptors, shared silent refresh, session helpers
+│   └── paginated.js     helper for the API's {count, next, previous, results} shape
+├── components/
+│   ├── layout/          AppLayout — sidebar, header, Settings and Help modals
+│   ├── ui/              DataTable, Modal, Badge, FormField, OrgUnitSelect, …
+│   └── EEUOrgChart.jsx  organizational chart used by the dashboard selector
+├── context/             AuthContext, I18nContext (EN/AM), ToastContext
+├── hooks/
+│   ├── usePermissions.js  mirrors the server capability matrix for UI gating only
+│   └── useOrgUnits.js
+├── pages/               one directory per module; every page is lazy-loaded
+├── utils/validation.js
+├── App.jsx              routes, ProtectedRoute, CapabilityRoute
+└── App.css, index.css
+```
+
+## Notes
+
+- **Permissions here are cosmetic.** `usePermissions` hides buttons and guards routes; the server is the only enforcement. Never rely on it for security.
+- **Pages are lazy-loaded** so an auditee never downloads the user-management or audit-trail chunks.
+- **Deploying:** serve `dist/` as static files with SPA fallback — any unknown path must return `index.html`, since routing is client-side.
