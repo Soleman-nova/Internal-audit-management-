@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import (AuditUniverse, AuditPlan, AuditEngagement, AuditTeamMember)
+from .models import (AuditUniverse, AuditPlan, AuditEngagement, AuditTeamMember, Project)
 from apps.accounts.serializers import UserSerializer
 
 
@@ -44,6 +44,19 @@ class AuditTeamMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuditTeamMember
         fields = '__all__'
+
+
+class ProjectSerializer(serializers.ModelSerializer):
+    department_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Project
+        fields = '__all__'
+
+    def get_department_name(self, obj):
+        if obj.department:
+            return obj.department.name
+        return None
 
 
 class AuditEngagementSerializer(serializers.ModelSerializer):

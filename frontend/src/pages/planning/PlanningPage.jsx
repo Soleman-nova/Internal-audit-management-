@@ -11,7 +11,8 @@ import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
 import OrgUnitSelect from '../../components/ui/OrgUnitSelect';
-import { Calendar, Plus, Users, Shield, Clock, Pencil } from 'lucide-react';
+import { useOrgUnits } from '../../hooks/useOrgUnits';
+import { Calendar, Plus, Users, Shield, Clock, Pencil, Upload, Download } from 'lucide-react';
 
 // Mirrors AuditEngagement.STATUS_CHOICES. The server rejects anything else, and
 // refuses `completed` outright while the engagement still holds a finding that
@@ -58,11 +59,11 @@ function PlanningPage() {
   const [engagementsTruncated, setEngagementsTruncated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState([]);
-  const [dueForAudit, setDueForAudit] = useState([]);
+  const [dueForAudit, setDueForAudit] = useState({ items: [], count: 0, hasMore: false });
 
   // Form State
-  const emptyUniverse = { name: '', code: '', category: 'system', risk_score: 3.5, audit_frequency: 'Annually', owner: '', department: '', status: 'active' };
-  const emptyPlan = { title: '', year: new Date().getFullYear(), total_budget_days: 0, start_date: '', end_date: '', description: '', objectives: '', scope: '' };
+  const emptyUniverse = { name: '', code: '', category: 'system', risk_score: 3.5, audit_frequency: 'Annually', owner: '', department: '', status: 'active', last_audited: '' };
+  const emptyPlan = { title: '', year: new Date().getFullYear(), plan_scope: 'directorate', directorate: '', total_budget_days: 0, start_date: '', end_date: '', description: '', objectives: '', scope: '', methodology: '' };
   const emptyEngagement = {
     title: '', plan: '', audit_universe: '', department: '',
     engagement_type: 'operational', risk_level: 'medium',
@@ -74,6 +75,27 @@ function PlanningPage() {
   const [editingUniverseId, setEditingUniverseId] = useState(null);
   const [editingUniverseDeptName, setEditingUniverseDeptName] = useState('');
   const [newUniverse, setNewUniverse] = useState(emptyUniverse);
+
+  // PPM project registry feeding the universe form's "PPM Project" dropdown,
+  // shown when the entity's category is 'project'. Picking or adding a project
+  // auto-fills the entity name/code and, when empty, the department (PPM node).
+  const { units: orgUnits } = useOrgUnits();
+  // PPM = EEU Projects Portfolio Management, a top-level Department (code PPM).
+  const ppmUnit = orgUnits.find(u => String(u.code).toUpperCase() === 'PPM');
+  const ppmDepartmentId = ppmUnit ? String(ppmUnit.id) : '';
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [showAddProject, setShowAddProject] = useState(false);
+  const [newProject, setNewProject] = useState({ code: '', name: '' });
+  const [projectErrors, setProjectErrors] = useState({});
+  const [addingProject, setAddingProject] = useState(false);
+
+  // Bulk import/export of the Audit Universe (Excel/CSV).
+  const [showUniverseImportModal, setShowUniverseImportModal] = useState(false);
+  const [showUniverseExportModal, setShowUniverseExportModal] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importResult, setImportResult] = useState(null);
 
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState(null);
@@ -108,12 +130,13 @@ function PlanningPage() {
     try {
       // Departments are not fetched here — OrgUnitSelect loads the org tree
       // itself through useOrgUnits and shares one request across forms.
-      const [univRes, plansRes, engRes, usersRes, dueRes] = await Promise.all([
+      const [univRes, plansRes, engRes, usersRes, dueRes, projectsRes] = await Promise.all([
         planningApi.getUniverse(),
         planningApi.getPlans(),
         planningApi.getEngagements(),
         usersApi.getUsers(),
         planningApi.getDueForReAudit(),
+        planningApi.getProjects(),
       ]);
       setUniverse(univRes || []);
       setPlans(plansRes || []);
@@ -121,7 +144,8 @@ function PlanningPage() {
       setEngagementCount(engRes.count);
       setEngagementsTruncated(engRes.hasMore);
       setAllUsers(usersRes || []);
-      setDueForAudit(dueRes || []);
+      setDueForAudit(dueRes || { items: [], count: 0, hasMore: false });
+      setProjects(projectsRes || []);
     } catch (err) {
       toast.error("Failed to load planning data");
     } finally {
@@ -132,9 +156,18 @@ function PlanningPage() {
   const auditors = allUsers.filter(u => u.role === 'auditor' || u.role === 'audit_manager');
   const supervisors = allUsers.filter(u => u.role === 'supervisor' || u.role === 'audit_manager');
 
+  // True once the department picker resolves to the PPM chief office — reveals
+  // the "PPM Project" dropdown just like category === 'project' does.
+  const ppmDepartmentSelected = !!(ppmDepartmentId && newUniverse.department &&
+    String(newUniverse.department) === ppmDepartmentId);
+
   const openAddUniverse = () => {
     setEditingUniverseId(null);
     setNewUniverse(emptyUniverse);
+    setSelectedProject(null);
+    setShowAddProject(false);
+    setNewProject({ code: '', name: '' });
+    setProjectErrors({});
     setShowUniverseModal(true);
   };
 
@@ -147,7 +180,20 @@ function PlanningPage() {
       name: item.name || '', code: item.code || '', category: item.category || 'system',
       risk_score: item.risk_score ?? 3.5, audit_frequency: item.audit_frequency || 'Annually',
       owner: item.owner || '', department: item.department || '', status: item.status || 'active',
+      last_audited: item.last_audited || '',
     });
+    // For a project-category row, preselect the registry entry whose code/name
+    // matches (there is no FK, so this is a best-effort match); department keeps
+    // whatever the row already stores.
+    if (item.category === 'project') {
+      const match = matchRegistryProject(item.name, item.code);
+      setSelectedProject(match || null);
+    } else {
+      setSelectedProject(null);
+    }
+    setShowAddProject(false);
+    setNewProject({ code: '', name: '' });
+    setProjectErrors({});
     setShowUniverseModal(true);
   };
 
@@ -156,6 +202,74 @@ function PlanningPage() {
     setEditingUniverseId(null);
     setEditingUniverseDeptName('');
     setNewUniverse(emptyUniverse);
+    setSelectedProject(null);
+    setShowAddProject(false);
+    setNewProject({ code: '', name: '' });
+    setProjectErrors({});
+  };
+
+  // Best-effort match of a saved registry project to a universe row (there is no
+  // FK): code match first, then a case-insensitive name match.
+  const matchRegistryProject = (name, code) =>
+    projects.find(p => p.code && code && p.code === code) ||
+    projects.find(p => p.name && name && String(p.name).trim().toLowerCase() === String(name).trim().toLowerCase()) ||
+    null;
+
+  const handleSelectProject = (id) => {
+    if (!id) {
+      setSelectedProject(null);
+      return;
+    }
+    const project = projects.find(p => String(p.id) === String(id));
+    if (!project) return;
+    setSelectedProject(project);
+    setNewUniverse(prev => ({
+      ...prev,
+      name: project.name,
+      // Fill the Unique Code only when it is still blank: registry codes and
+      // universe codes are separate namespaces, and a reused code would 400 on
+      // the universe table's unique constraint.
+      code: prev.code || project.code || '',
+      department: prev.department || ppmDepartmentId || '',
+    }));
+  };
+
+  const handleAddProject = async () => {
+    if (!canWriteAudit) return;
+    const errors = validateForm(newProject, {
+      code: { validators: [validators.required, validators.code] },
+      name: { validators: [validators.required, validators.minLength(3)] },
+    });
+    if (hasErrors(errors)) {
+      setProjectErrors(errors);
+      return;
+    }
+    setProjectErrors({});
+    setAddingProject(true);
+    try {
+      const created = await planningApi.createProject({
+        code: newProject.code.trim(),
+        name: newProject.name.trim(),
+      });
+      setProjects(prev => [created, ...prev]);
+      setSelectedProject(created);
+      setNewUniverse(prev => ({
+        ...prev,
+        name: created.name,
+        code: prev.code || created.code || '',
+        department: prev.department || ppmDepartmentId || '',
+      }));
+      setShowAddProject(false);
+      setNewProject({ code: '', name: '' });
+      toast.success('Project added to the registry');
+    } catch (err) {
+      const msg = typeof err.response?.data === 'object'
+        ? JSON.stringify(err.response.data)
+        : 'Failed to add project';
+      toast.error(msg);
+    } finally {
+      setAddingProject(false);
+    }
   };
 
   const handleSaveUniverse = async (e) => {
@@ -174,6 +288,7 @@ function PlanningPage() {
     try {
       const payload = { ...newUniverse };
       if (!payload.department) delete payload.department;
+      if (!payload.last_audited) delete payload.last_audited;
       if (editingUniverseId) {
         const response = await planningApi.updateUniverse(editingUniverseId, payload);
         setUniverse(universe.map(u => (u.id === editingUniverseId ? response : u)));
@@ -190,6 +305,64 @@ function PlanningPage() {
     }
   };
 
+  const openImportUniverse = () => {
+    setImportFile(null);
+    setImportResult(null);
+    setShowUniverseImportModal(true);
+  };
+
+  const closeImportUniverse = () => {
+    setShowUniverseImportModal(false);
+    setImportFile(null);
+    setImportResult(null);
+    setImportBusy(false);
+  };
+
+  const handleExportUniverse = async (format) => {
+    try {
+      await planningApi.exportUniverse(format);
+      toast.success(format === 'csv' ? 'Audit universe exported as CSV' : 'Audit universe exported as Excel');
+      setShowUniverseExportModal(false);
+    } catch (err) {
+      const msg = typeof err.response?.data?.detail === 'string'
+        ? err.response.data.detail
+        : 'Failed to export audit universe';
+      toast.error(msg);
+    }
+  };
+
+  const handleImportUniverse = async (e) => {
+    e.preventDefault();
+    if (!importFile) {
+      toast.warning('Choose an .xlsx or .csv file to import');
+      return;
+    }
+    setImportBusy(true);
+    setImportResult(null);
+    try {
+      const result = await planningApi.importUniverse(importFile);
+      setImportResult(result);
+      if (result.created || result.updated) {
+        toast.success(`Import complete: ${result.created} created, ${result.updated} updated`);
+      } else {
+        toast.info('No rows were added or changed by the import');
+      }
+      if (result.errors?.length) {
+        toast.error(`${result.errors.length} row(s) could not be imported`);
+      }
+      // Refresh every tab, not just the universe list — imports can shift the
+      // due-for-re-audit badge and downstream plan/engagement pickers.
+      fetchPlanningData();
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      const msg = typeof detail === 'string' ? detail : 'Failed to import audit universe';
+      toast.error(msg);
+      setImportResult({ created: 0, updated: 0, errors: [{ row: null, message: msg }] });
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   const openAddPlan = () => {
     setEditingPlanId(null);
     setNewPlan(emptyPlan);
@@ -200,9 +373,11 @@ function PlanningPage() {
     setEditingPlanId(plan.id);
     setNewPlan({
       title: plan.title || '', year: plan.year || new Date().getFullYear(),
+      plan_scope: plan.plan_scope || 'directorate', directorate: plan.directorate || '',
       total_budget_days: plan.total_budget_days ?? 0, start_date: plan.start_date || '',
       end_date: plan.end_date || '', description: plan.description || '',
       objectives: plan.objectives || '', scope: plan.scope || '',
+      methodology: plan.methodology || '',
     });
     setShowPlanModal(true);
   };
@@ -219,6 +394,7 @@ function PlanningPage() {
     const errors = validateForm(newPlan, {
       title: { validators: [validators.required, validators.minLength(5)] },
       year: { validators: [validators.required, validators.integer] },
+      plan_scope: { validators: [validators.required] },
       total_budget_days: { validators: [validators.required, validators.integer, validators.min(0)] },
       start_date: { validators: [validators.required, validators.date] },
       end_date: {
@@ -238,12 +414,14 @@ function PlanningPage() {
     }
     setFormErrors({});
     try {
+      const payload = { ...newPlan };
+      if (!payload.directorate) delete payload.directorate;
       if (editingPlanId) {
-        const response = await planningApi.updatePlan(editingPlanId, newPlan);
+        const response = await planningApi.updatePlan(editingPlanId, payload);
         setPlans(plans.map(p => (p.id === editingPlanId ? response : p)));
         toast.success('Annual plan updated successfully');
       } else {
-        const response = await planningApi.createPlan(newPlan);
+        const response = await planningApi.createPlan(payload);
         setPlans([response, ...plans]);
         toast.success('Annual plan created successfully');
       }
@@ -428,15 +606,31 @@ function PlanningPage() {
                   <p className="card-subtitle">Complete directory of all auditable operational nodes and systems</p>
                 </div>
                 <div className="flex gap-2">
-                  {dueForAudit.length > 0 && (
+                  {dueForAudit.count > 0 && (
                     <span className="badge badge-danger flex items-center gap-1">
-                      <Clock size={13} /> {dueForAudit.length} due for re-audit
+                      <Clock size={13} /> {dueForAudit.count} due for re-audit
                     </span>
                   )}
                   {canWriteAudit && (
-                    <button className="btn btn-primary flex items-center gap-2" onClick={openAddUniverse}>
-                      <Plus size={16} /> Add Entity
-                    </button>
+                    <>
+                      <button
+                        className="btn btn-outline flex items-center gap-2"
+                        onClick={openImportUniverse}
+                        title="Bulk-import the audit universe from an Excel or CSV file"
+                      >
+                        <Upload size={16} /> Import
+                      </button>
+                      <button
+                        className="btn btn-outline flex items-center gap-2"
+                        onClick={() => setShowUniverseExportModal(true)}
+                        title="Download the audit universe as Excel or CSV"
+                      >
+                        <Download size={16} /> Export
+                      </button>
+                      <button className="btn btn-primary flex items-center gap-2" onClick={openAddUniverse}>
+                        <Plus size={16} /> Add Entity
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -528,6 +722,8 @@ function PlanningPage() {
                       <p>{plan.description}</p>
                       <div className="plan-meta-row">
                         <div><span>Year:</span><strong>{plan.year}</strong></div>
+                        <div><span>Scope:</span><strong>{plan.plan_scope_display || plan.plan_scope}</strong></div>
+                        <div><span>Directorate:</span><strong>{plan.directorate_name || '—'}</strong></div>
                         <div><span>Budget Days:</span><strong>{plan.total_budget_days} Days</strong></div>
                       </div>
                       <div className="plan-dates text-sm">
@@ -705,15 +901,93 @@ function PlanningPage() {
                 <option value="process">Business Process</option>
                 <option value="system">IT System</option>
                 <option value="project">Project</option>
+                <option value="subsidiary">Subsidiary</option>
+                <option value="regulation">Regulatory Area</option>
               </select>
             </div>
           </div>
+          {/* PPM project registry — shown for project-category entities and for
+              entities whose department is the PPM chief office. Picking or adding
+              a project fills the entity name/code and, when blank, the department
+              (EEU Projects Portfolio Management). The mini-form is an inline panel
+              (Modal is not nest-safe) inside universe-form; all its buttons are
+              type="button" so it never submits the entity form. */}
+          {(newUniverse.category === 'project' || ppmDepartmentSelected) && (
+            <div className="form-group">
+              <label className="form-label" htmlFor="universe_ppm_project">PPM Project</label>
+              <div className="flex items-center gap-2">
+                <select
+                  id="universe_ppm_project"
+                  className="form-control flex-1 min-w-0"
+                  value={selectedProject ? String(selectedProject.id) : ''}
+                  onChange={(e) => handleSelectProject(e.target.value)}
+                >
+                  <option value="">Select a saved project…</option>
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+                  ))}
+                </select>
+                {canWriteAudit && (
+                  <button
+                    type="button"
+                    className="btn btn-outline flex items-center gap-1"
+                    onClick={() => setShowAddProject(v => !v)}
+                    title="Register a new PPM project"
+                    aria-expanded={showAddProject}
+                  >
+                    <Plus size={16} />
+                    <span>Add</span>
+                  </button>
+                )}
+              </div>
+              {showAddProject && canWriteAudit && (
+                <div className="mt-3 border border-border-color rounded-lg p-3">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Register a new project — it is saved and offered in the dropdown next time.
+                  </p>
+                  <div className="form-group-row">
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="project_code">Project Code</label>
+                      <input id="project_code" type="text" className="form-control" placeholder="e.g. PRJ-SCADA-01"
+                        value={newProject.code}
+                        onChange={(e) => setNewProject({ ...newProject, code: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddProject(); } }} />
+                      {projectErrors.code && <p className="form-error">{projectErrors.code}</p>}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="project_name">Project Name</label>
+                      <input id="project_name" type="text" className="form-control" placeholder="e.g. SCADA Expansion"
+                        value={newProject.name}
+                        onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddProject(); } }} />
+                      {projectErrors.name && <p className="form-error">{projectErrors.name}</p>}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button type="button" className="btn btn-primary" onClick={handleAddProject} disabled={addingProject}>
+                      {addingProject ? 'Adding…' : 'Add Project'}
+                    </button>
+                    <button type="button" className="btn btn-outline" onClick={() => setShowAddProject(false)}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="form-group-row">
             <OrgUnitSelect
               idPrefix="universe_dept"
-              label="Associated Department"
+              label="Department / Directorate"
               value={newUniverse.department}
-              onChange={(id) => setNewUniverse({ ...newUniverse, department: id })}
+              onChange={(id) => setNewUniverse(prev => {
+                // Picking the PPM chief office implies a project-managed entity,
+                // so default the category to Project (only when it is unset).
+                const isPpm = !!(id && ppmDepartmentId && String(id) === ppmDepartmentId);
+                return {
+                  ...prev,
+                  department: id,
+                  category: isPpm && prev.category !== 'project' ? 'project' : prev.category,
+                };
+              })}
               valueLabel={editingUniverseDeptName}
             />
             <div className="form-group">
@@ -730,6 +1004,120 @@ function PlanningPage() {
               </select>
             </div>
           </div>
+          <div className="form-group-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="universe_last_audited">Last Audited</label>
+              <input id="universe_last_audited" type="date" className="form-control"
+                value={newUniverse.last_audited} onChange={(e) => setNewUniverse({ ...newUniverse, last_audited: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="universe_status">Status</label>
+              <select id="universe_status" className="form-control" value={newUniverse.status} onChange={(e) => setNewUniverse({ ...newUniverse, status: e.target.value })}>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="under_review">Under Review</option>
+              </select>
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Universe Export Modal */}
+      <Modal
+        isOpen={showUniverseExportModal}
+        onClose={() => setShowUniverseExportModal(false)}
+        title="Export Audit Universe"
+        subtitle="Download the full directory as a spreadsheet"
+      >
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          The exported file uses the same columns the import accepts, so you can
+          edit it offline and re-import the changes later.
+        </p>
+        <div className="flex flex-col gap-2">
+          <button className="btn btn-outline flex items-center gap-2" onClick={() => handleExportUniverse('xlsx')}>
+            <Download size={16} /> Excel (.xlsx)
+          </button>
+          <button className="btn btn-outline flex items-center gap-2" onClick={() => handleExportUniverse('csv')}>
+            <Download size={16} /> CSV
+          </button>
+        </div>
+      </Modal>
+
+      {/* Universe Import Modal */}
+      <Modal
+        isOpen={showUniverseImportModal}
+        onClose={closeImportUniverse}
+        title="Import Audit Universe"
+        subtitle="Bulk-create or update universe entries from an Excel (.xlsx) or CSV file"
+        footer={
+          importResult ? (
+            <button type="button" className="btn btn-primary" onClick={closeImportUniverse}>
+              Close
+            </button>
+          ) : (
+            <>
+              <button type="button" className="btn btn-outline" onClick={closeImportUniverse}>
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="universe-import-form"
+                className="btn btn-primary flex items-center gap-2"
+                disabled={importBusy}
+              >
+                {importBusy ? 'Importing…' : 'Import'}
+              </button>
+            </>
+          )
+        }
+      >
+        <form id="universe-import-form" onSubmit={handleImportUniverse}>
+          {importResult ? (
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <span className="badge badge-success">{importResult.created ?? 0} created</span>
+                <span className="badge badge-info">{importResult.updated ?? 0} updated</span>
+                <span className="badge badge-warning">{importResult.errors?.length ?? 0} errors</span>
+              </div>
+              {importResult.errors?.length > 0 && (
+                <div className="max-h-64 overflow-auto border border-rose-200 dark:border-rose-900 rounded-lg p-3 text-xs">
+                  <p className="font-semibold mb-2 text-rose-700 dark:text-rose-400">
+                    Rows that could not be imported:
+                  </p>
+                  {importResult.errors.slice(0, 20).map((err, i) => (
+                    <p key={i} className="mb-1 text-gray-700 dark:text-gray-300">
+                      {err.row != null ? <span className="font-semibold">Row {err.row}: </span> : null}
+                      {err.message}
+                    </p>
+                  ))}
+                  {importResult.errors.length > 20 && (
+                    <p className="text-gray-500 dark:text-gray-400">
+                      …and {importResult.errors.length - 20} more
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
+                Rows are matched by their unique <strong>Code</strong>: an existing code
+                updates that entry (blank cells keep the current value), and a new code
+                creates one. Use <strong>Export</strong> to download a ready-made template,
+                or create columns: code, name, category, department_code, directorate_code,
+                description, owner, risk_score, audit_frequency, last_audited, status.
+              </p>
+              <label className="form-label" htmlFor="universe_import_file">Spreadsheet File</label>
+              <input
+                id="universe_import_file"
+                type="file"
+                accept=".xlsx,.csv"
+                className="form-control"
+                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+              />
+              {importBusy && <div className="loading-spinner mt-4" />}
+            </div>
+          )}
         </form>
       </Modal>
 
@@ -761,12 +1149,26 @@ function PlanningPage() {
                 onChange={(e) => setNewPlan({ ...newPlan, year: parseInt(e.target.value) })} required />
             </div>
             <div className="form-group">
+              <label className="form-label" htmlFor="plan_scope">Plan Scope</label>
+              <select id="plan_scope" className="form-control" value={newPlan.plan_scope}
+                onChange={(e) => setNewPlan({ ...newPlan, plan_scope: e.target.value })} required>
+                <option value="directorate">Directorate Plan</option>
+                <option value="consolidated">EEU Consolidated Master Plan</option>
+              </select>
+            </div>
+          </div>
+          <OrgUnitSelect
+            idPrefix="plan_directorate"
+            label="Directorate"
+            value={newPlan.directorate}
+            onChange={(id) => setNewPlan({ ...newPlan, directorate: id })}
+          />
+          <div className="form-group-row">
+            <div className="form-group">
               <label className="form-label" htmlFor="plan_budget_days">Budget Days</label>
               <input id="plan_budget_days" type="number" className="form-control" value={newPlan.total_budget_days}
                 onChange={(e) => setNewPlan({ ...newPlan, total_budget_days: parseInt(e.target.value) })} />
             </div>
-          </div>
-          <div className="form-group-row">
             <div className="form-group">
               <label className="form-label" htmlFor="plan_start_date">Start Date</label>
               <input id="plan_start_date" type="date" className="form-control" value={newPlan.start_date}
@@ -779,9 +1181,24 @@ function PlanningPage() {
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label" htmlFor="plan_description">Description / Objectives</label>
+            <label className="form-label" htmlFor="plan_description">Description</label>
             <textarea id="plan_description" rows="2" className="form-control" value={newPlan.description}
               onChange={(e) => setNewPlan({ ...newPlan, description: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="plan_objectives">Objectives</label>
+            <textarea id="plan_objectives" rows="2" className="form-control" placeholder="Overall goals of the audit plan"
+              value={newPlan.objectives} onChange={(e) => setNewPlan({ ...newPlan, objectives: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="plan_scope_text">Scope</label>
+            <textarea id="plan_scope_text" rows="2" className="form-control" placeholder="Entities, processes and systems covered"
+              value={newPlan.scope} onChange={(e) => setNewPlan({ ...newPlan, scope: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="plan_methodology">Methodology</label>
+            <textarea id="plan_methodology" rows="2" className="form-control" placeholder="Risk-based approach, sampling and techniques"
+              value={newPlan.methodology} onChange={(e) => setNewPlan({ ...newPlan, methodology: e.target.value })} />
           </div>
         </form>
       </Modal>

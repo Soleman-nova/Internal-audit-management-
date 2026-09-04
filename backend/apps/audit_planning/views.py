@@ -2,14 +2,17 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db import transaction
 from django.db.models import Q
+from django.http import HttpResponse
 from django.utils import timezone
-from .models import AuditUniverse, AuditPlan, AuditEngagement, AuditTeamMember
+from .models import AuditUniverse, AuditPlan, AuditEngagement, AuditTeamMember, Project
 from .serializers import (AuditUniverseSerializer, AuditPlanSerializer,
-                          AuditEngagementSerializer, AuditTeamMemberSerializer)
+                          AuditEngagementSerializer, AuditTeamMemberSerializer, ProjectSerializer)
+from apps.accounts.models import Department
 from apps.common.permissions import (
     CanWriteAudit, RequiresCapability, InvolvedPartyOrCapability, APPROVE_PLANS,
 )
@@ -39,6 +42,252 @@ BLOCKS_COMPLETION = ('draft', 'open', 'in_progress', 'disputed')
 # to act on, short enough that an engagement with fifty open findings does not
 # return a wall of text.
 BLOCKERS_NAMED = 10
+
+
+# ── Audit Universe bulk import/export ────────────────────────────────────────
+#
+# A round-trip spreadsheet is flat: each row is one AuditUniverse and the two
+# Department links are identified by Department.code (unique) rather than by
+# primary key, so a directory exported today can still be re-imported after the
+# org tree has been rebuilt. Import is an upsert keyed on the unique `code`: a
+# code already in the DB updates that entry (only the columns the sheet actually
+# fills — a blank cell leaves the existing value alone, which is what makes an
+# export → edit → re-import cycle lossless for technical_metadata etc.), and a
+# new code creates an entry. Rows are validated independently so a few bad rows
+# never roll back the rest of the batch.
+
+UNIVERSE_EXPORT_HEADERS = [
+    'code', 'name', 'category', 'department_code', 'directorate_code',
+    'description', 'owner', 'risk_score', 'audit_frequency',
+    'last_audited', 'status',
+]
+
+# Accepted spreadsheet header spellings, keyed by the canonical column name the
+# header maps to. Headers are lower-cased with whitespace collapsed to single
+# underscores before matching, so 'Entity Name', 'department', 'Last audit
+# date' and 'last_audited' all resolve to the same column.
+_UNIVERSE_HEADER_ALIASES = {
+    'code': {'code', 'entity_code', 'universe_code', 'unique_code', 'ref_code'},
+    'name': {'name', 'entity_name'},
+    'category': {'category', 'entity_category', 'type'},
+    'department_code': {'department_code', 'department', 'dept', 'dept_code',
+                        'org_unit', 'org_unit_code', 'orgunit_code'},
+    'directorate_code': {'directorate_code', 'directorate', 'dir_code',
+                         'audit_directorate'},
+    'description': {'description', 'notes'},
+    'owner': {'owner', 'owner_name'},
+    'risk_score': {'risk_score', 'risk', 'initial_risk_score', 'risk_level'},
+    'audit_frequency': {'audit_frequency', 'frequency', 'audit_freq'},
+    'last_audited': {'last_audited', 'last_audit_date', 'last_audited_date',
+                     'date_last_audited'},
+    'status': {'status'},
+}
+
+
+def _col_key(text):
+    """Collapse a header/label into the token shape used for matching."""
+    return '_'.join(str(text).strip().lower().split())
+
+
+def _choice_map(choices):
+    """Map punctuation-collapsed labels onto model values.
+
+    Accepts both the stored value ('system') and its human label ('IT System'),
+    so a spreadsheet typed by hand imports cleanly.
+    """
+    mapping = {}
+    for value, label in choices:
+        mapping[_col_key(value)] = value
+        mapping[_col_key(label)] = value
+    return mapping
+
+
+_CATEGORY_MAP = _choice_map(AuditUniverse.CATEGORY_CHOICES)
+_STATUS_MAP = _choice_map(AuditUniverse.STATUS_CHOICES)
+
+
+def _canonical_column(header):
+    for column, aliases in _UNIVERSE_HEADER_ALIASES.items():
+        if _col_key(header) in aliases or _col_key(header) == column:
+            return column
+    return None
+
+
+def _read_universe_upload(upload):
+    """Read an uploaded .xlsx/.csv into canonical rows.
+
+    Returns (data, blank_rows). ``data`` is a list of (row_number, fields)
+    where fields maps canonical column names onto raw cell values ('' for blank
+    cells) and row_number is the spreadsheet's 1-based row including the header,
+    so errors can point the user at the exact row in Excel. Returns (None, None)
+    when no header row is found.
+    """
+    name = (upload.name or '').lower()
+    if name.endswith('.csv'):
+        import csv
+        import io
+        text = upload.read().decode('utf-8-sig', errors='replace')
+        upload.seek(0)
+        rows = list(csv.reader(io.StringIO(text)))
+    else:  # .xlsx
+        import openpyxl
+        workbook = openpyxl.load_workbook(upload, read_only=True, data_only=True)
+        try:
+            sheet = workbook.active
+            rows = [list(r) for r in sheet.iter_rows(values_only=True)]
+        finally:
+            workbook.close()
+
+    def blank_row(row):
+        return all(cell is None or not str(cell).strip() for cell in row)
+
+    header_index = next(
+        (i for i, row in enumerate(rows) if not blank_row(row)), None,
+    )
+    if header_index is None:
+        return None, None
+
+    columns = {}
+    for index, cell in enumerate(rows[header_index]):
+        if cell is None:
+            continue
+        column = _canonical_column(cell)
+        if column:
+            columns[index] = column
+
+    data = []
+    blank_rows = 0
+    for offset, raw in enumerate(rows[header_index + 1:], start=1):
+        if blank_row(raw):
+            blank_rows += 1
+            continue
+        fields = {
+            column: (raw[index] if index < len(raw) and raw[index] is not None else '')
+            for index, column in columns.items()
+        }
+        data.append((header_index + 1 + offset, fields))
+    return data, blank_rows
+
+
+def _resolve_department(text, dept_by_code, dept_by_name):
+    token = text.strip().lower()
+    return dept_by_code.get(token) or dept_by_name.get(token)
+
+
+def _parse_import_date(cell):
+    from datetime import date, datetime
+    if isinstance(cell, datetime):
+        return cell.date()
+    if isinstance(cell, date):
+        return cell
+    text = str(cell).strip()
+    for parser in (date.fromisoformat, datetime.fromisoformat):
+        try:
+            parsed = parser(text)
+        except ValueError:
+            continue
+        return parsed.date() if isinstance(parsed, datetime) else parsed
+    return None
+
+
+def _coerce_universe_row(fields, dept_by_code, dept_by_name, creating):
+    """Validate one imported row and map it onto model-ready values.
+
+    Returns (values, errors). ``values`` only carries columns the sheet filled,
+    so during an update a blank cell leaves that attribute untouched; Department
+    references arrive as resolved instances.
+    """
+    from decimal import Decimal, InvalidOperation
+
+    errors = []
+    values = {}
+
+    def filled(cell):
+        return cell is not None and str(cell).strip()
+
+    code = str(fields.get('code') or '').strip()
+    if not code:
+        errors.append('code is required.')
+    elif len(code) > 50:
+        errors.append('code must be at most 50 characters.')
+    else:
+        values['code'] = code
+
+    name = str(fields.get('name') or '').strip()
+    if not name:
+        if creating:
+            errors.append('name is required for new entries.')
+    elif len(name) > 300:
+        errors.append('name must be at most 300 characters.')
+    else:
+        values['name'] = name
+
+    category = fields.get('category')
+    if filled(category):
+        matched = _CATEGORY_MAP.get(_col_key(category))
+        if matched:
+            values['category'] = matched
+        else:
+            errors.append(f"invalid category '{category}'.")
+    elif creating:
+        errors.append('category is required for new entries.')
+
+    status = fields.get('status')
+    if filled(status):
+        matched = _STATUS_MAP.get(_col_key(status))
+        if matched:
+            values['status'] = matched
+        else:
+            errors.append(f"invalid status '{status}'.")
+
+    for attribute, key, limit in (
+        ('description', 'description', None),
+        ('owner', 'owner', 200),
+        ('audit_frequency', 'audit_frequency', 50),
+    ):
+        cell = fields.get(key)
+        if not filled(cell):
+            continue
+        text = str(cell).strip()
+        if limit is not None and len(text) > limit:
+            errors.append(f'{key} must be at most {limit} characters.')
+        else:
+            values[attribute] = text
+
+    risk_score = fields.get('risk_score')
+    if filled(risk_score):
+        try:
+            score = Decimal(str(risk_score).strip())
+        except InvalidOperation:
+            errors.append(f"risk_score must be a number, got '{risk_score}'.")
+        else:
+            if score < 0 or score > Decimal('999.99'):
+                errors.append('risk_score must be between 0 and 999.99.')
+            else:
+                values['risk_score'] = score
+
+    last_audited = fields.get('last_audited')
+    if filled(last_audited):
+        when = _parse_import_date(last_audited)
+        if when is None:
+            errors.append(f"last_audited must be a date (YYYY-MM-DD), got '{last_audited}'.")
+        else:
+            values['last_audited'] = when
+
+    for attribute, key in (('department', 'department_code'),
+                           ('directorate', 'directorate_code')):
+        cell = fields.get(key)
+        if not filled(cell):
+            continue
+        department = _resolve_department(str(cell).strip(), dept_by_code, dept_by_name)
+        if department is None:
+            errors.append(
+                f"unknown {key} '{cell}': match it to a Department by its code or name."
+            )
+        else:
+            values[attribute] = department
+
+    return values, errors
 
 
 class AuditUniverseViewSet(viewsets.ModelViewSet):
@@ -94,6 +343,226 @@ class AuditUniverseViewSet(viewsets.ModelViewSet):
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='export')
+    def export(self, request):
+        """Stream the audit universe as an Excel (.xlsx) or CSV file.
+
+        Honors the viewset's filterset/search/ordering, so ``?filetype=csv`` on
+        a filtered list exports exactly what the caller filtered to; with no
+        query params it is the whole universe. The column layout is the import
+        template, so an exported file can be edited and uploaded back.
+
+        The selector is deliberately *not* named ``format``: DRF treats a
+        ``?format=`` query parameter as its URL-format override and 404s a
+        request whose value matches no renderer (``xlsx``/``csv`` never would).
+        """
+        export_format = (request.query_params.get('filetype') or 'xlsx').lower()
+        if export_format not in ('xlsx', 'csv'):
+            return Response(
+                {'detail': "Unsupported format; expected 'xlsx' or 'csv'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        rows = []
+        for item in self.filter_queryset(self.get_queryset()):
+            rows.append([
+                item.code,
+                item.name,
+                item.category,
+                item.department.code if item.department else '',
+                item.directorate.code if item.directorate else '',
+                item.description,
+                item.owner,
+                item.risk_score,
+                item.audit_frequency,
+                item.last_audited.isoformat() if item.last_audited else '',
+                item.status,
+            ])
+
+        filename = f"audit_universe_{timezone.now().strftime('%Y%m%d')}"
+        if export_format == 'csv':
+            import csv
+            import io
+            buffer = io.StringIO()
+            writer = csv.writer(buffer)
+            writer.writerow(UNIVERSE_EXPORT_HEADERS)
+            writer.writerows(rows)
+            # BOM so Excel opens a CSV holding Amharic department names correctly.
+            payload = b'\xef\xbb\xbf' + buffer.getvalue().encode('utf-8')
+            content_type = 'text/csv'
+            filename += '.csv'
+        else:
+            import io
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill
+            from openpyxl.utils import get_column_letter
+            workbook = openpyxl.Workbook()
+            sheet = workbook.active
+            sheet.title = 'Audit Universe'
+            header_font = Font(bold=True, color='FFFFFF')
+            header_fill = PatternFill(fill_type='solid', fgColor='1E3A5F')
+            for column_index, header in enumerate(UNIVERSE_EXPORT_HEADERS, 1):
+                cell = sheet.cell(row=1, column=column_index, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+            for row_index, row in enumerate(rows, start=2):
+                for column_index, value in enumerate(row, 1):
+                    sheet.cell(row=row_index, column=column_index, value=value)
+            for column_index in range(1, len(UNIVERSE_EXPORT_HEADERS) + 1):
+                sheet.column_dimensions[get_column_letter(column_index)].width = 40
+            buffer = io.BytesIO()
+            workbook.save(buffer)
+            payload = buffer.getvalue()
+            content_type = (
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            filename += '.xlsx'
+
+        response = HttpResponse(payload, content_type=content_type)
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        log_audit(
+            request, 'EXPORT', None, model_name='AuditUniverse',
+            object_repr=f'Exported {len(rows)} audit universe record(s) as {export_format.upper()}.',
+        )
+        return response
+
+    @action(detail=False, methods=['post'], url_path='import',
+            parser_classes=[MultiPartParser, FormParser, JSONParser])
+    def import_universe(self, request):
+        """Bulk-create or -update universe entries from an uploaded file.
+
+        ``file`` is a multipart field holding an .xlsx or .csv whose columns are
+        the export layout above. Rows are upserted by the unique ``code`` and
+        validated independently: valid rows are committed and invalid ones are
+        returned with their spreadsheet row number, never rolling back the rest
+        of the batch.
+        """
+        upload = request.FILES.get('file')
+        if upload is None:
+            return Response(
+                {'detail': 'No file uploaded (expected a multipart field named "file").'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        filename = (upload.name or '').lower()
+        if not filename.endswith(('.xlsx', '.csv')):
+            return Response(
+                {'detail': 'Unsupported file type. Upload an .xlsx or .csv file.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            data, blank_rows = _read_universe_upload(upload)
+        except Exception as exc:
+            return Response(
+                {'detail': f'Could not read the file: {exc}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if data is None:
+            return Response(
+                {'detail': 'The file is empty — expected a header row followed by data rows.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Every non-empty row carries the same columns, so the first one tells us
+        # whether the file has the identity columns at all.
+        if data:
+            missing = [c for c in ('code', 'name') if c not in data[0][1]]
+            if missing:
+                return Response(
+                    {'detail': 'Missing required column(s): '
+                               f'{", ".join(missing)}. Expected at least code and name.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        departments = list(Department.objects.all())
+        dept_by_code = {d.code.strip().lower(): d for d in departments if d.code}
+        dept_by_name = {d.name.strip().lower(): d for d in departments}
+
+        file_codes = {
+            str(fields.get('code') or '').strip() for _, fields in data
+        }
+        existing = {
+            universe.code: universe
+            for universe in AuditUniverse.objects.filter(code__in=file_codes)
+        }
+
+        created = updated = 0
+        errors = []
+        for row_number, fields in data:
+            code = str(fields.get('code') or '').strip()
+            target = existing.get(code)
+            values, row_errors = _coerce_universe_row(
+                fields, dept_by_code, dept_by_name, creating=target is None,
+            )
+            if row_errors:
+                errors.extend(
+                    {'row': row_number, 'message': message}
+                    for message in row_errors
+                )
+                continue
+
+            try:
+                with transaction.atomic():
+                    if target is None:
+                        AuditUniverse.objects.create(**values)
+                        created += 1
+                    else:
+                        changed = False
+                        for attribute, value in values.items():
+                            if attribute == 'code':
+                                continue  # identity key, never rewritten
+                            if getattr(target, attribute) != value:
+                                setattr(target, attribute, value)
+                                changed = True
+                        if changed:
+                            target.save()
+                            updated += 1
+            except Exception as exc:
+                errors.append(
+                    {'row': row_number, 'message': f'could not be imported: {exc}'}
+                )
+
+        log_audit(
+            request, 'IMPORT', None, model_name='AuditUniverse',
+            object_repr=(
+                f'Imported {upload.name}: {created} created, {updated} updated, '
+                f'{len(errors)} error(s).'
+            )[:300],
+        )
+        return Response({
+            'total_rows': len(data),
+            'blank_rows': blank_rows,
+            'created': created,
+            'updated': updated,
+            'errors': errors,
+        })
+
+
+class ProjectViewSet(viewsets.ModelViewSet):
+    """PPM project registry feeding the Audit Universe project dropdown."""
+    queryset = Project.objects.select_related('department').all()
+    serializer_class = ProjectSerializer
+    permission_classes = [CanWriteAudit]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['department']
+    search_fields = ['name', 'code']
+    ordering = ['name']
+
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            obj = serializer.save()
+            log_audit(self.request, 'CREATE', obj)
+
+    def perform_update(self, serializer):
+        with transaction.atomic():
+            obj = serializer.save()
+            log_audit(self.request, 'UPDATE', obj)
+
+    def perform_destroy(self, instance):
+        with transaction.atomic():
+            log_audit(self.request, 'DELETE', instance)
+            instance.delete()
 
 
 class AuditPlanViewSet(viewsets.ModelViewSet):

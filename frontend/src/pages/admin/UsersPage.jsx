@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { usersApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
@@ -8,7 +9,7 @@ import DataTable from '../../components/ui/DataTable';
 import Badge from '../../components/ui/Badge';
 import FormField from '../../components/ui/FormField';
 import OrgUnitSelect from '../../components/ui/OrgUnitSelect';
-import { UserPlus, Shield, Activity, UserCheck, Edit2, Key } from 'lucide-react';
+import { UserPlus, Shield, Activity, UserCheck, Edit2, Key, ArrowRight } from 'lucide-react';
 
 // Turn a DRF error body into one readable sentence. Raw JSON.stringify output
 // ("{"email":["..."]}") is unreadable in a toast.
@@ -38,7 +39,7 @@ function UsersPage() {
   const { t } = useI18n();
   const [users, setUsers] = useState([]);
   const [formErrors, setFormErrors] = useState({});
-  const [auditTrail, setAuditTrail] = useState([]);
+  const [accountActivity, setAccountActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -82,12 +83,19 @@ function UsersPage() {
     try {
       // Departments are no longer fetched here — OrgUnitSelect loads the org
       // tree itself through useOrgUnits and shares one request across forms.
+      //
+      // model_name: 'User' is what makes this a *security* log rather than a
+      // second copy of the Audit Trail page. log_audit stores
+      // instance.__class__.__name__, and every account event — login, logout,
+      // create, edit, activate, deactivate, password reset/change, profile
+      // update — is logged against the User instance. Drop this filter and the
+      // panel silently becomes the global feed again.
       const [usersRes, trailRes] = await Promise.all([
         usersApi.getUsers(),
-        usersApi.getAuditTrail()
+        usersApi.getAuditTrail({ model_name: 'User', page_size: 10 })
       ]);
       setUsers(usersRes || []);
-      setAuditTrail(trailRes?.results || trailRes || []);
+      setAccountActivity(trailRes?.results || trailRes || []);
     } catch (err) {
       toast.error('Failed to load user management data');
     } finally {
@@ -290,31 +298,36 @@ function UsersPage() {
         </div>
       </div>
 
-      {/* Audit Trail Section */}
+      {/* Account activity — the same AuditTrail record as the Audit Trail page,
+          filtered to User events. The full history lives on that page. */}
       <div className="card mt-6">
-        <div className="card-header">
-          <h3><Activity size={18} className="inline mr-2 text-accent" /> {t('securityAuditLog')}</h3>
-          <p className="card-subtitle">{t('realTimeLog')}</p>
+        <div className="card-header justify-between">
+          <div>
+            <h3><Activity size={18} className="inline mr-2 text-accent" /> {t('securityAuditLog')}</h3>
+            <p className="card-subtitle">{t('accountActivitySubtitle')}</p>
+          </div>
+          <Link to="/audit-trail" className="btn btn-sm btn-outline flex items-center gap-1.5">
+            {t('viewFullTrail')} <ArrowRight size={14} />
+          </Link>
         </div>
 
         <div className="table-responsive mt-3">
           <table className="table table-sm">
             <thead>
               <tr>
-                <th>Timestamp</th>
-                <th>Operator</th>
-                <th>Action</th>
-                <th>Impacted Module</th>
-                <th>Object Representation</th>
+                <th>{t('timestamp')}</th>
+                <th>{t('operator')}</th>
+                <th>{t('action')}</th>
+                <th>{t('objectRepresentation')}</th>
               </tr>
             </thead>
             <tbody>
-              {auditTrail.length === 0 ? (
+              {accountActivity.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="text-center py-4 text-muted">No audit trail records registered.</td>
+                  <td colSpan="4" className="text-center py-4 text-muted">{t('noAccountActivity')}</td>
                 </tr>
               ) : (
-                auditTrail.map(log => (
+                accountActivity.map(log => (
                   <tr key={log.id}>
                     <td>{new Date(log.timestamp).toLocaleString()}</td>
                     <td><strong>{log.user_email || 'System'}</strong></td>
@@ -323,7 +336,6 @@ function UsersPage() {
                         {log.action}
                       </span>
                     </td>
-                    <td>{log.model_name}</td>
                     <td><span className="font-mono text-xs">{log.object_repr}</span></td>
                   </tr>
                 ))

@@ -162,6 +162,7 @@ class AuditTrail(models.Model):
         ('LOGIN', 'Login'),
         ('LOGOUT', 'Logout'),
         ('EXPORT', 'Export'),
+        ('IMPORT', 'Import'),
         ('APPROVE', 'Approve'),
         ('REJECT', 'Reject'),
     ]
