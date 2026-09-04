@@ -4,6 +4,7 @@ from . import views
 
 router = DefaultRouter()
 router.register('universe', views.AuditUniverseViewSet, basename='universe')
+router.register('projects', views.ProjectViewSet, basename='project')
 router.register('plans', views.AuditPlanViewSet, basename='plan')
 router.register('engagements', views.AuditEngagementViewSet, basename='engagement')
 

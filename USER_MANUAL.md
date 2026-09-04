@@ -579,6 +579,13 @@ Filter by role, department and active status; search by Employee ID, email or na
 
 Every action here is written to the audit trail with your name against it.
 
+### Security Audit Log
+
+The card at the bottom of this page is a scoped view of the same Audit Trail table described in §13, filtered to **account and sign-in events only** — sign-ins, sign-outs, account creation, edits, activation, deactivation and password resets or changes. It lists the ten most recent entries, newest first. Treat it as a glance while you administer accounts, not as a search tool.
+
+- For the full history — with search, IP address, role and every kind of action — open the **Audit Trail** page (§13). It reads the same records; the two are not separate logs.
+- **View full trail** jumps straight there from this card.
+
 ---
 
 ## 13. Audit Trail
@@ -597,7 +604,7 @@ Every action here is written to the audit trail with your name against it.
 | Timestamp | |
 | IP address, User agent | Where the request came from. |
 
-Newest first, 20 rows per page. Filter by model, user or action.
+Newest first, 25 rows per page. Filter by model, user or action. The **Security Audit Log** card in §12 reads this same table filtered to account events — the two views are one log, not two.
 
 Entries are written as a side effect of real work throughout the system — approvals, user administration, procedure edits, exports — so the trail reflects activity rather than being maintained by hand.
 

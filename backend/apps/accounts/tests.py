@@ -592,6 +592,63 @@ class ProfileViewTest(TestCase):
         )
 
 
+class AuditTrailFilterTest(TestCase):
+    """The Security Audit Log panel is scoped to account events.
+
+    User Management renders its panel with ``getAuditTrail({ model_name: 'User' })``,
+    which is what keeps it a *security* log rather than a second copy of the Audit
+    Trail page. Nothing previously asserted that ``?model_name=`` filtered correctly,
+    so a future edit that drops the parameter would silently turn the panel back into
+    the global feed. This locks the contract.
+    """
+
+    URL = '/api/auth/audit-trail/'
+
+    def setUp(self):
+        self.client = APIClient()
+        self.department = Department.objects.create(name='Finance', code='FIN')
+        self.admin = User.objects.create_user(
+            username='audit-admin', employee_id='A001', email='admin@test.com',
+            password='pass', role=Role.ADMIN, department=self.department,
+        )
+        self.operator = User.objects.create_user(
+            username='audit-operator', employee_id='A002', email='operator@test.com',
+            password='pass', role=Role.AUDIT_MANAGER, department=self.department,
+        )
+        self.client.force_authenticate(user=self.admin)
+
+    def test_model_name_filter_returns_only_user_rows(self):
+        AuditTrail.objects.create(
+            user=self.admin, action='LOGIN', model_name='User',
+            object_id=str(self.admin.id), object_repr='Audit admin signed in',
+        )
+        AuditTrail.objects.create(
+            user=self.admin, action='UPDATE', model_name='User',
+            object_id=str(self.operator.id), object_repr='Deactivated user A002',
+        )
+        AuditTrail.objects.create(
+            user=self.admin, action='CREATE', model_name='AuditFinding',
+            object_id='1', object_repr='Finding on procurement',
+        )
+        AuditTrail.objects.create(
+            user=self.admin, action='APPROVE', model_name='AuditPlan',
+            object_id='1', object_repr='Annual audit plan approved',
+        )
+
+        response = self.client.get(self.URL, {'model_name': 'User'})
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data['results']
+        self.assertEqual(len(results), 2)
+        self.assertTrue(all(row['model_name'] == 'User' for row in results))
+        self.assertEqual({row['action'] for row in results}, {'LOGIN', 'UPDATE'})
+
+    def test_unauthenticated_requests_are_rejected(self):
+        self.client.force_authenticate(user=None)
+        response = self.client.get(self.URL, {'model_name': 'User'})
+        self.assertEqual(response.status_code, 401)
+
+
 class LoginThrottleTest(TestCase):
     """Login is rate limited per client.
 

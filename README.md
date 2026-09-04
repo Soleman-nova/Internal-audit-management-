@@ -271,7 +271,7 @@ All endpoints live under `/api/`. Authenticate with `Authorization: Bearer <acce
 | `GET` | `departments/` | authenticated | Filter `unit_type`, `directorate_type`, `parent`, `is_active`. |
 | `POST` `PATCH` `DELETE` | `departments/` | `write_audit` | |
 | `GET` | `departments/tree/` | authenticated | Whole hierarchy, unpaginated. |
-| `GET` | `audit-trail/` | `view_audit_trail` | Read-only, **including reads**. Filter `model_name`, `user`, `action`. |
+| `GET` | `audit-trail/` | `view_audit_trail` | Read-only, **including reads**. Filter `?model_name=` and `?user=` (django-filter exact); `?action=` matches case-insensitively; `?search=` covers the object representation and the acting user's email and name. The User Management page's Security Audit Log panel calls this with `model_name=User`. |
 
 ### Planning — `/api/planning/`
 

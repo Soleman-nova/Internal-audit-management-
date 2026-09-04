@@ -8,12 +8,13 @@ unresolved), and the auditee read scoping on the engagement calendar.
 """
 import datetime
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 
 from apps.accounts.models import AuditTrail, Role
 from apps.audit_planning.models import (
-    AuditEngagement, AuditPlan, AuditTeamMember, AuditUniverse,
+    AuditEngagement, AuditPlan, AuditTeamMember, AuditUniverse, Project,
 )
 from apps.audit_planning.views import BLOCKS_COMPLETION
 from apps.common.role_fixtures import (
@@ -23,6 +24,7 @@ from apps.common.role_fixtures import (
 from apps.notifications.models import Notification
 
 UNIVERSE_URL = '/api/planning/universe/'
+PROJECTS_URL = '/api/planning/projects/'
 PLANS_URL = '/api/planning/plans/'
 ENGAGEMENTS_URL = '/api/planning/engagements/'
 
@@ -95,6 +97,266 @@ class AuditUniverseRoleAccessTest(RoleFixtureMixin, TestCase):
             .values_list('action', flat=True)
         )
         self.assertCountEqual(actions, ['CREATE', 'UPDATE', 'DELETE'])
+
+
+class AuditUniverseTransferTest(RoleFixtureMixin, TestCase):
+    """Bulk import/export of the universe register — Excel (.xlsx) and CSV.
+
+    Export streams the whole register in the import's column layout; import
+    upserts by the unique ``code`` and commits valid rows while reporting the
+    invalid ones with their spreadsheet row numbers.
+    """
+
+    EXPORT_URL = UNIVERSE_URL + 'export/'
+    IMPORT_URL = UNIVERSE_URL + 'import/'
+    # Must match the canonical header order the exporter writes.
+    CSV_HEADER = ('code,name,category,department_code,directorate_code,description,'
+                  'owner,risk_score,audit_frequency,last_audited,status')
+
+    def make_csv(self, rows, filename='universe.csv'):
+        """Build an uploaded CSV from a list of row lists (each cell stringified)."""
+        text = '\n'.join(
+            ','.join('' if cell is None else str(cell) for cell in row)
+            for row in rows
+        )
+        return SimpleUploadedFile(
+            filename, text.encode('utf-8'), content_type='text/csv',
+        )
+
+    @staticmethod
+    def make_xlsx(rows, filename='universe.xlsx'):
+        from io import BytesIO
+
+        import openpyxl
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        for row in rows:
+            sheet.append(row)
+        buffer = BytesIO()
+        workbook.save(buffer)
+        return SimpleUploadedFile(
+            filename, buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+    def setUp(self):
+        super().setUp()
+        self.entry = make_universe(
+            department=self.department, name='Existing Process', code=f'UNV-X-{next_seq()}',
+        )
+
+    def test_export_csv_round_trips_the_registry(self):
+        response = self.as_user(self.manager).get(self.EXPORT_URL, {'filetype': 'csv'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        self.assertIn('attachment', response['Content-Disposition'])
+        # The exporter writes a UTF-8 BOM so Excel opens Amharic text correctly.
+        text = response.content.decode('utf-8-sig')
+        self.assertTrue(text.startswith(self.CSV_HEADER))
+        self.assertIn(self.entry.code, text)
+        self.assertIn(self.entry.name, text)
+        self.assertIn(self.department.code, text)
+
+    def test_export_xlsx_contains_the_rows(self):
+        from io import BytesIO
+
+        import openpyxl
+        response = self.as_user(self.manager).get(self.EXPORT_URL, {'filetype': 'xlsx'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        workbook = openpyxl.load_workbook(BytesIO(response.content), read_only=True)
+        sheet = workbook.active
+        rows = list(sheet.iter_rows(values_only=True))
+        codes = [str(r[0]) for r in rows if r[0] is not None]
+        self.assertIn(self.entry.code, codes)
+
+    def test_export_rejects_unknown_format(self):
+        response = self.as_user(self.manager).get(self.EXPORT_URL, {'filetype': 'pdf'})
+        self.assertEqual(response.status_code, 400)
+
+    def test_import_creates_new_rows_from_csv(self):
+        code = f'UNV-IMP-{next_seq()}'
+        response = self.as_user(self.auditor).post(self.IMPORT_URL, {
+            'file': self.make_csv([
+                self.CSV_HEADER.split(','),
+                [code, 'Imported Process', 'process', self.department.code, '', '',
+                 '', '3.5', 'Annually', '2025-01-01', 'active'],
+            ]),
+        })
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['created'], 1)
+        self.assertEqual(response.data['updated'], 0)
+        self.assertEqual(response.data['errors'], [])
+        imported = AuditUniverse.objects.get(code=code)
+        self.assertEqual(imported.name, 'Imported Process')
+        self.assertEqual(imported.department, self.department)
+        self.assertEqual(str(imported.risk_score), '3.50')
+
+    def test_import_creates_from_xlsx(self):
+        code = f'UNV-XLS-{next_seq()}'
+        response = self.as_user(self.manager).post(self.IMPORT_URL, {
+            'file': self.make_xlsx([
+                self.CSV_HEADER.split(','),
+                [code, 'Imported From Excel', 'system', '', '', '', 'Owner', 4, 'Quarterly', '2025-03-15', 'active'],
+            ]),
+        })
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['created'], 1)
+        entry = AuditUniverse.objects.get(code=code)
+        self.assertEqual(entry.category, 'system')
+        self.assertEqual(entry.owner, 'Owner')
+
+    def test_import_upserts_by_code_without_growing_the_table(self):
+        # Columns: code, name, category, dept, dir, description, OWNER,
+        # risk_score, frequency, last_audited, status.
+        rows = [
+            self.CSV_HEADER.split(','),
+            [self.entry.code, self.entry.name, 'process', self.department.code, '',
+             '', 'Renamed offline', '4.0', 'Annually', '', 'active'],
+        ]
+        before = AuditUniverse.objects.count()
+
+        # A fresh SimpleUploadedFile per request — a reused one is already read
+        # past its end and uploads as empty on the second call.
+        first = self.as_user(self.manager).post(self.IMPORT_URL, {'file': self.make_csv(rows)})
+        self.assertEqual(first.data['updated'], 1, first.data)
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.owner, 'Renamed offline')
+        self.assertEqual(str(self.entry.risk_score), '4.00')
+
+        # Blank cells on the update leave the existing value alone (a lossless
+        # export -> edit -> re-import cycle), and re-running is idempotent.
+        second = self.as_user(self.manager).post(self.IMPORT_URL, {'file': self.make_csv(rows)})
+        self.assertEqual(second.data['updated'], 0, second.data)
+
+        self.assertEqual(AuditUniverse.objects.count(), before)
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.owner, 'Renamed offline')
+
+    def test_import_commits_valid_rows_and_reports_the_bad_ones(self):
+        good_code = f'UNV-GOOD-{next_seq()}'
+        response = self.as_user(self.manager).post(self.IMPORT_URL, {
+            'file': self.make_csv([
+                self.CSV_HEADER.split(','),
+                [good_code, 'Good Row', 'process', self.department.code, '', '', '', '3', '', '', 'active'],
+                [f'UNV-BAD-{next_seq()}', 'Bad Category', 'bogus', '', '', '', '', '3', '', '', 'active'],
+                [f'UNV-BAD-{next_seq()}', 'Bad Department', 'process', 'NO-SUCH-DEPT', '', '', '', '3', '', '', 'active'],
+            ]),
+        })
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['created'], 1)
+        self.assertTrue(AuditUniverse.objects.filter(code=good_code).exists())
+        messages = {e['message'] for e in response.data['errors']}
+        self.assertIn("invalid category 'bogus'", str(messages))
+        self.assertTrue(any('unknown department_code' in m for m in messages))
+        # Both bad rows must be reported with their spreadsheet row numbers
+        # (header is row 1, so the bad rows sit at 3 and 4).
+        self.assertEqual({e['row'] for e in response.data['errors']}, {3, 4})
+
+    def test_import_rejects_missing_identity_columns(self):
+        response = self.as_user(self.manager).post(self.IMPORT_URL, {
+            'file': self.make_csv([['name', 'category'], ['Only A Name', 'process']]),
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('code', response.data['detail'])
+
+    def test_import_rejects_unhandled_file_type(self):
+        upload = SimpleUploadedFile('universe.txt', b'code,name\n', content_type='text/plain')
+        response = self.as_user(self.manager).post(self.IMPORT_URL, {'file': upload})
+        self.assertEqual(response.status_code, 400)
+
+    def test_import_requires_write_audit_export_stays_open(self):
+        code = f'UNV-NOPE-{next_seq()}'
+        response = self.as_user(self.auditee).post(self.IMPORT_URL, {
+            'file': self.make_csv([
+                self.CSV_HEADER.split(','),
+                [code, 'Blocked', 'process', '', '', '', '', '3', '', '', 'active'],
+            ]),
+        })
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(AuditUniverse.objects.filter(code=code).exists())
+        # Reads (export) are open to every authenticated role.
+        self.assertEqual(self.as_user(self.auditee).get(self.EXPORT_URL).status_code, 200)
+
+    def test_import_and_export_are_audit_logged(self):
+        client = self.as_user(self.auditor)
+        client.post(self.IMPORT_URL, {
+            'file': self.make_csv([
+                self.CSV_HEADER.split(','),
+                [f'UNV-TRAIL-{next_seq()}', 'Trailed Import', 'process', self.department.code,
+                 '', '', '', '', '', '', 'active'],
+            ]),
+        })
+        client.get(self.EXPORT_URL)
+
+        actions = list(
+            AuditTrail.objects.filter(model_name='AuditUniverse').values_list('action', flat=True)
+        )
+        self.assertIn('IMPORT', actions)
+        self.assertIn('EXPORT', actions)
+
+
+class ProjectRegistryRoleAccessTest(RoleFixtureMixin, TestCase):
+    """PPM project registry: WRITE_AUDIT gates writes; reads open to every role."""
+
+    def test_every_role_can_list(self):
+        Project.objects.create(code=f'PRJ-LIST-{next_seq()}', name='Listable Project')
+        self.assert_status_by_role(
+            {role: 200 for role in self.users},
+            lambda client, role: client.get(PROJECTS_URL),
+        )
+
+    def test_only_write_audit_roles_can_create(self):
+        def create(client, role):
+            # Unique per role: five roles POSTing the same code would fail on the
+            # unique constraint rather than on the permission.
+            return client.post(PROJECTS_URL, {
+                'code': f'PRJ-{role[:3].upper()}-{next_seq()}',
+                'name': f'Project for {role}',
+                'department': self.department.id,
+            }, format='json')
+
+        self.assert_status_by_role({
+            Role.ADMIN: 201,
+            Role.AUDIT_MANAGER: 201,
+            Role.SUPERVISOR: 201,
+            Role.AUDITOR: 201,
+            Role.AUDITEE: 403,
+        }, create)
+
+    def test_auditee_post_does_not_persist(self):
+        self.as_user(self.auditee).post(PROJECTS_URL, {
+            'code': f'PRJ-AUD-{next_seq()}', 'name': 'No',
+        }, format='json')
+        self.assertFalse(Project.objects.filter(name='No').exists())
+
+    def test_created_project_is_persisted_and_relistable(self):
+        payload = {'code': f'PRJ-PERSIST-{next_seq()}', 'name': 'Persistent Project'}
+        created = self.as_user(self.auditor).post(PROJECTS_URL, payload, format='json')
+        self.assertEqual(created.status_code, 201)
+        listed = self.as_user(self.auditor).get(PROJECTS_URL).data['results']
+        codes = [p['code'] for p in listed]
+        self.assertIn(payload['code'], codes)
+
+    def test_duplicate_project_code_rejected(self):
+        code = f'PRJ-DUP-{next_seq()}'
+        Project.objects.create(code=code, name='First')
+        response = self.as_user(self.auditor).post(PROJECTS_URL, {
+            'code': code, 'name': 'Second',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Project.objects.filter(code=code).count(), 1)
+
+    def test_project_create_is_audit_logged(self):
+        self.as_user(self.auditor).post(PROJECTS_URL, {
+            'code': f'PRJ-LOG-{next_seq()}', 'name': 'Logged',
+        }, format='json')
+        self.assertTrue(
+            AuditTrail.objects.filter(model_name='Project', action='CREATE').exists()
+        )
 
 
 class DueForReAuditTest(RoleFixtureMixin, TestCase):

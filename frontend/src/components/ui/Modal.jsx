@@ -40,6 +40,18 @@ export const Modal = ({
   const headingId = useId();
   const descriptionId = useId();
 
+  // Keep the latest `onClose` without letting it drive the focus effect below.
+  // Callers hand in fresh inline closures every render (e.g. PlanningPage's
+  // `closeUniverseModal`), so listing `onClose` in that effect's dependency
+  // array made it tear down and re-run on *every* keystroke in a modal field:
+  // its cleanup restored focus to the previously-focused button behind the
+  // dialog, yanking the caret out of the input after one character. Reading it
+  // through a ref decouples focus management from parent re-renders.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!isOpen) return undefined;
 
@@ -49,8 +61,8 @@ export const Modal = ({
     const focusable = () => Array.from(dialogRef.current?.querySelectorAll(FOCUSABLE) || []);
 
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && onClose) {
-        onClose();
+      if (e.key === 'Escape' && onCloseRef.current) {
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab') return;
@@ -95,7 +107,11 @@ export const Modal = ({
       document.removeEventListener('keydown', handleKeyDown, true);
       previouslyFocused.current?.focus?.();
     };
-  }, [isOpen, onClose]);
+    // Deliberately not depending on `onClose`: callers pass it as a fresh inline
+    // closure each render, and having it here re-ran this effect (and its
+    // focus-restoring cleanup) after every keystroke in a modal input. The
+    // latest handler is read through onCloseRef instead.
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

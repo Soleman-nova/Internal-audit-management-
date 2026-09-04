@@ -221,3 +221,31 @@ class AuditTeamMember(models.Model):
 
     class Meta:
         unique_together = ['engagement', 'user']
+
+
+class Project(models.Model):
+    """Persistent registry of PPM projects.
+
+    Not linked to AuditUniverse by any FK: a universe row with category='project'
+    is auto-filled (name/code/department) from an entry here, but the universe row
+    is deliberately an independent record.
+    """
+    code = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=300)
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text='EEU Projects Portfolio Management node (or owning unit) for this project.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.code} - {self.name}'
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'PPM Project'
+        verbose_name_plural = 'PPM Projects'
