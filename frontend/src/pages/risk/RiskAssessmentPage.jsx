@@ -76,7 +76,7 @@ function RiskAssessmentPage() {
       ]);
       setParameters(paramRes || []);
       setAssessments(assessRes || []);
-      setUniverse(uniRes || []);
+      setUniverse(uniRes?.items || []);
       setHeatmapData(heatRes || []);
       setSummary(sumRes || {});
       setSelfAssessments(selfRes || []);

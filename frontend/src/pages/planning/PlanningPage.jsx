@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { planningApi, usersApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
@@ -10,6 +10,7 @@ import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
+import Pagination from '../../components/ui/Pagination';
 import OrgUnitSelect from '../../components/ui/OrgUnitSelect';
 import { useOrgUnits } from '../../hooks/useOrgUnits';
 import { Calendar, Plus, Users, Shield, Clock, Pencil, Upload, Download } from 'lucide-react';
@@ -50,13 +51,28 @@ function PlanningPage() {
   }
 
   const [formErrors, setFormErrors] = useState({});
+  // The three arrays below hold ONLY the current page slice of each tab. The
+  // per-tab count/page/pageSize/nonce drive server-side pagination (same pattern
+  // as AuditTrailPage). The modal dropdowns must NOT read these slices — they use
+  // the full universeCatalog/plansCatalog reference sets loaded at page_size 1000.
   const [universe, setUniverse] = useState([]);
   const [plans, setPlans] = useState([]);
   const [engagements, setEngagements] = useState([]);
-  // The server's total, not this page's slice — the tab label shows it and
-  // `engagements.length` stops at DRF's PAGE_SIZE.
+  const [universeCount, setUniverseCount] = useState(0);
+  const [plansCount, setPlansCount] = useState(0);
+  // Server total shown in the Engagements tab label (never the slice length).
   const [engagementCount, setEngagementCount] = useState(0);
-  const [engagementsTruncated, setEngagementsTruncated] = useState(false);
+  const [universePage, setUniversePage] = useState(1);
+  const [universePageSize, setUniversePageSize] = useState(25);
+  const [universeNonce, setUniverseNonce] = useState(0);
+  const [plansPage, setPlansPage] = useState(1);
+  const [plansPageSize, setPlansPageSize] = useState(25);
+  const [plansNonce, setPlansNonce] = useState(0);
+  const [engagementsPage, setEngagementsPage] = useState(1);
+  const [engagementsPageSize, setEngagementsPageSize] = useState(25);
+  const [engagementsNonce, setEngagementsNonce] = useState(0);
+  const [universeCatalog, setUniverseCatalog] = useState([]);
+  const [plansCatalog, setPlansCatalog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState([]);
   const [dueForAudit, setDueForAudit] = useState({ items: [], count: 0, hasMore: false });
@@ -112,9 +128,9 @@ function PlanningPage() {
   const [teamMember, setTeamMember] = useState({ user: '', role: 'member', allocated_days: 0 });
   const [engagementTeam, setEngagementTeam] = useState([]);
 
-  useEffect(() => {
-    fetchPlanningData();
-  }, []);
+  // Tab slices and reference data are loaded by the per-tab effects defined
+  // below their loaders. Each tab keeps its own page state, so switching tabs
+  // never loses the user's place.
 
   // Scroll the deep-linked record into view once the fetch has landed —
   // otherwise the notification drops the user on the right tab with no
@@ -125,33 +141,142 @@ function PlanningPage() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [loading, activeTab, deepLinkKey]);
 
-  const fetchPlanningData = async () => {
+  // Guard flags so the deep-link page scans below run at most once per link
+  // (the resulting setXPage(...) refetches through the effect, which would
+  // otherwise re-enter the scan forever).
+  const plansLocateDone = useRef(false);
+  const engagementsLocateDone = useRef(false);
+
+  // Per-tab server-paginated loaders. Each mirrors AuditTrailPage: fetch the
+  // page, store the slice + the server total, and clamp the page if a mutation
+  // shrank the list. Bumping the tab's nonce forces a refetch even when the
+  // page/pageSize are unchanged.
+  const fetchUniverseTab = async () => {
     setLoading(true);
     try {
-      // Departments are not fetched here — OrgUnitSelect loads the org tree
-      // itself through useOrgUnits and shares one request across forms.
-      const [univRes, plansRes, engRes, usersRes, dueRes, projectsRes] = await Promise.all([
-        planningApi.getUniverse(),
-        planningApi.getPlans(),
-        planningApi.getEngagements(),
-        usersApi.getUsers(),
-        planningApi.getDueForReAudit(),
-        planningApi.getProjects(),
-      ]);
-      setUniverse(univRes || []);
-      setPlans(plansRes || []);
-      setEngagements(engRes.items);
-      setEngagementCount(engRes.count);
-      setEngagementsTruncated(engRes.hasMore);
-      setAllUsers(usersRes || []);
-      setDueForAudit(dueRes || { items: [], count: 0, hasMore: false });
-      setProjects(projectsRes || []);
+      const res = await planningApi.getUniverse({ page: universePage, page_size: universePageSize });
+      setUniverse(res.items || []);
+      setUniverseCount(res.count || 0);
+      const last = Math.max(1, Math.ceil((res.count || 0) / universePageSize));
+      if (universePage > last) setUniversePage(last);
     } catch (err) {
-      toast.error("Failed to load planning data");
+      toast.error('Failed to load planning data');
     } finally {
       setLoading(false);
     }
   };
+
+  const fetchPlansTab = async () => {
+    setLoading(true);
+    try {
+      const res = await planningApi.getPlans({ page: plansPage, page_size: plansPageSize });
+      setPlans(res.items || []);
+      setPlansCount(res.count || 0);
+      const last = Math.max(1, Math.ceil((res.count || 0) / plansPageSize));
+      if (plansPage > last) setPlansPage(last);
+      // Deep link (?plan=N): if the target plan is on a later page, jump to it.
+      if (focusPlanId
+        && !res.items.some(p => String(p.id) === String(focusPlanId))
+        && res.hasMore && !plansLocateDone.current) {
+        plansLocateDone.current = true;
+        const cap = Math.min(last, 200);
+        for (let p = plansPage + 1; p <= cap; p++) {
+          const r = await planningApi.getPlans({ page: p, page_size: plansPageSize });
+          if (r.items.some(p => String(p.id) === String(focusPlanId))) { setPlansPage(p); break; }
+          if (!r.hasMore) break;
+        }
+      }
+    } catch (err) {
+      toast.error('Failed to load planning data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchEngagementsTab = async () => {
+    setLoading(true);
+    try {
+      const res = await planningApi.getEngagements({ page: engagementsPage, page_size: engagementsPageSize });
+      setEngagements(res.items || []);
+      setEngagementCount(res.count || 0);
+      const last = Math.max(1, Math.ceil((res.count || 0) / engagementsPageSize));
+      if (engagementsPage > last) setEngagementsPage(last);
+      // Deep link (?engagement=N): same one-shot jump as the plans tab.
+      if (focusEngagementId
+        && !res.items.some(e => String(e.id) === String(focusEngagementId))
+        && res.hasMore && !engagementsLocateDone.current) {
+        engagementsLocateDone.current = true;
+        const cap = Math.min(last, 200);
+        for (let p = engagementsPage + 1; p <= cap; p++) {
+          const r = await planningApi.getEngagements({ page: p, page_size: engagementsPageSize });
+          if (r.items.some(e => String(e.id) === String(focusEngagementId))) { setEngagementsPage(p); break; }
+          if (!r.hasMore) break;
+        }
+      }
+    } catch (err) {
+      toast.error('Failed to load planning data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Reference data that never paginates: users (lead/supervisor pickers), the
+  // PPM project registry, the due-for-re-audit badge, and the FULL universe/plan
+  // catalogs that back the modal dropdowns (the arrays in state are slices).
+  const fetchReferences = async () => {
+    try {
+      const [usersRes, projectsRes, dueRes, univCatRes, plansCatRes] = await Promise.all([
+        usersApi.getUsers(),
+        planningApi.getProjects(),
+        planningApi.getDueForReAudit(),
+        planningApi.getUniverse(),
+        planningApi.getPlans(),
+      ]);
+      setAllUsers(usersRes || []);
+      setProjects(projectsRes || []);
+      setDueForAudit(dueRes || { items: [], count: 0, hasMore: false });
+      setUniverseCatalog(univCatRes.items || []);
+      setPlansCatalog(plansCatRes.items || []);
+    } catch (err) {
+      toast.error('Failed to load planning data');
+    }
+  };
+
+  // Refetch a tab after a mutation even when page/pageSize are unchanged.
+  // resetPage restarts at page 1 when a new row's position under the current
+  // ordering is unpredictable (create/import).
+  const reloadTab = (tab, { resetPage = false } = {}) => {
+    if (tab === 'universe') {
+      if (resetPage) setUniversePage(1);
+      setUniverseNonce(n => n + 1);
+    } else if (tab === 'plans') {
+      if (resetPage) setPlansPage(1);
+      setPlansNonce(n => n + 1);
+    } else {
+      if (resetPage) setEngagementsPage(1);
+      setEngagementsNonce(n => n + 1);
+    }
+  };
+
+  useEffect(() => {
+    fetchUniverseTab();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [universePage, universePageSize, universeNonce]);
+
+  useEffect(() => {
+    fetchPlansTab();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plansPage, plansPageSize, plansNonce]);
+
+  useEffect(() => {
+    fetchEngagementsTab();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engagementsPage, engagementsPageSize, engagementsNonce]);
+
+  useEffect(() => {
+    fetchReferences();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const auditors = allUsers.filter(u => u.role === 'auditor' || u.role === 'audit_manager');
   const supervisors = allUsers.filter(u => u.role === 'supervisor' || u.role === 'audit_manager');
@@ -290,14 +415,17 @@ function PlanningPage() {
       if (!payload.department) delete payload.department;
       if (!payload.last_audited) delete payload.last_audited;
       if (editingUniverseId) {
-        const response = await planningApi.updateUniverse(editingUniverseId, payload);
-        setUniverse(universe.map(u => (u.id === editingUniverseId ? response : u)));
+        await planningApi.updateUniverse(editingUniverseId, payload);
         toast.success('Audit universe item updated successfully');
       } else {
-        const response = await planningApi.createUniverse(payload);
-        setUniverse([response, ...universe]);
+        await planningApi.createUniverse(payload);
         toast.success('Audit universe item created successfully');
       }
+      // A risk_score/name edit can move the row across page boundaries under
+      // -risk_score ordering; the catalog and re-audit badge also need to stay
+      // truthful — refetch rather than mutate the slice in place.
+      reloadTab('universe', { resetPage: !editingUniverseId });
+      fetchReferences();
       closeUniverseModal();
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to save universe item';
@@ -350,9 +478,10 @@ function PlanningPage() {
       if (result.errors?.length) {
         toast.error(`${result.errors.length} row(s) could not be imported`);
       }
-      // Refresh every tab, not just the universe list — imports can shift the
-      // due-for-re-audit badge and downstream plan/engagement pickers.
-      fetchPlanningData();
+      // Imports shift the due-for-re-audit badge and the modal catalogs too,
+      // so refresh the references alongside the universe slice.
+      reloadTab('universe', { resetPage: true });
+      fetchReferences();
     } catch (err) {
       const detail = err.response?.data?.detail;
       const msg = typeof detail === 'string' ? detail : 'Failed to import audit universe';
@@ -417,14 +546,16 @@ function PlanningPage() {
       const payload = { ...newPlan };
       if (!payload.directorate) delete payload.directorate;
       if (editingPlanId) {
-        const response = await planningApi.updatePlan(editingPlanId, payload);
-        setPlans(plans.map(p => (p.id === editingPlanId ? response : p)));
+        await planningApi.updatePlan(editingPlanId, payload);
         toast.success('Annual plan updated successfully');
       } else {
-        const response = await planningApi.createPlan(payload);
-        setPlans([response, ...plans]);
+        await planningApi.createPlan(payload);
         toast.success('Annual plan created successfully');
       }
+      // Year/status edits can reorder the -year slice; refresh plans and the
+      // full plans catalog that backs the engagement modal's plan picker.
+      reloadTab('plans', { resetPage: !editingPlanId });
+      fetchReferences();
       closePlanModal();
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to save plan';
@@ -489,15 +620,13 @@ function PlanningPage() {
       if (!payload.lead_auditor) delete payload.lead_auditor;
       if (!payload.supervisor) delete payload.supervisor;
       if (editingEngagementId) {
-        const response = await planningApi.updateEngagement(editingEngagementId, payload);
-        setEngagements(engagements.map(en => (en.id === editingEngagementId ? response : en)));
+        await planningApi.updateEngagement(editingEngagementId, payload);
         toast.success('Audit engagement updated successfully');
       } else {
-        const response = await planningApi.createEngagement(payload);
-        setEngagements([response, ...engagements]);
-        setEngagementCount(c => c + 1);
+        await planningApi.createEngagement(payload);
         toast.success('Audit engagement created successfully');
       }
+      reloadTab('engagements', { resetPage: !editingEngagementId });
       closeEngagementModal();
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to save engagement';
@@ -509,7 +638,7 @@ function PlanningPage() {
     try {
       await planningApi.submitPlan(planId);
       toast.success('Plan submitted for approval successfully!');
-      fetchPlanningData();
+      reloadTab('plans');
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to submit plan';
       toast.error(msg);
@@ -520,7 +649,7 @@ function PlanningPage() {
     try {
       await planningApi.approvePlan(planId);
       toast.success('Plan approved successfully!');
-      fetchPlanningData();
+      reloadTab('plans');
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to approve plan';
       toast.error(msg);
@@ -539,14 +668,14 @@ function PlanningPage() {
     try {
       await planningApi.updateEngagementStatus(engagementId, nextStatus);
       toast.success(`Engagement status set to ${nextStatus.replace('_', ' ')}`);
-      fetchPlanningData();
+      reloadTab('engagements');
     } catch (err) {
       const data = err.response?.data;
       const msg = data?.detail
         || (typeof data === 'object' ? JSON.stringify(data) : 'Failed to update engagement status');
       toast.error(msg);
       // Re-fetch so the select is repainted from the server's actual value.
-      fetchPlanningData();
+      reloadTab('engagements');
     }
   };
 
@@ -688,6 +817,16 @@ function PlanningPage() {
                   </tbody>
                 </table>
               </div>
+
+              <Pagination
+                page={universePage}
+                pageCount={Math.max(1, Math.ceil(universeCount / universePageSize))}
+                totalCount={universeCount}
+                onPageChange={setUniversePage}
+                pageSize={universePageSize}
+                onPageSizeChange={setUniversePageSize}
+                showPageSize
+              />
             </div>
           )}
 
@@ -751,6 +890,16 @@ function PlanningPage() {
                   </div>
                 ))}
               </div>
+
+              <Pagination
+                page={plansPage}
+                pageCount={Math.max(1, Math.ceil(plansCount / plansPageSize))}
+                totalCount={plansCount}
+                onPageChange={setPlansPage}
+                pageSize={plansPageSize}
+                onPageSizeChange={setPlansPageSize}
+                showPageSize
+              />
             </div>
           )}
 
@@ -761,9 +910,6 @@ function PlanningPage() {
                 <div>
                   <h3>Audit Engagements</h3>
                   <p className="card-subtitle">Individual operational audits configured under current plans</p>
-                  {engagementsTruncated && (
-                    <p className="text-xs text-muted mt-1">{t('showingFirstOf', engagements.length, engagementCount)}</p>
-                  )}
                 </div>
                 {canWriteAudit && (
                   <button className="btn btn-primary flex items-center gap-2" onClick={openAddEngagement}>
@@ -857,6 +1003,16 @@ function PlanningPage() {
                   </tbody>
                 </table>
               </div>
+
+              <Pagination
+                page={engagementsPage}
+                pageCount={Math.max(1, Math.ceil(engagementCount / engagementsPageSize))}
+                totalCount={engagementCount}
+                onPageChange={setEngagementsPage}
+                pageSize={engagementsPageSize}
+                onPageSizeChange={setEngagementsPageSize}
+                showPageSize
+              />
             </div>
           )}
 
@@ -1230,7 +1386,7 @@ function PlanningPage() {
               <select id="engagement_plan" className="form-control" value={newEngagement.plan}
                 onChange={(e) => setNewEngagement({ ...newEngagement, plan: e.target.value })} required>
                 <option value="">Select Plan...</option>
-                {plans.map(p => (<option key={p.id} value={p.id}>{p.title}</option>))}
+                {plansCatalog.map(p => (<option key={p.id} value={p.id}>{p.title}</option>))}
               </select>
             </div>
             <div className="form-group">
@@ -1295,7 +1451,7 @@ function PlanningPage() {
               <select id="engagement_audit_universe" className="form-control" value={newEngagement.audit_universe}
                 onChange={(e) => setNewEngagement({ ...newEngagement, audit_universe: e.target.value })}>
                 <option value="">Select Entity...</option>
-                {universe.map(u => (<option key={u.id} value={u.id}>{u.code} - {u.name}</option>))}
+                {universeCatalog.map(u => (<option key={u.id} value={u.id}>{u.code} - {u.name}</option>))}
               </select>
             </div>
             <OrgUnitSelect

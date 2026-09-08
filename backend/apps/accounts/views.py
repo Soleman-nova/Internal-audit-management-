@@ -42,7 +42,8 @@ class LoginView(generics.GenericAPIView):
     serializer_class = LoginSerializer
     # The only unauthenticated write in the system, against a guessable username
     # space (EEU-#####). The scope is configured in settings.DEFAULT_THROTTLE_RATES
-    # as 'login' (5/min) — far tighter than the global anon rate.
+    # as 'login' (30/min) — tighter than the global anon rate, yet lenient enough
+    # that the one-click demo logins and e2e runs do not trip it.
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'login'
 

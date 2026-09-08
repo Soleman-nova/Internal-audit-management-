@@ -10,6 +10,7 @@ import Modal from '../../components/ui/Modal';
 import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
+import Pagination from '../../components/ui/Pagination';
 import FormField from '../../components/ui/FormField';
 import { CheckCircle2, Clock, ShieldAlert, MessageCircle, RefreshCw, Plus, FileUp } from 'lucide-react';
 
@@ -20,9 +21,16 @@ function FollowUpPage() {
   const navigate = useNavigate();
   const { canWriteAudit, canApprovePlans } = usePermissions();
   const [capas, setCapas] = useState([]);
-  const [overdueCapas, setOverdueCapas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
+  // Server-side pagination: capas holds only the current page slice. reloadKey
+  // lets mutations force a refetch even when page/pageSize are unchanged.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  // Role-scoped counts (total/overdue/...) driving the tab badges.
+  const [summary, setSummary] = useState(null);
   const [formErrors, setFormErrors] = useState({});
   const currentUser = auth.user;
 
@@ -50,29 +58,63 @@ function FollowUpPage() {
   const [submittingResponse, setSubmittingResponse] = useState(false);
 
   useEffect(() => {
+    // Reset to page 1 whenever the active tab changes so a user on page 3 of
+    // "all" isn't dropped on a nonexistent page 3 of "overdue".
+    setPage(1);
+  }, [activeTab]);
+
+  useEffect(() => {
     fetchCapas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, page, pageSize, reloadKey]);
+
+  useEffect(() => {
+    fetchSummary();
     if (currentUser && currentUser.role !== 'auditee') {
       fetchFindingsAndAuditees();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
   const fetchCapas = async () => {
     setLoading(true);
     try {
-      // The overdue list comes from the server so the tab is correct even
-      // before flag_overdue_actions has stamped status='overdue' — it derives
-      // the set from due_date. Filtering the main list on status='overdue'
-      // left the tab silently empty between management-command runs.
-      const [res, overdueRes] = await Promise.all([
-        capaApi.getActions(),
-        capaApi.getOverdue(),
-      ]);
-      setCapas(Array.isArray(res) ? res : []);
-      setOverdueCapas(Array.isArray(overdueRes) ? overdueRes : []);
+      // Each tab is its own paginated server query so the visible rows and the
+      // totals both reflect the real set — filtering one loaded page in memory
+      // used to stop silently at DRF's PAGE_SIZE. The overdue set comes from a
+      // dedicated endpoint so it is correct even before flag_overdue_actions
+      // has stamped status='overdue' — it derives the set from due_date.
+      const params = { page, page_size: pageSize };
+      let res;
+      if (activeTab === 'overdue') {
+        res = await capaApi.getOverdue(params);
+      } else if (activeTab === 'open') {
+        res = await capaApi.getActions({ ...params, status__in: 'open,in_progress' });
+      } else if (activeTab === 'resolved') {
+        res = await capaApi.getActions({ ...params, status__in: 'resolved,closed' });
+      } else {
+        res = await capaApi.getActions(params);
+      }
+      setCapas(res.items || []);
+      setTotalCount(res.count || 0);
+      // Clamp: after a mutation shrank the list, the current page may not exist.
+      const last = Math.max(1, Math.ceil((res.count || 0) / pageSize));
+      if (page > last) setPage(last);
     } catch (err) {
       toast.error('Failed to load CAPA actions');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Role-scoped counts driving the tab badges. Refetched after mutations; a
+  // failure just falls back to the loaded page's total.
+  const fetchSummary = async () => {
+    try {
+      const s = await capaApi.getSummary();
+      setSummary(s);
+    } catch (err) {
+      /* non-fatal */
     }
   };
 
@@ -139,8 +181,7 @@ function FollowUpPage() {
     setFormErrors({});
     setCreating(true);
     try {
-      const res = await capaApi.createAction(newCapa);
-      setCapas([res, ...capas]);
+      await capaApi.createAction(newCapa);
       setShowCreateModal(false);
       setNewCapa({
         finding: '',
@@ -151,6 +192,11 @@ function FollowUpPage() {
         priority: 'medium',
         due_date: ''
       });
+      // Reload so counts/ordering stay truthful — the new row's due date
+      // decides which page it lands on under due_date ordering, so neither a
+      // local prepend nor a page jump would be reliable.
+      setReloadKey(k => k + 1);
+      fetchSummary();
       toast.success('CAPA task successfully created and assigned!');
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
@@ -183,11 +229,12 @@ function FollowUpPage() {
 
       await capaApi.addResponse(selectedCapa.id, formData);
 
-      // Update local state
-      setCapas(capas.map(c => c.id === selectedCapa.id ? { ...c, status: statusUpdate } : c));
+      // A status change can move the row off the current tab/filter, so trust
+      // the server: refetch the current page and the badge counts.
       setShowResponseModal(false);
       toast.success('Response recorded and CAPA status updated!');
-      fetchCapas(); // Refresh list to get files or related fields updated
+      setReloadKey(k => k + 1);
+      fetchSummary();
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
       toast.error('Failed to submit response: ' + msg);
@@ -210,18 +257,11 @@ function FollowUpPage() {
     }
   };
 
-  const overdueIds = new Set(overdueCapas.map(c => c.id));
-  const isOverdue = (c) => c.status === 'overdue' || c.is_overdue || overdueIds.has(c.id);
-  const overdueCount = capas.filter(isOverdue).length;
-
-  const filteredCapas = capas.filter(c => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'open') return c.status === 'open' || c.status === 'in_progress';
-    if (activeTab === 'resolved') return c.status === 'resolved' || c.status === 'closed';
-    // Trust the server-derived set, plus anything the command has already flagged.
-    if (activeTab === 'overdue') return isOverdue(c);
-    return true;
-  });
+  // Rows are already server-filtered per active tab. isOverdue only drives the
+  // extra OVERDUE overlay on visible rows: the serializer's `is_overdue` covers
+  // due-date-derived rows, and flag_overdue_actions may also have stamped
+  // status='overdue'.
+  const isOverdue = (c) => c.status === 'overdue' || !!c.is_overdue;
 
   // The named owner may respond without holding WRITE_AUDIT — that mirrors the
   // backend's InvolvedPartyOrCapability.for_('owner') gate on add-response.
@@ -239,7 +279,7 @@ function FollowUpPage() {
     <div className="followup-view">
       <div className="tab-container">
         <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>
-          {t('allCapas', capas.length)}
+          {t('allCapas', summary?.total ?? totalCount)}
         </button>
         <button className={`tab-btn ${activeTab === 'open' ? 'active' : ''}`} onClick={() => setActiveTab('open')}>
           {t('openInProgress')}
@@ -248,7 +288,7 @@ function FollowUpPage() {
           {t('resolvedCapas')}
         </button>
         <button className={`tab-btn ${activeTab === 'overdue' ? 'active' : ''}`} onClick={() => setActiveTab('overdue')}>
-          {t('overdue')}{overdueCount > 0 ? ` (${overdueCount})` : ''}
+          {t('overdue')}{summary?.overdue > 0 ? ` (${summary.overdue})` : ''}
         </button>
       </div>
 
@@ -287,12 +327,12 @@ function FollowUpPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredCapas.length === 0 ? (
+                {capas.length === 0 ? (
                   <tr>
                     <td colSpan="7" className="text-center py-8">No corrective action records found for this filter.</td>
                   </tr>
                 ) : (
-                  filteredCapas.map(c => (
+                  capas.map(c => (
                     <tr key={c.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/50" onClick={() => navigate(`/capa/${c.id}`)} title="Click to view details">
                       <td><strong>{c.action_number}</strong></td>
                       <td>
@@ -340,6 +380,16 @@ function FollowUpPage() {
               </tbody>
             </table>
           </div>
+
+          <Pagination
+            page={page}
+            pageCount={Math.max(1, Math.ceil(totalCount / pageSize))}
+            totalCount={totalCount}
+            onPageChange={setPage}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+            showPageSize
+          />
         </div>
       )}
 

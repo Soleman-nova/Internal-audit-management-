@@ -7,7 +7,7 @@ export const planningApi = {
     // browsed, so default to one large page instead of DRF's PAGE_SIZE = 20.
     // Callers that genuinely want a page can still pass page/page_size.
     const res = await apiClient.get('/planning/universe/', { params: { page_size: 1000, ...params } });
-    return res.data?.results ?? res.data;
+    return unwrapPage(res.data);
   },
   createUniverse: async (data) => {
     const res = await apiClient.post('/planning/universe/', data);
@@ -66,8 +66,12 @@ export const planningApi = {
     return unwrapPage(res.data);
   },
   getPlans: async (params = {}) => {
-    const res = await apiClient.get('/planning/plans/', { params });
-    return res.data?.results ?? res.data;
+    // Default to one large page like getUniverse so callers that want the whole
+    // catalogue (org chart, modal dropdowns) actually get it — a bare call used
+    // to silently stop at DRF's PAGE_SIZE = 20. Paged callers override with an
+    // explicit page/page_size.
+    const res = await apiClient.get('/planning/plans/', { params: { page_size: 1000, ...params } });
+    return unwrapPage(res.data);
   },
   createPlan: async (data) => {
     const res = await apiClient.post('/planning/plans/', data);

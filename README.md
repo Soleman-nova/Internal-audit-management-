@@ -216,7 +216,7 @@ Neither `.env` is committed (both are gitignored). The variables that actually c
 | `DB_NAME` / `DB_USER` / `DB_PASSWORD` / `DB_HOST` / `DB_PORT` | backend | Ignored while `USE_SQLITE=True`. |
 | `CORS_ALLOWED_ORIGINS` | backend | Origins the browser may call the API from, scheme included, no trailing slash. Must list wherever the built frontend is served. A missing entry shows up as every browser request failing while `curl` works fine. Also used as `CSRF_TRUSTED_ORIGINS` when `DEBUG=False`. |
 | `EMAIL_BACKEND` + `EMAIL_HOST*` | backend | Console backend by default (mail prints to the server log). Switch to SMTP to actually deliver reminders. |
-| `THROTTLE_LOGIN` | backend | Default `5/min`. This is what stands between the login endpoint and credential stuffing. |
+| `THROTTLE_LOGIN` | backend | Default `30/min`. Tighter than the anonymous rate so it still blunts credential stuffing, but loose enough that the one-click demo logins and e2e runs do not trip it. |
 | `JWT_ACCESS_TOKEN_LIFETIME_MINUTES` / `JWT_REFRESH_TOKEN_LIFETIME_DAYS` | backend | Default 60 minutes / 7 days. |
 | `LOG_LEVEL` | backend | Handlers write to the console and to a rotating `backend/logs/audit_system.log` (5 MB × 5). |
 | `VITE_API_BASE_URL` | frontend | Base URL of the API **including** `/api`. Inlined at build time. Without it a production build is pinned to `localhost:8000`. |
@@ -235,7 +235,7 @@ All endpoints live under `/api/`. Authenticate with `Authorization: Bearer <acce
 
 - **Pagination** — every list endpoint returns `{count, next, previous, results}` at 20 rows per page; `?page=` and `?page_size=` are honoured ([apps/common/pagination.py](backend/apps/common/pagination.py)). The single exception is `departments/tree/`, which is deliberately unpaginated because the cascading picker needs the whole tree in one response.
 - **Filtering** — `DjangoFilterBackend`, `SearchFilter` (`?search=`) and `OrderingFilter` (`?ordering=`) are enabled globally; each viewset declares its own `filterset_fields`.
-- **Throttling** — anonymous 60/min, authenticated 1000/hour, login 5/min.
+- **Throttling** — anonymous 60/min, authenticated 1000/hour, login 30/min.
 - **Files** — uploads are validated by extension allowlist and size cap (documents 10 MB, images 2 MB) in [apps/common/validators.py](backend/apps/common/validators.py). Media is not served directly in production; evidence, working papers and reports are fetched through their permission-gated `download` / `export` actions.
 - **Reference numbers** — `finding_number`, `engagement_number` and `action_number` are assigned by the server as `FND-YYYY-NNNN`, `ENG-YYYY-NNNN` and `CAPA-YYYY-NNNN`. A client-supplied value is ignored ([apps/common/reference_numbers.py](backend/apps/common/reference_numbers.py)).
 - **403 vs 404** — a `403` means the record is visible but you are not named on it; a `404` means read scoping hid the row entirely. The distinction is deliberate and asserted by tests.
@@ -258,7 +258,7 @@ All endpoints live under `/api/`. Authenticate with `Authorization: Bearer <acce
 
 | Method | Path | Required | Notes |
 |---|---|---|---|
-| `POST` | `login/` | — | Body `{employee_id, password}`. Throttled at 5/min. Returns `access`, `refresh`, `user`. |
+| `POST` | `login/` | — | Body `{employee_id, password}`. Throttled at 30/min. Returns `access`, `refresh`, `user`. |
 | `POST` | `logout/` | authenticated | Body `{refresh}`. Blacklists the refresh token. |
 | `POST` | `token/refresh/` | — | Body `{refresh}`. Rotates and returns a new pair. |
 | `POST` | `change-password/` | authenticated | Body `{current_password, new_password}`. |

@@ -24,10 +24,20 @@ class CorrectiveActionViewSet(viewsets.ModelViewSet):
     serializer_class = CorrectiveActionSerializer
     permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['status', 'priority', 'finding', 'owner']
+    # Dict form so django-filter also honours ?status__in=open,in_progress —
+    # the FollowUp page filters its tabs server-side with that multi-value
+    # lookup. The rest stay exact matches as before.
+    filterset_fields = {
+        'status': ['exact', 'in'],
+        'priority': ['exact'],
+        'finding': ['exact'],
+        'owner': ['exact'],
+    }
     search_fields = ['title', 'description', 'recommendation', 'action_number']
     ordering_fields = ['due_date', 'created_at', 'priority']
-    ordering = ['due_date']
+    # 'id' is a deterministic tiebreaker: offset pagination over a shared
+    # due_date could otherwise repeat/drop rows between page flips.
+    ordering = ['due_date', 'id']
 
     def get_queryset(self):
         user = self.request.user

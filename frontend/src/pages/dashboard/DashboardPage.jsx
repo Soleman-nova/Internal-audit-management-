@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { usersApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
+import { hasCapability, getCurrentUser, CAPABILITIES } from '../../hooks/usePermissions';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area
@@ -81,19 +82,26 @@ function DashboardPage() {
       })
       .catch(() => {/* switcher falls back to the consolidated option only */ });
 
-    usersApi.getAuditTrail({ page_size: 5 })
-      .then(res => {
-        if (cancelled) return;
-        const items = res.results || (Array.isArray(res) ? res : []);
-        setActivities(items.map((log, idx) => ({
-          id: log.id || idx,
-          user: log.user_name || log.user_email || 'System',
-          action: log.action || 'Event',
-          target: log.object_repr || log.description || '—',
-          time: log.timestamp ? new Date(log.timestamp).toLocaleString() : '—',
-        })));
-      })
-      .catch(() => {/* feed stays empty */ });
+    // The feed is the same record the /audit-trail page shows, and the backend
+    // gates that endpoint behind VIEW_AUDIT_TRAIL even for reads (auditors and
+    // auditees hold no such capability). Firing it unconditionally produced a
+    // guaranteed 403 in the console on every dashboard load for those roles, so
+    // it is fetched only when the signed-in user could actually open it.
+    if (hasCapability(getCurrentUser(), CAPABILITIES.VIEW_AUDIT_TRAIL)) {
+      usersApi.getAuditTrail({ page_size: 5 })
+        .then(res => {
+          if (cancelled) return;
+          const items = res.results || (Array.isArray(res) ? res : []);
+          setActivities(items.map((log, idx) => ({
+            id: log.id || idx,
+            user: log.user_name || log.user_email || 'System',
+            action: log.action || 'Event',
+            target: log.object_repr || log.description || '—',
+            time: log.timestamp ? new Date(log.timestamp).toLocaleString() : '—',
+          })));
+        })
+        .catch(() => {/* feed stays empty */ });
+    }
 
     return () => { cancelled = true; };
   }, []);

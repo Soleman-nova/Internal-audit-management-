@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { reportsApi, planningApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
@@ -9,6 +9,7 @@ import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
+import Pagination from '../../components/ui/Pagination';
 import { FileText, Download, Plus, RefreshCw, BarChart2 } from 'lucide-react';
 
 function ReportsPage() {
@@ -19,7 +20,14 @@ function ReportsPage() {
   const focusReportId = searchParams.get('id');
   const [templates, setTemplates] = useState([]);
   const [engagements, setEngagements] = useState([]);
+  // `generated` holds only the current page slice of the archive; the page,
+  // size and reload key drive server-side pagination (reloadKey lets the poll
+  // and the generate flow force a refetch even when the page is unchanged).
   const [generated, setGenerated] = useState([]);
+  const [generatedCount, setGeneratedCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [genReloadKey, setGenReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [formErrors, setFormErrors] = useState({});
   const [downloadingId, setDownloadingId] = useState(null);
@@ -39,19 +47,12 @@ function ReportsPage() {
 
   // ── Poll while anything is still being generated ─────────────────
   // Generation runs off-thread in reports/jobs.py, so the row lands as
-  // `generating` and flips to ready/failed seconds later. A single fixed
-  // 2 s refetch missed anything slower than that and left the row stuck.
+  // `generating` and flips to ready/failed seconds later. Each tick bumps the
+  // reload key, which drives the paged fetch effect below — so whatever page is
+  // visible is what gets refetched. If the generating row is on another page,
+  // polling naturally stops until the user returns to that page.
   const pollRef = useRef(null);
   const anyGenerating = generated.some(g => g.status === 'generating');
-
-  const refreshGenerated = useCallback(async () => {
-    try {
-      const genRes = await reportsApi.getGeneratedReports();
-      setGenerated(Array.isArray(genRes) ? genRes : []);
-    } catch {
-      // A failed poll is not worth a toast — the next tick retries.
-    }
-  }, []);
 
   useEffect(() => {
     if (!anyGenerating) {
@@ -61,37 +62,89 @@ function ReportsPage() {
       }
       return undefined;
     }
-    pollRef.current = setInterval(refreshGenerated, 3000);
+    pollRef.current = setInterval(() => {
+      setGenReloadKey(k => k + 1);
+    }, 3000);
     return () => {
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
       }
     };
-  }, [anyGenerating, refreshGenerated]);
+  }, [anyGenerating]);
 
-  // Scroll the deep-linked row into view once the archive has loaded.
+  // Scroll the deep-linked row into view once it has loaded (deps include
+  // `generated` so it retries after a page jump brings the row onto the slice).
   useEffect(() => {
     if (loading || !focusReportId) return;
     const el = document.getElementById(`report-${focusReportId}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [loading, focusReportId]);
+  }, [loading, focusReportId, generated]);
+
+  // ── Paged archive helpers ────────────────────────────────────────
+  const generatedLoadedRef = useRef(false);
+  const focusLocatedRef = useRef(false);
+
+  // Fetch one page of generated reports (defaults to the current page/size).
+  // Used by the mount load, page navigation and the generate/poll reload path.
+  // Does not toggle `loading`, so the poll never blanks the table.
+  const fetchGenerated = async (pageNo = page, size = pageSize) => {
+    const res = await reportsApi.getGeneratedReports({ page: pageNo, page_size: size });
+    setGenerated(res.items || []);
+    setGeneratedCount(res.count || 0);
+    // Clamp: after a refresh the current page may exceed the new last page.
+    const last = Math.max(1, Math.ceil((res.count || 0) / size));
+    if (pageNo > last) setPage(last);
+    return res;
+  };
+
+  // Refetch the visible page whenever the page, page size or reload key change.
+  // The very first run is skipped — fetchReportsData loads page 1 on mount.
+  useEffect(() => {
+    if (!generatedLoadedRef.current) {
+      generatedLoadedRef.current = true;
+      return undefined;
+    }
+    fetchGenerated(page, pageSize).catch(() => {
+      // A failed refetch is not worth a toast — the next tick retries.
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize, genReloadKey]);
+
+  // Deep link (?id=N from reports/jobs.py): the report may live beyond page 1.
+  // Scan forward once and jump to its page; the paged effect refetches it and
+  // the scroll effect then centers the ringed row.
+  useEffect(() => {
+    if (loading || !focusReportId || focusLocatedRef.current) return;
+    focusLocatedRef.current = true;
+    if (generated.some(g => String(g.id) === String(focusReportId))) return;
+    (async () => {
+      const last = Math.max(1, Math.ceil(generatedCount / pageSize));
+      for (let p = 2; p <= Math.min(last, 200); p++) {
+        try {
+          const res = await reportsApi.getGeneratedReports({ page: p, page_size: pageSize });
+          if (res.items.some(g => String(g.id) === String(focusReportId))) { setPage(p); return; }
+          if (!res.hasMore) return;
+        } catch {
+          return;
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, focusReportId, generated, generatedCount, pageSize]);
 
   const fetchReportsData = async () => {
     setLoading(true);
     try {
-      const [tempRes, engRes, genRes] = await Promise.all([
+      const [tempRes, engRes] = await Promise.all([
         reportsApi.getTemplates(),
-        planningApi.getEngagements(),
-        reportsApi.getGeneratedReports(),
+        planningApi.getEngagements({ page_size: 1000 }),
       ]);
       const templateList = Array.isArray(tempRes) ? tempRes : [];
       const engList = engRes.items;
-      const genList = Array.isArray(genRes) ? genRes : [];
 
       setTemplates(templateList);
       setEngagements(engList);
-      setGenerated(genList);
 
       if (engList.length > 0) {
         setSelectedEngId(engList[0].id);
@@ -100,6 +153,7 @@ function ReportsPage() {
       if (templateList.length > 0) {
         setSelectedTemplateId(templateList[0].id);
       }
+      await fetchGenerated(1, pageSize);
     } catch (err) {
       toast.error('Failed to load reports data');
     } finally {
@@ -129,12 +183,14 @@ function ReportsPage() {
     };
 
     try {
-      const response = await reportsApi.generateReport(data);
-      setGenerated([response, ...generated]);
+      await reportsApi.generateReport(data);
       setShowGenModal(false);
       toast.success('Report generation triggered. Download available when status is READY.');
-      // The polling effect above takes over from here — the new row is
-      // `generating`, so it refetches every 3 s until the file is ready.
+      // Newest-first ordering (-generated_at) puts the new generating row on
+      // page 1, so jump there and let the paged effect refetch it; the poll
+      // above then keeps refetching until the file is ready.
+      setPage(1);
+      setGenReloadKey(k => k + 1);
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
       toast.error('Failed to generate report: ' + msg);
@@ -197,7 +253,7 @@ function ReportsPage() {
         <div className="card right-side-card">
           <div className="card-header justify-between">
             <h3>{t('generatedReportsArchive')}</h3>
-            <button className="btn btn-outline flex items-center gap-1" onClick={fetchReportsData}>
+            <button className="btn btn-outline flex items-center gap-1" onClick={() => setGenReloadKey(k => k + 1)}>
               <RefreshCw size={14} /> {t('refresh')}
             </button>
           </div>
@@ -258,6 +314,16 @@ function ReportsPage() {
               </table>
             </div>
           )}
+
+          <Pagination
+            page={page}
+            pageCount={Math.max(1, Math.ceil(generatedCount / pageSize))}
+            totalCount={generatedCount}
+            onPageChange={setPage}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+            showPageSize
+          />
         </div>
       </div>
 

@@ -681,13 +681,23 @@ class LoginThrottleTest(TestCase):
             format='json',
         )
 
-    def test_the_rate_is_configured(self):
-        self.assertEqual(
-            settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['login'], '5/min',
+    def _rate_limit(self):
+        """Attempts allowed per window, read from the configured login rate.
+
+        Kept in sync with settings so these tests survive a rate change instead
+        of silently passing because the loop stopped short of the new budget.
+        """
+        return int(
+            settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['login'].split('/')[0]
         )
 
-    def test_the_sixth_rapid_attempt_is_refused(self):
-        for index in range(5):
+    def test_the_rate_is_configured(self):
+        self.assertEqual(
+            settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['login'], '30/min',
+        )
+
+    def test_attempts_beyond_the_rate_are_refused(self):
+        for index in range(self._rate_limit()):
             with self.subTest(attempt=index + 1):
                 self.assertEqual(self.attempt().status_code, 400)
         self.assertEqual(self.attempt().status_code, 429)
@@ -695,7 +705,7 @@ class LoginThrottleTest(TestCase):
     def test_a_successful_login_also_counts_against_the_budget(self):
         """Otherwise an attacker who lands one valid credential gets an
         unmetered channel for enumerating the rest."""
-        for _ in range(5):
+        for _ in range(self._rate_limit()):
             self.attempt()
         self.assertEqual(self.attempt(password='correct-horse-battery').status_code, 429)
 
@@ -709,7 +719,7 @@ class LoginThrottleTest(TestCase):
         self.assertIn('refresh', response.data)
 
     def test_the_login_scope_does_not_throttle_authenticated_traffic(self):
-        """The tight 5/min applies to the login scope only; an auditor paging
+        """The login scope's rate applies to login only; an auditor paging
         through the org tree is on the far looser 'user' rate."""
         self.client.force_authenticate(user=self.user)
         for _ in range(8):
