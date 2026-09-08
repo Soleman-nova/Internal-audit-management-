@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import { unwrapPage } from './paginated';
 
 export const reportsApi = {
   getTemplates: async () => {
@@ -6,8 +7,10 @@ export const reportsApi = {
     return res.data?.results ?? res.data;
   },
   getGeneratedReports: async (params = {}) => {
+    // Unwrapped page so the archive page can show the real total and browse
+    // past the first PAGE_SIZE.
     const res = await apiClient.get('/reports/generated/', { params });
-    return res.data?.results ?? res.data;
+    return unwrapPage(res.data);
   },
   getReport: async (id) => {
     const res = await apiClient.get(`/reports/generated/${id}/`);

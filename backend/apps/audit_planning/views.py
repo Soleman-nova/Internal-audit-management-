@@ -298,7 +298,9 @@ class AuditUniverseViewSet(viewsets.ModelViewSet):
     filterset_fields = ['category', 'status', 'department', 'directorate']
     search_fields = ['name', 'code', 'owner']
     ordering_fields = ['risk_score', 'name', 'last_audited']
-    ordering = ['-risk_score']
+    # 'name' breaks the many ties at a shared risk score so offset pagination
+    # over the universe cannot repeat or drop rows between page flips.
+    ordering = ['-risk_score', 'name']
 
     def perform_create(self, serializer):
         with transaction.atomic():
@@ -572,7 +574,9 @@ class AuditPlanViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'year', 'directorate', 'plan_scope']
     search_fields = ['title', 'description']
-    ordering = ['-year']
+    # 'created_at' is a deterministic tiebreaker: many plans share a year, and
+    # offset pagination over ties can repeat/drop rows between page flips.
+    ordering = ['-year', '-created_at']
 
     def perform_create(self, serializer):
         with transaction.atomic():
@@ -649,7 +653,7 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'engagement_type', 'plan', 'department', 'directorate', 'risk_level']
     search_fields = ['title', 'engagement_number', 'objectives']
-    ordering = ['-created_at']
+    ordering = ['-created_at', '-id']
 
     def get_queryset(self):
         """Auditees see only engagements covering their own department.

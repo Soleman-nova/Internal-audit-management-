@@ -164,6 +164,11 @@ REST_FRAMEWORK = {
     # Login is the one unauthenticated write in the system and the usernames are
     # the guessable EEU-##### series, so it gets its own tighter scope. See
     # LoginView.throttle_scope in apps/accounts/views.py.
+    #
+    # The default used to be 5/min, which a one-click demo login or a quick e2e
+    # pass trips within seconds — a legitimate user retrying after a typo got
+    # locked out for a minute. 30/min stays tighter than the 60/min anon rate
+    # while letting normal login flows through. Override with THROTTLE_LOGIN.
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',
@@ -171,7 +176,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': config('THROTTLE_ANON', default='60/min'),
         'user': config('THROTTLE_USER', default='1000/hour'),
-        'login': config('THROTTLE_LOGIN', default='5/min'),
+        'login': config('THROTTLE_LOGIN', default='30/min'),
     },
 }
 

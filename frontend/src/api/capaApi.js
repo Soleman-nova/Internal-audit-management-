@@ -1,9 +1,12 @@
 import apiClient from './apiClient';
+import { unwrapPage } from './paginated';
 
 export const capaApi = {
   getActions: async (params = {}) => {
+    // Unwrapped page (not a bare array) so list pages read the server's real
+    // total and can page past the first PAGE_SIZE.
     const res = await apiClient.get('/corrective/actions/', { params });
-    return res.data?.results ?? res.data;
+    return unwrapPage(res.data);
   },
   // Single-record fetch — the detail page must not filter the paginated list.
   getAction: async (id) => {
@@ -38,7 +41,7 @@ export const capaApi = {
   // flag_overdue_actions command has stamped status='overdue'.
   getOverdue: async (params = {}) => {
     const res = await apiClient.get('/corrective/actions/overdue/', { params });
-    return res.data?.results ?? res.data;
+    return unwrapPage(res.data);
   },
   getSummary: async () => {
     const res = await apiClient.get('/corrective/actions/summary/');

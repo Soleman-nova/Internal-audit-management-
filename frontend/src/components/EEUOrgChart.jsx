@@ -48,9 +48,10 @@ function EEUOrgChart({ onSelectDirectorate }) {
                     planningApi.getEngagements({ page_size: 100 }),
                 ]);
 
-                const universeList = Array.isArray(universe) ? universe : (universe?.results || []);
-                const plansList = Array.isArray(plans) ? plans : (plans?.results || []);
-                // getEngagements returns { items, count, hasMore } — see api/paginated.js.
+                // getUniverse/getPlans/getEngagements all return
+                // { items, count, hasMore } — see api/paginated.js.
+                const universeList = universe?.items || [];
+                const plansList = plans?.items || [];
                 const engagementsList = engagements?.items || [];
 
                 const statsByDept = {};
