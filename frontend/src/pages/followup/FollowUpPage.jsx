@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useI18n } from '../../context/I18nContext';
+import { localizedName } from '../../utils/localizedName';
 import { validateForm, validators, hasErrors } from '../../utils/validation';
 import Modal from '../../components/ui/Modal';
 import Badge from '../../components/ui/Badge';
@@ -17,7 +18,7 @@ import { CheckCircle2, Clock, ShieldAlert, MessageCircle, RefreshCw, Plus, FileU
 function FollowUpPage() {
   const toast = useToast();
   const auth = useAuth();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const navigate = useNavigate();
   const { canWriteAudit, canApprovePlans } = usePermissions();
   const [capas, setCapas] = useState([]);
@@ -478,7 +479,7 @@ function FollowUpPage() {
               >
                 <option value="">Select Auditee Owner...</option>
                 {auditees.map(a => (
-                  <option key={a.id} value={a.id}>{a.first_name} {a.last_name} ({a.department_name || 'Auditee'})</option>
+                  <option key={a.id} value={a.id}>{a.first_name} {a.last_name} ({localizedName(lang, a.department_name, a.department_name_am) || 'Auditee'})</option>
                 ))}
               </select>
             </div>

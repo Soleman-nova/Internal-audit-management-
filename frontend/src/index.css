@@ -15,17 +15,26 @@
 
 /* ── CSS Variables ── */
 :root {
-  --primary: #2563eb;
-  --primary-dark: #1d4ed8;
-  --primary-light: #3b82f6;
-  --primary-glow: rgba(37, 99, 235, 0.25);
+  /* EEU brand — orange (half-circle: power, energy, hope) */
+  --brand-orange: #f2801f;
+  --brand-orange-dark: #df6c0b;
+  --brand-orange-light: #f8a24d;
+  /* EEU brand — green (circles: growth, sustainability, green economy) */
+  --brand-green: #00a651;
+  --brand-green-dark: #00823f;
+  --brand-green-light: #3ecf6e;
+
+  --primary: var(--brand-orange);
+  --primary-dark: var(--brand-orange-dark);
+  --primary-light: var(--brand-orange-light);
+  --primary-glow: rgba(242, 128, 31, 0.25);
   --secondary: #0f172a;
-  --accent: #06b6d4;
-  --accent2: #8b5cf6;
+  --accent: var(--brand-green);
+  --accent2: #00b85e;
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
-  --info: #3b82f6;
+  --info: var(--brand-orange);
 
   --bg-dark: #0a0f1e;
   --bg-card: #111827;
@@ -38,12 +47,12 @@
   --text-muted: #64748b;
 
   --border: rgba(255, 255, 255, 0.07);
-  --border-active: rgba(37, 99, 235, 0.5);
+  --border-active: rgba(242, 128, 31, 0.5);
 
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 24px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(37, 99, 235, 0.3);
+  --shadow-glow: 0 0 20px rgba(242, 128, 31, 0.3);
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -57,17 +66,17 @@
 
 /* ── Light Theme Overrides ── */
 [data-theme="light"] {
-  --primary: #2563eb;
-  --primary-dark: #1d4ed8;
-  --primary-light: #3b82f6;
-  --primary-glow: rgba(37, 99, 235, 0.15);
+  --primary: #e06f10;
+  --primary-dark: #c2570a;
+  --primary-light: #ef8f3c;
+  --primary-glow: rgba(224, 111, 16, 0.15);
   --secondary: #e2e8f0;
-  --accent: #0891b2;
-  --accent2: #7c3aed;
+  --accent: #008a44;
+  --accent2: #0a9e52;
   --success: #059669;
   --warning: #d97706;
   --danger: #dc2626;
-  --info: #2563eb;
+  --info: #e06f10;
 
   --bg-dark: #f1f5f9;
   --bg-card: #ffffff;
@@ -80,12 +89,12 @@
   --text-muted: #94a3b8;
 
   --border: rgba(0, 0, 0, 0.08);
-  --border-active: rgba(37, 99, 235, 0.4);
+  --border-active: rgba(242, 128, 31, 0.4);
 
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 24px rgba(0, 0, 0, 0.12);
   --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.16);
-  --shadow-glow: 0 0 20px rgba(37, 99, 235, 0.15);
+  --shadow-glow: 0 0 20px rgba(242, 128, 31, 0.15);
 }
 
 /* Light mode: header needs white bg to be visible */
@@ -221,8 +230,8 @@ body {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(37, 99, 235, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(37, 99, 235, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(242, 128, 31, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(242, 128, 31, 0.05) 1px, transparent 1px);
   background-size: 60px 60px;
   animation: gridMove 20s linear infinite;
 }
@@ -479,12 +488,12 @@ body {
 .btn-primary {
   background: linear-gradient(135deg, var(--primary), var(--primary-dark));
   color: white;
-  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 4px 15px rgba(242, 128, 31, 0.4);
 }
 
 .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 6px 20px rgba(242, 128, 31, 0.5);
   background: linear-gradient(135deg, var(--primary-light), var(--primary));
 }
 
@@ -548,8 +557,8 @@ body {
 .login-demo {
   margin-top: 24px;
   padding: 16px;
-  background: rgba(37, 99, 235, 0.07);
-  border: 1px solid rgba(37, 99, 235, 0.2);
+  background: rgba(242, 128, 31, 0.07);
+  border: 1px solid rgba(242, 128, 31, 0.2);
   border-radius: var(--radius-sm);
 }
 
@@ -569,14 +578,14 @@ body {
   font-size: 11px;
   padding: 3px 8px;
   border-radius: 4px;
-  background: rgba(37, 99, 235, 0.15);
+  background: rgba(242, 128, 31, 0.15);
   color: var(--primary-light);
   cursor: pointer;
   transition: var(--transition);
 }
 
 .demo-tag:hover {
-  background: rgba(37, 99, 235, 0.3);
+  background: rgba(242, 128, 31, 0.3);
 }
 
 /* ── Login Header ── */
@@ -594,7 +603,7 @@ body {
   background: linear-gradient(135deg, var(--primary), var(--accent));
   border-radius: var(--radius-md);
   margin-bottom: 16px;
-  box-shadow: 0 0 30px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 0 30px rgba(242, 128, 31, 0.4);
   animation: logoPulse 3s ease-in-out infinite;
 }
 
@@ -602,11 +611,11 @@ body {
 
   0%,
   100% {
-    box-shadow: 0 0 20px rgba(37, 99, 235, 0.4);
+    box-shadow: 0 0 20px rgba(242, 128, 31, 0.4);
   }
 
   50% {
-    box-shadow: 0 0 40px rgba(37, 99, 235, 0.7);
+    box-shadow: 0 0 40px rgba(242, 128, 31, 0.7);
   }
 }
 
@@ -852,7 +861,7 @@ body {
   justify-content: center;
   font-size: 18px;
   flex-shrink: 0;
-  box-shadow: 0 0 12px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 0 12px rgba(242, 128, 31, 0.4);
 }
 
 .sidebar-logo-text .line1 {
@@ -908,12 +917,12 @@ body {
 .nav-item:hover {
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.04);
-  border-left-color: rgba(37, 99, 235, 0.3);
+  border-left-color: rgba(242, 128, 31, 0.3);
 }
 
 .nav-item.active {
   color: var(--primary-light);
-  background: rgba(37, 99, 235, 0.1);
+  background: rgba(242, 128, 31, 0.1);
   border-left-color: var(--primary);
   font-weight: 600;
 }
@@ -1203,11 +1212,11 @@ body {
 }
 
 .stat-card.purple::before {
-  background: linear-gradient(90deg, var(--accent2), #a78bfa);
+  background: linear-gradient(90deg, var(--accent2), #4ade80);
 }
 
 .stat-card.cyan::before {
-  background: linear-gradient(90deg, var(--accent), #67e8f9);
+  background: linear-gradient(90deg, var(--accent), #4ade80);
 }
 
 .stat-card:hover {
@@ -1234,7 +1243,7 @@ body {
 }
 
 .stat-icon.blue {
-  background: rgba(37, 99, 235, 0.15);
+  background: rgba(242, 128, 31, 0.15);
   color: var(--primary-light);
 }
 
@@ -1254,12 +1263,12 @@ body {
 }
 
 .stat-icon.purple {
-  background: rgba(139, 92, 246, 0.15);
+  background: rgba(0, 182, 94, 0.15);
   color: var(--accent2);
 }
 
 .stat-icon.cyan {
-  background: rgba(6, 182, 212, 0.15);
+  background: rgba(0, 166, 81, 0.15);
   color: var(--accent);
 }
 
@@ -1399,8 +1408,8 @@ tbody tr:hover {
 }
 
 .badge-blue {
-  background: rgba(37, 99, 235, 0.15);
-  color: #60a5fa;
+  background: rgba(242, 128, 31, 0.15);
+  color: #f8a24d;
 }
 
 .badge-green {
@@ -1419,13 +1428,13 @@ tbody tr:hover {
 }
 
 .badge-purple {
-  background: rgba(139, 92, 246, 0.15);
-  color: #a78bfa;
+  background: rgba(0, 182, 94, 0.15);
+  color: #4ade80;
 }
 
 .badge-cyan {
-  background: rgba(6, 182, 212, 0.15);
-  color: #67e8f9;
+  background: rgba(0, 166, 81, 0.15);
+  color: #4ade80;
 }
 
 .badge-gray {
@@ -1694,7 +1703,7 @@ tbody tr:hover {
   border-radius: 50%;
   background: var(--primary);
   border: 2px solid var(--bg-dark);
-  box-shadow: 0 0 8px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 0 8px rgba(242, 128, 31, 0.5);
 }
 
 .timeline-item.green::before {
@@ -1809,9 +1818,9 @@ tbody tr:hover {
 }
 
 .alert-blue {
-  background: rgba(37, 99, 235, 0.1);
-  border: 1px solid rgba(37, 99, 235, 0.2);
-  color: #93c5fd;
+  background: rgba(242, 128, 31, 0.1);
+  border: 1px solid rgba(242, 128, 31, 0.2);
+  color: #f8a24d;
 }
 
 .alert-green {
@@ -2152,7 +2161,7 @@ tbody tr:hover {
 }
 
 .notif-item.unread {
-  background: rgba(37, 99, 235, 0.05);
+  background: rgba(242, 128, 31, 0.05);
 }
 
 .notif-item-icon {
@@ -2249,13 +2258,13 @@ tbody tr:hover {
 
 .mini-bar {
   flex: 1;
-  background: rgba(37, 99, 235, 0.3);
+  background: rgba(242, 128, 31, 0.3);
   border-radius: 2px 2px 0 0;
   transition: var(--transition);
 }
 
 .mini-bar:hover {
-  background: rgba(37, 99, 235, 0.6);
+  background: rgba(242, 128, 31, 0.6);
 }
 
 .mini-bar.active {
@@ -2331,7 +2340,7 @@ tbody tr:hover {
   background: var(--primary);
   border-color: var(--primary);
   color: white;
-  box-shadow: 0 0 12px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 0 12px rgba(242, 128, 31, 0.4);
 }
 
 .step-label {
@@ -2410,7 +2419,7 @@ tbody tr:hover {
 }
 
 .cal-day.today {
-  background: rgba(37, 99, 235, 0.2);
+  background: rgba(242, 128, 31, 0.2);
   color: var(--primary-light);
   font-weight: 700;
 }
@@ -2610,12 +2619,12 @@ tbody tr:hover {
 .nav-item:hover {
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.04);
-  border-left-color: rgba(37, 99, 235, 0.3);
+  border-left-color: rgba(242, 128, 31, 0.3);
 }
 
 .nav-item.active {
   color: var(--primary-light);
-  background: rgba(37, 99, 235, 0.1);
+  background: rgba(242, 128, 31, 0.1);
   border-left-color: var(--primary);
   font-weight: 600;
 }
@@ -2795,7 +2804,7 @@ tbody tr:hover {
 }
 
 .notification-item.unread {
-  background: rgba(37, 99, 235, 0.05);
+  background: rgba(242, 128, 31, 0.05);
 }
 
 .notification-item.read {
@@ -2980,7 +2989,7 @@ textarea.form-control {
 }
 
 .btn-accent {
-  background: linear-gradient(135deg, var(--accent), #0891b2);
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
   color: white;
 }
 
@@ -3250,13 +3259,13 @@ textarea.form-control {
 }
 
 .badge-info {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
+  background: rgba(242, 128, 31, 0.15);
+  color: #f8a24d;
 }
 
 .badge-accent {
-  background: rgba(6, 182, 212, 0.15);
-  color: #22d3ee;
+  background: rgba(0, 166, 81, 0.15);
+  color: #4ade80;
 }
 
 .badge-outline {
@@ -3441,8 +3450,8 @@ textarea.form-control {
 
 .demo-btn {
   padding: 7px 10px;
-  background: rgba(37, 99, 235, 0.08);
-  border: 1px solid rgba(37, 99, 235, 0.2);
+  background: rgba(242, 128, 31, 0.08);
+  border: 1px solid rgba(242, 128, 31, 0.2);
   border-radius: var(--radius-sm);
   color: var(--primary-light);
   font-size: 11px;
@@ -3453,7 +3462,7 @@ textarea.form-control {
 }
 
 .demo-btn:hover {
-  background: rgba(37, 99, 235, 0.18);
+  background: rgba(242, 128, 31, 0.18);
   border-color: var(--primary);
 }
 
@@ -3514,7 +3523,7 @@ textarea.form-control {
 }
 
 .kpi-blue::before {
-  background: linear-gradient(90deg, #2563eb, #06b6d4);
+  background: linear-gradient(90deg, #f2801f, #00a651);
 }
 
 .kpi-orange::before {
@@ -3540,8 +3549,8 @@ textarea.form-control {
 }
 
 .kpi-icon-blue {
-  background: rgba(37, 99, 235, 0.15);
-  color: #60a5fa;
+  background: rgba(242, 128, 31, 0.15);
+  color: #f8a24d;
 }
 
 .kpi-icon-orange {
@@ -3787,7 +3796,7 @@ textarea.form-control {
   background: var(--primary);
   flex-shrink: 0;
   margin-top: 5px;
-  box-shadow: 0 0 6px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 0 6px rgba(242, 128, 31, 0.5);
 }
 
 .activity-body {
@@ -3984,11 +3993,11 @@ textarea.form-control {
 
 .org-node-root {
   min-width: 360px;
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), var(--bg-card2));
+  background: linear-gradient(135deg, rgba(242, 128, 31, 0.12), var(--bg-card2));
 }
 
 .org-node-pp {
-  border-color: rgba(6, 182, 212, 0.35);
+  border-color: rgba(0, 166, 81, 0.35);
 }
 
 .org-node-header {
@@ -4151,9 +4160,9 @@ textarea.form-control {
   gap: 6px;
   font-size: 11px;
   font-weight: 600;
-  color: #22d3ee;
-  background: rgba(6, 182, 212, 0.1);
-  border: 1px solid rgba(6, 182, 212, 0.2);
+  color: #4ade80;
+  background: rgba(0, 166, 81, 0.1);
+  border: 1px solid rgba(0, 166, 81, 0.2);
   border-radius: var(--radius-sm);
   padding: 6px 10px;
 }
@@ -4502,7 +4511,7 @@ textarea.form-control {
 
 .finding-list-item.active {
   border-color: var(--primary);
-  background: rgba(37, 99, 235, 0.08);
+  background: rgba(242, 128, 31, 0.08);
 }
 
 .finding-item-meta {
@@ -4553,8 +4562,8 @@ textarea.form-control {
 }
 
 .highlight-box {
-  background: rgba(37, 99, 235, 0.06);
-  border: 1px solid rgba(37, 99, 235, 0.2);
+  background: rgba(242, 128, 31, 0.06);
+  border: 1px solid rgba(242, 128, 31, 0.2);
   border-radius: var(--radius-sm);
   padding: 14px;
 }
@@ -5130,16 +5139,16 @@ textarea.form-control {
 
 /* Primary */
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary), #1d4ed8);
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
   color: white;
   border-color: var(--primary);
-  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 2px 12px rgba(242, 128, 31, 0.3);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1d4ed8, #1e3a8a);
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.45);
+  box-shadow: 0 4px 16px rgba(242, 128, 31, 0.45);
 }
 
 /* Outline */
@@ -5157,7 +5166,7 @@ textarea.form-control {
 
 /* Accent (teal) */
 .btn-accent {
-  background: linear-gradient(135deg, var(--accent), #0891b2);
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
   color: white;
   border-color: transparent;
 }
@@ -5393,9 +5402,9 @@ textarea.form-control {
 }
 
 .badge-accent {
-  background: rgba(6, 182, 212, 0.15);
+  background: rgba(0, 166, 81, 0.15);
   color: var(--accent);
-  border: 1px solid rgba(6, 182, 212, 0.3);
+  border: 1px solid rgba(0, 166, 81, 0.3);
 }
 
 /* ============================================================
@@ -5499,14 +5508,14 @@ textarea.form-control {
 }
 
 .app-modal-nav-btn:hover {
-  background: rgba(37, 99, 235, 0.08);
+  background: rgba(242, 128, 31, 0.08);
   color: var(--text-primary);
 }
 
 .app-modal-nav-btn.active {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.15), rgba(6, 182, 212, 0.1));
+  background: linear-gradient(135deg, rgba(242, 128, 31, 0.15), rgba(0, 166, 81, 0.1));
   color: var(--primary-light);
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(242, 128, 31, 0.25);
 }
 
 .app-modal-nav-icon {
@@ -5605,12 +5614,12 @@ textarea.form-control {
 }
 
 .app-modal-theme-card:hover {
-  border-color: rgba(37, 99, 235, 0.35);
+  border-color: rgba(242, 128, 31, 0.35);
 }
 
 .app-modal-theme-card.selected {
   border-color: var(--primary);
-  background: rgba(37, 99, 235, 0.06);
+  background: rgba(242, 128, 31, 0.06);
   box-shadow: 0 0 0 3px var(--primary-glow);
 }
 
@@ -5715,12 +5724,12 @@ textarea.form-control {
 }
 
 .app-modal-lang-card:hover {
-  border-color: rgba(37, 99, 235, 0.35);
+  border-color: rgba(242, 128, 31, 0.35);
 }
 
 .app-modal-lang-card.selected {
   border-color: var(--primary);
-  background: rgba(37, 99, 235, 0.06);
+  background: rgba(242, 128, 31, 0.06);
 }
 
 .app-modal-lang-flag {
@@ -5763,8 +5772,8 @@ textarea.form-control {
 }
 
 .app-modal-alert.info {
-  background: rgba(37, 99, 235, 0.08);
-  border: 1px solid rgba(37, 99, 235, 0.2);
+  background: rgba(242, 128, 31, 0.08);
+  border: 1px solid rgba(242, 128, 31, 0.2);
   color: var(--primary-light);
 }
 
@@ -5823,7 +5832,7 @@ textarea.form-control {
   gap: 16px;
   padding: 18px;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(6, 182, 212, 0.05));
+  background: linear-gradient(135deg, rgba(242, 128, 31, 0.08), rgba(0, 166, 81, 0.05));
   border: 1px solid var(--border);
   margin-bottom: 20px;
 }
@@ -5864,9 +5873,9 @@ textarea.form-control {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  background: rgba(37, 99, 235, 0.12);
+  background: rgba(242, 128, 31, 0.12);
   color: var(--primary-light);
-  border: 1px solid rgba(37, 99, 235, 0.25);
+  border: 1px solid rgba(242, 128, 31, 0.25);
 }
 
 .app-modal-info-grid {
@@ -5993,8 +6002,8 @@ textarea.form-control {
 }
 
 .app-modal-role-item:hover {
-  border-color: rgba(37, 99, 235, 0.25);
-  background: rgba(37, 99, 235, 0.04);
+  border-color: rgba(242, 128, 31, 0.25);
+  background: rgba(242, 128, 31, 0.04);
 }
 
 .app-modal-role-dot {
@@ -6113,7 +6122,7 @@ textarea.form-control {
 
 .app-modal-role-pill:hover {
   color: var(--text-primary);
-  border-color: rgba(37, 99, 235, 0.3);
+  border-color: rgba(242, 128, 31, 0.3);
 }
 
 .app-modal-role-pill.active {
@@ -6137,7 +6146,7 @@ textarea.form-control {
 }
 
 .app-modal-checklist-item:hover {
-  border-color: rgba(37, 99, 235, 0.25);
+  border-color: rgba(242, 128, 31, 0.25);
 }
 
 .app-modal-checklist-item input[type="checkbox"] {
@@ -6274,4 +6283,41 @@ textarea.form-control {
   .content-container {
     padding: 16px;
   }
+}
+
+/* ============================================================
+   EEU BRAND SIGNATURE
+   The logo pairs an orange half-circle (power, energy, hope) with
+   green circles (growth, green economy). Two quiet gradient accents —
+   a thin line under the header and one under each page title — echo
+   that pairing on every authenticated page.
+   ============================================================ */
+.app-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--brand-orange), var(--brand-green));
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.page-title-group .page-title,
+.page-header-left h1 {
+  position: relative;
+  padding-bottom: 10px;
+}
+
+.page-title-group .page-title::after,
+.page-header-left h1::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 44px;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--brand-orange), var(--brand-green));
 }

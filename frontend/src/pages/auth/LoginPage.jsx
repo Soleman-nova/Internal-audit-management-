@@ -111,7 +111,7 @@ function LoginPage() {
       <div className="relative z-10 flex flex-col items-center gap-2 mb-6 mt-2">
         <div className="w-[72px] h-[72px] rounded-full bg-[#1b2f52] p-[3px] flex items-center justify-center"
           style={{
-            boxShadow: '0 0 0 3px #f2a93b,0 0 0 5px #1b2f52,0 0 0 7px rgba(20,33,61,0.6),0 6px 24px rgba(0,0,0,0.35)',
+            boxShadow: '0 0 0 3px #f2a93b,0 0 0 5px #1b2f52,0 0 0 7px rgba(20,33,61,0.6),0 0 0 10px rgba(0,166,81,0.22),0 8px 28px rgba(0,0,0,0.35)',
           }}>
           <img src="/eeu-logo.png" alt="EEU Logo" className="w-full h-full rounded-full object-cover block" />
         </div>
@@ -126,6 +126,7 @@ function LoginPage() {
         <div className="text-[11px] font-bold tracking-[0.3em] text-amber-300 uppercase drop-shadow-md">
           Internal Audit Management System
         </div>
+        <div className="w-12 h-[3px] rounded-full bg-gradient-to-r from-amber-400 to-emerald-500 drop-shadow-md" />
       </div>
 
       {/* ============================================================ LOGIN CARD */}
@@ -306,8 +307,8 @@ function LoginPage() {
       <div className="relative z-10 flex gap-4 justify-center flex-wrap mt-6 px-4 max-w-2xl">
         {[
           { Icon: ShieldCheck, label: 'Secure Access', iconClass: 'text-amber-300' },
-          { Icon: BarChart2, label: 'Real-time Insights', iconClass: 'text-amber-300' },
-          { Icon: Users, label: 'Accountability', iconClass: 'text-amber-300' },
+          { Icon: BarChart2, label: 'Real-time Insights', iconClass: 'text-emerald-400' },
+          { Icon: Users, label: 'Accountability', iconClass: 'text-emerald-400' },
         ].map(({ Icon, label, iconClass }) => (
           <div
             key={label}

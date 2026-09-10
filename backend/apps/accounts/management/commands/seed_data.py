@@ -19,17 +19,22 @@ class Command(BaseCommand):
 
         # 1. Create Departments
         depts_data = [
-            {"name": "Finance and Accounts", "code": "FIN", "head": "Abebe Kebede"},
+            {"name": "Finance and Accounts", "code": "FIN", "head": "Abebe Kebede", "name_am": "ፋይናንስ እና ሒሳብ"},
             {"name": "Information Technology", "code": "IT", "head": "Sarah Mohammed"},
-            {"name": "Procurement and Logistics", "code": "PROC", "head": "Daniel Tekle"},
+            {"name": "Procurement and Logistics", "code": "PROC", "head": "Daniel Tekle", "name_am": "ግዢ እና ሎጂስቲክስ"},
             {"name": "Human Resources", "code": "HR", "head": "Tigist Assefa"},
-            {"name": "Power Distribution", "code": "DIST", "head": "Dawit Tesfaye"},
+            {"name": "Power Distribution", "code": "DIST", "head": "Dawit Tesfaye", "name_am": "የኃይል ስርጭት"},
         ]
         depts = {}
         for d in depts_data:
             dept, created = Department.objects.get_or_create(
                 code=d["code"],
-                defaults={"name": d["name"], "head": d["head"], "description": f"EEU {d['name']} Department"}
+                defaults={
+                    "name": d["name"],
+                    "name_am": d.get("name_am", ""),
+                    "head": d["head"],
+                    "description": f"EEU {d['name']} Department",
+                },
             )
             depts[d["code"]] = dept
             if created:

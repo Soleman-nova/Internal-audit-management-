@@ -1,0 +1,4076 @@
+[
+  {
+    "id": 1,
+    "csc_code": "AA02",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 3",
+    "region": "አዲስ አበባ",
+    "region_id": 29
+  },
+  {
+    "id": 2,
+    "csc_code": "AA03",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 4",
+    "region": "አዲስ አበባ",
+    "region_id": 29
+  },
+  {
+    "id": 3,
+    "csc_code": "AA04",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 5",
+    "region": "አዲስ አበባ",
+    "region_id": 29
+  },
+  {
+    "id": 4,
+    "csc_code": "AA05",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 6",
+    "region": "አዲስ አበባ",
+    "region_id": 29
+  },
+  {
+    "id": 5,
+    "csc_code": "AA06",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 7",
+    "region": "አዲስ አበባ",
+    "region_id": 29
+  },
+  {
+    "id": 6,
+    "csc_code": "AA07",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 9",
+    "region": "አዲስ አበባ",
+    "region_id": 29
+  },
+  {
+    "id": 7,
+    "csc_code": "AA10",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 8",
+    "region": "አዲስ አበባ",
+    "region_id": 29
+  },
+  {
+    "id": 8,
+    "csc_code": "AB03",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 3",
+    "region": "አዲስ አበባ",
+    "region_id": 31
+  },
+  {
+    "id": 9,
+    "csc_code": "AB05",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 5",
+    "region": "አዲስ አበባ",
+    "region_id": 31
+  },
+  {
+    "id": 10,
+    "csc_code": "AB06",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 6",
+    "region": "አዲስ አበባ",
+    "region_id": 31
+  },
+  {
+    "id": 11,
+    "csc_code": "AB07",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 7",
+    "region": "አዲስ አበባ",
+    "region_id": 31
+  },
+  {
+    "id": 12,
+    "csc_code": "AB08",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 8",
+    "region": "አዲስ አበባ",
+    "region_id": 31
+  },
+  {
+    "id": 13,
+    "csc_code": "AB09",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 9",
+    "region": "አዲስ አበባ",
+    "region_id": 31
+  },
+  {
+    "id": 14,
+    "csc_code": "AB10",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 10",
+    "region": "አዲስ አበባ",
+    "region_id": 31
+  },
+  {
+    "id": 15,
+    "csc_code": "AB12",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 4",
+    "region": "አዲስ አበባ",
+    "region_id": 31
+  },
+  {
+    "id": 16,
+    "csc_code": "AB17",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 2",
+    "region": "አዲስ አበባ",
+    "region_id": 31
+  },
+  {
+    "id": 17,
+    "csc_code": "AC01",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 1",
+    "region": "አዲስ አበባ",
+    "region_id": 32
+  },
+  {
+    "id": 18,
+    "csc_code": "AC09",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 2",
+    "region": "አዲስ አበባ",
+    "region_id": 32
+  },
+  {
+    "id": 19,
+    "csc_code": "AC10",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 3",
+    "region": "አዲስ አበባ",
+    "region_id": 32
+  },
+  {
+    "id": 20,
+    "csc_code": "AC11",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 4",
+    "region": "አዲስ አበባ",
+    "region_id": 32
+  },
+  {
+    "id": 21,
+    "csc_code": "AC12",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 6",
+    "region": "አዲስ አበባ",
+    "region_id": 32
+  },
+  {
+    "id": 22,
+    "csc_code": "AC14",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 7",
+    "region": "አዲስ አበባ",
+    "region_id": 32
+  },
+  {
+    "id": 23,
+    "csc_code": "AC15",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 8",
+    "region": "አዲስ አበባ",
+    "region_id": 32
+  },
+  {
+    "id": 24,
+    "csc_code": "AD01",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 1",
+    "region": "አዲስ አበባ",
+    "region_id": 30
+  },
+  {
+    "id": 25,
+    "csc_code": "AD02",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 2",
+    "region": "አዲስ አበባ",
+    "region_id": 30
+  },
+  {
+    "id": 26,
+    "csc_code": "AD03",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 3",
+    "region": "አዲስ አበባ",
+    "region_id": 30
+  },
+  {
+    "id": 27,
+    "csc_code": "AD04",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 4",
+    "region": "አዲስ አበባ",
+    "region_id": 30
+  },
+  {
+    "id": 28,
+    "csc_code": "AD09",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል 5",
+    "region": "አዲስ አበባ",
+    "region_id": 30
+  },
+  {
+    "id": 29,
+    "csc_code": "AD10",
+    "csc_name": "ፈረንሳይ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አዲስ አበባ",
+    "region_id": 30
+  },
+  {
+    "id": 30,
+    "csc_code": "AD11",
+    "csc_name": "አወሊያ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አዲስ አበባ",
+    "region_id": 30
+  },
+  {
+    "id": 31,
+    "csc_code": "BA01",
+    "csc_name": "አዳማ የደንበኞች አገልግሎት ማዕከል ቁ.1",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 32,
+    "csc_code": "BA02",
+    "csc_name": "አዳማ የደንበኞች አገልግሎት ማዕከል ቁ.2",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 33,
+    "csc_code": "BA03",
+    "csc_name": "አዳማ የደንበኞች አገልግሎት ማዕከል ቁ.3",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 34,
+    "csc_code": "BA04",
+    "csc_name": "አዳማ የደንበኞች አገልግሎት ማዕከል ቁ.4",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 35,
+    "csc_code": "BA05",
+    "csc_name": "አቦምሳ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 36,
+    "csc_code": "BA06",
+    "csc_name": "አዳሚቱሉ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 37,
+    "csc_code": "BA07",
+    "csc_name": "በቆጂ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 38,
+    "csc_code": "BA08",
+    "csc_name": "ቡልቡላ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 39,
+    "csc_code": "BA09",
+    "csc_name": "ደራ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 40,
+    "csc_code": "BA10",
+    "csc_name": "ቀርሳ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 41,
+    "csc_code": "BA11",
+    "csc_name": "አዋሽ መልካሳ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 42,
+    "csc_code": "BA12",
+    "csc_name": "ሰጉሬ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 43,
+    "csc_code": "BA13",
+    "csc_name": "ወለንጪቲ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 44,
+    "csc_code": "BA14",
+    "csc_name": "አሰላ ቁ.1",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 45,
+    "csc_code": "BA15",
+    "csc_name": "ወንጂ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 46,
+    "csc_code": "BA16",
+    "csc_name": "መተሃራ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 47,
+    "csc_code": "BA17",
+    "csc_name": "ሞጆ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 48,
+    "csc_code": "BA18",
+    "csc_name": "ዝዋይ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 49,
+    "csc_code": "BA19",
+    "csc_name": "ጎቤሳ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 50,
+    "csc_code": "BA20",
+    "csc_name": "አርሲ ሮቤ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 51,
+    "csc_code": "BA21",
+    "csc_name": "አለምጠና",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 52,
+    "csc_code": "BA22",
+    "csc_name": "እጠና",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 53,
+    "csc_code": "BA23",
+    "csc_name": "ጮሌ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 54,
+    "csc_code": "BA24",
+    "csc_name": "ኦጎልጮ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 55,
+    "csc_code": "BA25",
+    "csc_name": "ዲክሲስ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 56,
+    "csc_code": "BA26",
+    "csc_name": "ሁሩታ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 57,
+    "csc_code": "BA27",
+    "csc_name": "መቂ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 58,
+    "csc_code": "BA28",
+    "csc_name": "አሰላ ቁ.2",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 59,
+    "csc_code": "BA29",
+    "csc_name": "በሌ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 60,
+    "csc_code": "BA30",
+    "csc_name": "አርቦዬ",
+    "region": "ኦሮሚያ",
+    "region_id": 1
+  },
+  {
+    "id": 61,
+    "csc_code": "BB01",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ሰንዳፋ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 62,
+    "csc_code": "BB02",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ሸኖ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 63,
+    "csc_code": "BB03",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ሙከጡሪ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 64,
+    "csc_code": "BB04",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ፍቼ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 65,
+    "csc_code": "BB05",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ገብረጉራቻ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 66,
+    "csc_code": "BB06",
+    "csc_name": "ፊንፊኔ ዲስትሪክት እጀሬ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 67,
+    "csc_code": "BB07",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ጉንዶ መስቀል የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 68,
+    "csc_code": "BB08",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ለገጣፎ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 69,
+    "csc_code": "BB09",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ጎሃጽዮን የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 70,
+    "csc_code": "BB10",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ቡራዩ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 71,
+    "csc_code": "BB11",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ተሬ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 72,
+    "csc_code": "BB12",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ጫንጮ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 73,
+    "csc_code": "BB13",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ሆለታ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 74,
+    "csc_code": "BB14",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ሙገር የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 75,
+    "csc_code": "BB15",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ሱሉልታ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 76,
+    "csc_code": "BB16",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ታጠቅ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 77,
+    "csc_code": "BB17",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ዱከም የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 78,
+    "csc_code": "BB18",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ቢሾፍቱ የደንበኞች አገልግሎት ማዕከል ቁ.1",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 79,
+    "csc_code": "BB19",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ቢሾፍቱ የደንበኞች አገልግሎት ማዕከል ቁ.2",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 80,
+    "csc_code": "BB20",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ጨፌ ዶንሳ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 81,
+    "csc_code": "BB21",
+    "csc_name": "ፊንፊኔ ዲስትሪክት አዱላላ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 82,
+    "csc_code": "BB22",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ገላን የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 83,
+    "csc_code": "BB23",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ሰበታ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 84,
+    "csc_code": "BB24",
+    "csc_name": "ፊንፊኔ ዲስትሪክት አለምገና የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 85,
+    "csc_code": "BB25",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ፉሪ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 86,
+    "csc_code": "BB26",
+    "csc_name": "ፊንፊኔ ዲስትሪክት አንፎ ሜድ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 87,
+    "csc_code": "BB27",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ለመን የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 88,
+    "csc_code": "BB28",
+    "csc_name": "ፊንፊኔ ዲስትሪክት ኦሮሚያ ኮንዶሚኒየም የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 89,
+    "csc_code": "BB29",
+    "csc_name": "ፊንፊኔ ዙሪያ ዲስትሪክት ሺኖ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 90,
+    "csc_code": "BB30",
+    "csc_name": "ተጂ",
+    "region": "ኦሮሚያ",
+    "region_id": 22
+  },
+  {
+    "id": 91,
+    "csc_code": "BC01",
+    "csc_name": "ሻሸመኔ ቁ.1",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 92,
+    "csc_code": "BC02",
+    "csc_name": "ሻሸመኔ ቁ.2",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 93,
+    "csc_code": "BC03",
+    "csc_name": "ቦሬ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 94,
+    "csc_code": "BC04",
+    "csc_name": "ሀገረ ማርያም",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 95,
+    "csc_code": "BC05",
+    "csc_name": "ኮፈሌ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 96,
+    "csc_code": "BC06",
+    "csc_name": "ነጌሌ ቦረና",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 97,
+    "csc_code": "BC07",
+    "csc_name": "ሻኪሶ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 98,
+    "csc_code": "BC08",
+    "csc_name": "ያቤሎ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 99,
+    "csc_code": "BC09",
+    "csc_name": "አርሲ ነገሌ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 100,
+    "csc_code": "BC10",
+    "csc_name": "ክብረ መንግሥት",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 101,
+    "csc_code": "BC11",
+    "csc_name": "ሞያሌ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 102,
+    "csc_code": "BC12",
+    "csc_name": "ሶሎሞ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 103,
+    "csc_code": "BC13",
+    "csc_name": "ቶሬ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 104,
+    "csc_code": "BC14",
+    "csc_name": "ኮኮሳ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 105,
+    "csc_code": "BC15",
+    "csc_name": "ቡሌ ጉራቻ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 106,
+    "csc_code": "BC16",
+    "csc_name": "ጎንጓ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 107,
+    "csc_code": "BC17",
+    "csc_name": "ቀርጫ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 108,
+    "csc_code": "BC18",
+    "csc_name": "አጄ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 109,
+    "csc_code": "BC19",
+    "csc_name": "ሜጋ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 110,
+    "csc_code": "BC20",
+    "csc_name": "ጎልጆታ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 111,
+    "csc_code": "BC21",
+    "csc_name": "ሀረቀሎ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 112,
+    "csc_code": "BC22",
+    "csc_name": "ቢዲሬ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 113,
+    "csc_code": "BC23",
+    "csc_name": "ዲሚቱ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 114,
+    "csc_code": "BC24",
+    "csc_name": "ሜልካ ሶዳ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 115,
+    "csc_code": "BC25",
+    "csc_name": "አሳሳ",
+    "region": "ኦሮሚያ",
+    "region_id": 21
+  },
+  {
+    "id": 116,
+    "csc_code": "BD01",
+    "csc_name": "ጪሮ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 117,
+    "csc_code": "BD02",
+    "csc_name": "ባቢሌ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 118,
+    "csc_code": "BD03",
+    "csc_name": "በደሳ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 119,
+    "csc_code": "BD04",
+    "csc_name": "ቢሲዲሞ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 120,
+    "csc_code": "BD05",
+    "csc_name": "ኮምቦልቻ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 121,
+    "csc_code": "BD06",
+    "csc_name": "ገለምሶ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 122,
+    "csc_code": "BD07",
+    "csc_name": "ጉርሱም",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 123,
+    "csc_code": "BD08",
+    "csc_name": "ሂርና",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 124,
+    "csc_code": "BD09",
+    "csc_name": "ቀራሚሌ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 125,
+    "csc_code": "BD10",
+    "csc_name": "ቀርሳ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 126,
+    "csc_code": "BD11",
+    "csc_name": "ደደር",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 127,
+    "csc_code": "BD12",
+    "csc_name": "ሀሮማያ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 128,
+    "csc_code": "BD13",
+    "csc_name": "ጊራዋ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 129,
+    "csc_code": "BD14",
+    "csc_name": "መቻራ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 130,
+    "csc_code": "BD15",
+    "csc_name": "ሚኤሶ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 131,
+    "csc_code": "BD16",
+    "csc_name": "ጪናክሰን",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 132,
+    "csc_code": "BD17",
+    "csc_name": "ፈዲስ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 133,
+    "csc_code": "BD18",
+    "csc_name": "አወዳይ",
+    "region": "ኦሮሚያ",
+    "region_id": 8
+  },
+  {
+    "id": 134,
+    "csc_code": "BE01",
+    "csc_name": "ጂማ ዲስትሪክት ጂማ የደንበኞች አገልግሎት ማዕከል ቁ.1",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 135,
+    "csc_code": "BE02",
+    "csc_name": "ጂማ ዲስትሪክት ጂማ የደንበኞች አገልግሎት ማዕከል ቁ.2",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 136,
+    "csc_code": "BE03",
+    "csc_name": "ጂማ ዲስትሪክት አሰንዲቦ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 137,
+    "csc_code": "BE05",
+    "csc_name": "ጂማ ዲስትሪክት ለሙ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 138,
+    "csc_code": "BE06",
+    "csc_name": "ጂማ ዲስትሪክት ቶባ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 139,
+    "csc_code": "BE08",
+    "csc_name": "ጂማ ዲስትሪክት ሶኮሮ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 140,
+    "csc_code": "BE09",
+    "csc_name": "ጂማ ዲስትሪክት አጋሮ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 141,
+    "csc_code": "BE10",
+    "csc_name": "ጂማ ዲስትሪክት ዱምቱ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 142,
+    "csc_code": "BE11",
+    "csc_name": "ጂማ ዲስትሪክት ጋቲራ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 143,
+    "csc_code": "BE12",
+    "csc_name": "ጂማ ዲስትሪክት ገራ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 144,
+    "csc_code": "BE14",
+    "csc_name": "ጂማ ዲስትሪክት ደዶ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 145,
+    "csc_code": "BE15",
+    "csc_name": "ጂማ ዲስትሪክት ሸቤ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 146,
+    "csc_code": "BE16",
+    "csc_name": "አጋሮ የደንበኞች አገልግሎት ማዕከል 2",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 147,
+    "csc_code": "BE17",
+    "csc_name": "ደምቢ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 17
+  },
+  {
+    "id": 148,
+    "csc_code": "BF01",
+    "csc_name": "ነቀምቴ 1",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 149,
+    "csc_code": "BF02",
+    "csc_name": "ፊንጫ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 150,
+    "csc_code": "BF03",
+    "csc_name": "ሻምቡ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 151,
+    "csc_code": "BF04",
+    "csc_name": "አሊቦ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 152,
+    "csc_code": "BF05",
+    "csc_name": "መቻራ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 153,
+    "csc_code": "BF06",
+    "csc_name": "ሙጊ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 154,
+    "csc_code": "BF07",
+    "csc_name": "ሮቤ ገበያ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 155,
+    "csc_code": "BF08",
+    "csc_name": "ደምቢዶሎ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 156,
+    "csc_code": "BF09",
+    "csc_name": "በጊ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 157,
+    "csc_code": "BF10",
+    "csc_name": "ጉሊሶ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 158,
+    "csc_code": "BF11",
+    "csc_name": "መንዲ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 159,
+    "csc_code": "BF12",
+    "csc_name": "ነጆ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 160,
+    "csc_code": "BF13",
+    "csc_name": "ጊምቢ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 161,
+    "csc_code": "BF14",
+    "csc_name": "ሀሮ ሰቡ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 162,
+    "csc_code": "BF15",
+    "csc_name": "ኖሌ ካባ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 163,
+    "csc_code": "BF16",
+    "csc_name": "ጊዳ አያና",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 164,
+    "csc_code": "BF17",
+    "csc_name": "ሲሬ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 165,
+    "csc_code": "BF18",
+    "csc_name": "አንገር ጉቲን",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 166,
+    "csc_code": "BF19",
+    "csc_name": "ኪረሙ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 167,
+    "csc_code": "BF20",
+    "csc_name": "አርጆ አውራጃ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 168,
+    "csc_code": "BF21",
+    "csc_name": "ደዱ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 169,
+    "csc_code": "BF22",
+    "csc_name": "ሳሲጋ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 170,
+    "csc_code": "BF23",
+    "csc_name": "ኡኬ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 171,
+    "csc_code": "BF24",
+    "csc_name": "አርጆ ጉደቱ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 172,
+    "csc_code": "BF25",
+    "csc_name": "ኑኑ ኩምባ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 173,
+    "csc_code": "BF26",
+    "csc_name": "ኦበራ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 174,
+    "csc_code": "BF27",
+    "csc_name": "ነቀምቴ 2",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 175,
+    "csc_code": "BF28",
+    "csc_name": "ገንጂ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 176,
+    "csc_code": "BF29",
+    "csc_name": "ሀሮ ሊሙ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 177,
+    "csc_code": "BF30",
+    "csc_name": "ቃቄ",
+    "region": "ኦሮሚያ",
+    "region_id": 20
+  },
+  {
+    "id": 178,
+    "csc_code": "BG01",
+    "csc_name": "አምቦ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 179,
+    "csc_code": "BG02",
+    "csc_name": "ቱሉ ቦሎ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 180,
+    "csc_code": "BG03",
+    "csc_name": "ወሊሶ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 181,
+    "csc_code": "BG04",
+    "csc_name": "ባንቱ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 182,
+    "csc_code": "BG05",
+    "csc_name": "አመያ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 183,
+    "csc_code": "BG06",
+    "csc_name": "አዲስ አለም የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 184,
+    "csc_code": "BG07",
+    "csc_name": "ጊንጪ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 185,
+    "csc_code": "BG08",
+    "csc_name": "ካቼሴ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 186,
+    "csc_code": "BG09",
+    "csc_name": "ጉደር የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 187,
+    "csc_code": "BG10",
+    "csc_name": "ሆርማት የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 188,
+    "csc_code": "BG11",
+    "csc_name": "ገዶ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 189,
+    "csc_code": "BG12",
+    "csc_name": "አጂጆ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 190,
+    "csc_code": "BG13",
+    "csc_name": "ባኮ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 191,
+    "csc_code": "BG14",
+    "csc_name": "ዋዮ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 192,
+    "csc_code": "BG15",
+    "csc_name": "ጀልዱ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 193,
+    "csc_code": "BG16",
+    "csc_name": "ሰዮ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 194,
+    "csc_code": "BG17",
+    "csc_name": "ሰዳን ሶዶ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 195,
+    "csc_code": "BG18",
+    "csc_name": "አቡና የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 196,
+    "csc_code": "BG19",
+    "csc_name": "ሸነን የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 197,
+    "csc_code": "BG20",
+    "csc_name": "ቢሎ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 198,
+    "csc_code": "BG21",
+    "csc_name": "ዲሬ እንጪኒ",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 199,
+    "csc_code": "BG22",
+    "csc_name": "ቡሳ",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 200,
+    "csc_code": "BG23",
+    "csc_name": "ስልካምባ",
+    "region": "ኦሮሚያ",
+    "region_id": 3
+  },
+  {
+    "id": 201,
+    "csc_code": "BH01",
+    "csc_name": "ሮቤ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 202,
+    "csc_code": "BH02",
+    "csc_name": "ጎባ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 203,
+    "csc_code": "BH03",
+    "csc_name": "ዶዶላ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 204,
+    "csc_code": "BH04",
+    "csc_name": "ጊኒር የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 205,
+    "csc_code": "BH05",
+    "csc_name": "አዳባ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 206,
+    "csc_code": "BH06",
+    "csc_name": "አጋርፋ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 207,
+    "csc_code": "BH07",
+    "csc_name": "ጋሰራ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 208,
+    "csc_code": "BH08",
+    "csc_name": "ጎሮ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 209,
+    "csc_code": "BH10",
+    "csc_name": "ደሎ መና የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 210,
+    "csc_code": "BH11",
+    "csc_name": "ሀሮ ዱመል የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 211,
+    "csc_code": "BH12",
+    "csc_name": "ራይቱ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 212,
+    "csc_code": "BH13",
+    "csc_name": "ዲንሾ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 213,
+    "csc_code": "BH14",
+    "csc_name": "ወረቃ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 214,
+    "csc_code": "BH15",
+    "csc_name": "ጃራ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 6
+  },
+  {
+    "id": 215,
+    "csc_code": "BI01",
+    "csc_name": "መቱ",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 216,
+    "csc_code": "BI02",
+    "csc_name": "ጎሬ",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 217,
+    "csc_code": "BI03",
+    "csc_name": "ሱጴ",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 218,
+    "csc_code": "BI04",
+    "csc_name": "ያዮ",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 219,
+    "csc_code": "BI05",
+    "csc_name": "ቡሬ",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 220,
+    "csc_code": "BI06",
+    "csc_name": "ዶሬኒ",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 221,
+    "csc_code": "BI07",
+    "csc_name": "መቱ ዲስትሪክት ዲሬሙ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 222,
+    "csc_code": "BI08",
+    "csc_name": "መቱ ዲስትሪክት ደጋ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 223,
+    "csc_code": "BI10",
+    "csc_name": "ጮራ",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 224,
+    "csc_code": "BI11",
+    "csc_name": "በደሌ",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 225,
+    "csc_code": "BI12",
+    "csc_name": "ጨዋቃ",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 226,
+    "csc_code": "BI13",
+    "csc_name": "ሁርሙ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 227,
+    "csc_code": "BI14",
+    "csc_name": "ኖፋ",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 228,
+    "csc_code": "BI15",
+    "csc_name": "በቾ",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 229,
+    "csc_code": "BI16",
+    "csc_name": "ሰሌ ኖኖ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 230,
+    "csc_code": "BI17",
+    "csc_name": "ላሎ",
+    "region": "ኦሮሚያ",
+    "region_id": 19
+  },
+  {
+    "id": 231,
+    "csc_code": "CA01",
+    "csc_name": "ባህር ዳር ዲስትሪክት ባህር ዳር 1 የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 232,
+    "csc_code": "CA02",
+    "csc_name": "ባህር ዳር ዲስትሪክት ባህር ዳር 2 የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 233,
+    "csc_code": "CA03",
+    "csc_name": "ባህር ዳር ቁ.3 (አባይ ማዶ) የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 234,
+    "csc_code": "CA04",
+    "csc_name": "ባህር ዳር ዲስትሪክት አዴት የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 235,
+    "csc_code": "CA06",
+    "csc_name": "ባህር ዳር ዲስትሪክት ጫግኒ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 236,
+    "csc_code": "CA07",
+    "csc_name": "ባህር ዳር ዲስትሪክት ዱርቤቴ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 237,
+    "csc_code": "CA09",
+    "csc_name": "ባህር ዳር ዲስትሪክት ኮሶበር የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 238,
+    "csc_code": "CA10",
+    "csc_name": "ባህር ዳር ዲስትሪክት መራዊ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 239,
+    "csc_code": "CA11",
+    "csc_name": "ባህር ዳር ዲስትሪክት ወረታ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 240,
+    "csc_code": "CA12",
+    "csc_name": "ባህር ዳር ዲስትሪክት ዳንግላ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 241,
+    "csc_code": "CA13",
+    "csc_name": "ባህር ዳር ዲስትሪክት ደብረ ታቦር",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 242,
+    "csc_code": "CA14",
+    "csc_name": "ባህር ዳር ዲስትሪክት እብናት የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 243,
+    "csc_code": "CA15",
+    "csc_name": "ባህር ዳር ዲስትሪክት ጃዊ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 244,
+    "csc_code": "CA17",
+    "csc_name": "ባህር ዳር ዲስትሪክት እስቴ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 245,
+    "csc_code": "CA19",
+    "csc_name": "ባህር ዳር ዲስትሪክት አዲስ ዘመን የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 246,
+    "csc_code": "CA20",
+    "csc_name": "ባህር ዳር ዲስትሪክት ወገዳ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 247,
+    "csc_code": "CA22",
+    "csc_name": "ባህር ዳር ዲስትሪክት ገመጃቤት የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 248,
+    "csc_code": "CA23",
+    "csc_name": "ባህር ዳር ዲስትሪክት ግሽ አባይ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 249,
+    "csc_code": "CA24",
+    "csc_name": "ባህር ዳር ዲስትሪክት አዲስ ቅዳም የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 250,
+    "csc_code": "CA25",
+    "csc_name": "ባህር ዳር ዲስትሪክት ሊበን የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 251,
+    "csc_code": "CA26",
+    "csc_name": "ባህር ዳር ዲስትሪክት ኪላጅ",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 252,
+    "csc_code": "CA27",
+    "csc_name": "ባህር ዳር ዲስትሪክት አምበሳሜ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 253,
+    "csc_code": "CA28",
+    "csc_name": "ባህር ዳር ዲስትሪክት ንፋስ መውጫ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 254,
+    "csc_code": "CA29",
+    "csc_name": "ባህር ዳር ዲስትሪክት ደብረ ታቦር 2",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 255,
+    "csc_code": "CA30",
+    "csc_name": "ባህር ዳር ዲስትሪክት ኪምር ድንጋይ",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 256,
+    "csc_code": "CA31",
+    "csc_name": "ባህር ዳር ዲስትሪክት ጎንጂ",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 257,
+    "csc_code": "CA32",
+    "csc_name": "ባህር ዳር ዲስትሪክት ታች ጋይንት (አርብ ገበያ) የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 258,
+    "csc_code": "CA33",
+    "csc_name": "ባህር ዳር ዲስትሪክት አንድቤት የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 259,
+    "csc_code": "CA34",
+    "csc_name": "ባህር ዳር ዲስትሪክት ቲሊሊ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 5
+  },
+  {
+    "id": 260,
+    "csc_code": "CB01",
+    "csc_name": "ደሴ 1 የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 261,
+    "csc_code": "CB02",
+    "csc_name": "ደሴ 2 የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 262,
+    "csc_code": "CB03",
+    "csc_name": "ባቲ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 263,
+    "csc_code": "CB04",
+    "csc_name": "አቀስታ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 264,
+    "csc_code": "CB05",
+    "csc_name": "ሀይቅ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 265,
+    "csc_code": "CB06",
+    "csc_name": "መካነ ሰላም",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 266,
+    "csc_code": "CB07",
+    "csc_name": "ተንታ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 267,
+    "csc_code": "CB08",
+    "csc_name": "ወረኢሉ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 268,
+    "csc_code": "CB09",
+    "csc_name": "ከሚሴ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 269,
+    "csc_code": "CB10",
+    "csc_name": "ኮምቦልቻ ቁ.1",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 270,
+    "csc_code": "CB11",
+    "csc_name": "ኮምቦልቻ ቁ.2",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 271,
+    "csc_code": "CB12",
+    "csc_name": "ሳይንት አጂባር የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 272,
+    "csc_code": "CB13",
+    "csc_name": "ቁታበር የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 273,
+    "csc_code": "CB14",
+    "csc_name": "ወግዲ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 274,
+    "csc_code": "CB15",
+    "csc_name": "ውቻሌ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 275,
+    "csc_code": "CB16",
+    "csc_name": "ቀላላ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 276,
+    "csc_code": "CB17",
+    "csc_name": "ወግልጠና የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 277,
+    "csc_code": "CB18",
+    "csc_name": "አልብኮ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 278,
+    "csc_code": "CB19",
+    "csc_name": "ቢስቲማ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 279,
+    "csc_code": "CB20",
+    "csc_name": "ጨፋ ሮቢት የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 280,
+    "csc_code": "CB21",
+    "csc_name": "ሀርቡ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 281,
+    "csc_code": "CB22",
+    "csc_name": "ጀማ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 282,
+    "csc_code": "CB23",
+    "csc_name": "ማሻ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 283,
+    "csc_code": "CB24",
+    "csc_name": "ደንሳ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 284,
+    "csc_code": "CB25",
+    "csc_name": "መቆይ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 285,
+    "csc_code": "CB26",
+    "csc_name": "ለገሂዳ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 286,
+    "csc_code": "CB27",
+    "csc_name": "ደሴ 3 የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 11
+  },
+  {
+    "id": 287,
+    "csc_code": "CC01",
+    "csc_name": "ጎንደር ዲስትሪክት ጎንደር 1 የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 288,
+    "csc_code": "CC02",
+    "csc_name": "ጎንደር ዲስትሪክት ጎንደር 2 የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 289,
+    "csc_code": "CC03",
+    "csc_name": "ጎንደር ዲስትሪክት ጎንደር ቁ.3 የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 290,
+    "csc_code": "CC04",
+    "csc_name": "ጎንደር ዲስትሪክት ጪልጋ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 291,
+    "csc_code": "CC05",
+    "csc_name": "ጎንደር ዲስትሪክት ዳባት የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 292,
+    "csc_code": "CC06",
+    "csc_name": "ጎንደር ዲስትሪክት ደባርቅ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 293,
+    "csc_code": "CC07",
+    "csc_name": "ጎንደር ዲስትሪክት ኮላድባ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 294,
+    "csc_code": "CC08",
+    "csc_name": "ጎንደር ዲስትሪክት መተማ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 295,
+    "csc_code": "CC09",
+    "csc_name": "ጎንደር ዲስትሪክት ሳንጃ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 296,
+    "csc_code": "CC10",
+    "csc_name": "ጎንደር ዲስትሪክት ማክሰኝት የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 297,
+    "csc_code": "CC11",
+    "csc_name": "ጎንደር ዲስትሪክት ደልጊ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 298,
+    "csc_code": "CC12",
+    "csc_name": "ጎንደር ዲስትሪክት አዳርቃይ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 299,
+    "csc_code": "CC13",
+    "csc_name": "ጎንደር ዲስትሪክት አረባያ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 300,
+    "csc_code": "CC14",
+    "csc_name": "ጎንደር ዲስትሪክት ገላጆ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 301,
+    "csc_code": "CC15",
+    "csc_name": "ጎንደር ዲስትሪክት ጉሃሳ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 302,
+    "csc_code": "CC16",
+    "csc_name": "ጎንደር ዲስትሪክት መካነ ብርሃን የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 303,
+    "csc_code": "CC17",
+    "csc_name": "ጎንደር ዲስትሪክት ሻወራ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 304,
+    "csc_code": "CC18",
+    "csc_name": "ጎንደር ዲስትሪክት ተክልድንጋይ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 305,
+    "csc_code": "CC19",
+    "csc_name": "ጎንደር ዲስትሪክት አብደራፊ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 306,
+    "csc_code": "CC21",
+    "csc_name": "አምባ ጊዮርጊስ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 307,
+    "csc_code": "CC22",
+    "csc_name": "መተማ ዮሐንስ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 308,
+    "csc_code": "CC23",
+    "csc_name": "ጎንደር ዲስትሪክት ቿሂት የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 309,
+    "csc_code": "CC24",
+    "csc_name": "ኪራኪር የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 14
+  },
+  {
+    "id": 310,
+    "csc_code": "CD01",
+    "csc_name": "ደብረ ብርሃን ቁ.1 የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 311,
+    "csc_code": "CD02",
+    "csc_name": "ደብረ ብርሃን ቁ.2 የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 312,
+    "csc_code": "CD03",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት እናዋሪ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 313,
+    "csc_code": "CD04",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት አንኮበር የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 314,
+    "csc_code": "CD05",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት አለም ከተማ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 315,
+    "csc_code": "CD06",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት ለሚ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 316,
+    "csc_code": "CD07",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት ሀገረ ማርያም የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 317,
+    "csc_code": "CD08",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት አረርቲ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 318,
+    "csc_code": "CD09",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት አታዬ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 319,
+    "csc_code": "CD10",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት ደብረ ሲና የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 320,
+    "csc_code": "CD11",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት መሀል ሜዳ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 321,
+    "csc_code": "CD12",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት ሞላሌ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 322,
+    "csc_code": "CD13",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት ሸዋ ሮቢት የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 323,
+    "csc_code": "CD14",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት ጊሼ ራበል የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 324,
+    "csc_code": "CD15",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት መጢህቢላ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 325,
+    "csc_code": "CD16",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት ሰላ ድንጋይ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 326,
+    "csc_code": "CD17",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት ጊናገር የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 327,
+    "csc_code": "CD18",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት ደንባ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 328,
+    "csc_code": "CD19",
+    "csc_name": "ደብረ ብርሃን ዲስትሪክት ጫቻ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 329,
+    "csc_code": "CD20",
+    "csc_name": "ሚዳ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 9
+  },
+  {
+    "id": 330,
+    "csc_code": "CE01",
+    "csc_name": "ደብረ ማርቆስ 01",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 331,
+    "csc_code": "CE02",
+    "csc_name": "ደብረ ማርቆስ 02",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 332,
+    "csc_code": "CE03",
+    "csc_name": "አማኑኤል",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 333,
+    "csc_code": "CE04",
+    "csc_name": "ቢቸና",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 334,
+    "csc_code": "CE05",
+    "csc_name": "ደጀን",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 335,
+    "csc_code": "CE06",
+    "csc_name": "ግንደወይን",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 336,
+    "csc_code": "CE07",
+    "csc_name": "ቁይ",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 337,
+    "csc_code": "CE08",
+    "csc_name": "ሞጣ",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 338,
+    "csc_code": "CE09",
+    "csc_name": "ዲጎ ጽዮን",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 339,
+    "csc_code": "CE10",
+    "csc_name": "ሉማሜ",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 340,
+    "csc_code": "CE11",
+    "csc_name": "መርጦ ለማርያም",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 341,
+    "csc_code": "CE12",
+    "csc_name": "የጁቤ",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 342,
+    "csc_code": "CE13",
+    "csc_name": "ቡሬ",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 343,
+    "csc_code": "CE14",
+    "csc_name": "ፍኖተ ሰላም",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 344,
+    "csc_code": "CE15",
+    "csc_name": "ሺንዲ",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 345,
+    "csc_code": "CE16",
+    "csc_name": "ደነበጫ",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 346,
+    "csc_code": "CE17",
+    "csc_name": "ፈረስ ቤት",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 347,
+    "csc_code": "CE18",
+    "csc_name": "ደብረ ኤልያስ",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 348,
+    "csc_code": "CE19",
+    "csc_name": "ገበዘ ማርያም",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 349,
+    "csc_code": "CE20",
+    "csc_name": "ደብረ ወርቅ",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 350,
+    "csc_code": "CE21",
+    "csc_name": "የዲውሃ",
+    "region": "አማራ",
+    "region_id": 10
+  },
+  {
+    "id": 351,
+    "csc_code": "CF01",
+    "csc_name": "ወልዲያ ዲስትሪክት ወልዲያ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 352,
+    "csc_code": "CF02",
+    "csc_name": "ወልዲያ ዲስትሪክት አመደወርቅ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 353,
+    "csc_code": "CF03",
+    "csc_name": "ወልዲያ ዲስትሪክት ጋሸና የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 354,
+    "csc_code": "CF04",
+    "csc_name": "ወልዲያ ዲስትሪክት ላሊበላ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 355,
+    "csc_code": "CF05",
+    "csc_name": "ወልዲያ ዲስትሪክት ቆቦ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 356,
+    "csc_code": "CF06",
+    "csc_name": "ወልዲያ ዲስትሪክት መርሳ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 357,
+    "csc_code": "CF07",
+    "csc_name": "ወልዲያ ዲስትሪክት ሰቆጣ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 358,
+    "csc_code": "CF08",
+    "csc_name": "ወልዲያ ዲስትሪክት ኑራቅ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 359,
+    "csc_code": "CF09",
+    "csc_name": "ወልዲያ ዲስትሪክት አየና ቡጉና የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 360,
+    "csc_code": "CF10",
+    "csc_name": "ወልዲያ ዲስትሪክት ዳውንት የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 361,
+    "csc_code": "CF11",
+    "csc_name": "ወልዲያ ዲስትሪክት ዝቋላ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 362,
+    "csc_code": "CF12",
+    "csc_name": "ወልዲያ ዲስትሪክት ሮቢት የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 363,
+    "csc_code": "CF13",
+    "csc_name": "ወልዲያ ዲስትሪክት ፍላቂት",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 364,
+    "csc_code": "CF14",
+    "csc_name": "ወልዲያ ዲስትሪክት ሙጃ የደንበኞች አገልግሎት ማዕከል",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 365,
+    "csc_code": "CF15",
+    "csc_name": "ወልዲያ ዲስትሪክት ወልዲያ የደንበኞች አገልግሎት ማዕከል 2",
+    "region": "አማራ",
+    "region_id": 27
+  },
+  {
+    "id": 366,
+    "csc_code": "DB01",
+    "csc_name": "አርባ ምንጭ ቁ.1 የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 367,
+    "csc_code": "DB02",
+    "csc_name": "አርባ ምንጭ ቁ.2 የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 368,
+    "csc_code": "DB03",
+    "csc_name": "ሳውላ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 369,
+    "csc_code": "DB04",
+    "csc_name": "ጨንቻ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 370,
+    "csc_code": "DB05",
+    "csc_name": "ገረሴ ቦንኬ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 371,
+    "csc_code": "DB06",
+    "csc_name": "ባስኬቶ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 372,
+    "csc_code": "DB07",
+    "csc_name": "ሰገን የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 373,
+    "csc_code": "DB08",
+    "csc_name": "ጂንካ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 374,
+    "csc_code": "DB09",
+    "csc_name": "ዲመካ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 375,
+    "csc_code": "DB10",
+    "csc_name": "የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 376,
+    "csc_code": "DB11",
+    "csc_name": "ምዕራብ አባያ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 377,
+    "csc_code": "DB12",
+    "csc_name": "ቤቶ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 378,
+    "csc_code": "DB13",
+    "csc_name": "ኮንሶ",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 379,
+    "csc_code": "DB14",
+    "csc_name": "ሰላምበር",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 380,
+    "csc_code": "DB15",
+    "csc_name": "አማሮ ኬሌ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 381,
+    "csc_code": "DB16",
+    "csc_name": "ቡርጂ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 382,
+    "csc_code": "DB17",
+    "csc_name": "ከምባ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 383,
+    "csc_code": "DB18",
+    "csc_name": "ዲታ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 4
+  },
+  {
+    "id": 384,
+    "csc_code": "DC01",
+    "csc_name": "ሆሳዕና ዲስትሪክት ሆሳዕና ቁ.1",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 385,
+    "csc_code": "DC02",
+    "csc_name": "ሆሳዕና ዲስትሪክት ወልቂጤ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 386,
+    "csc_code": "DC03",
+    "csc_name": "ሆሳዕና ዲስትሪክት ቡታጅራ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 387,
+    "csc_code": "DC04",
+    "csc_name": "ሆሳዕና ዲስትሪክት ወራቤ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 388,
+    "csc_code": "DC05",
+    "csc_name": "ሆሳዕና ዲስትሪክት ቡኢ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 389,
+    "csc_code": "DC06",
+    "csc_name": "ሆሳዕና ዲስትሪክት እምድብር የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 390,
+    "csc_code": "DC07",
+    "csc_name": "ሆሳዕና ዲስትሪክት ጎንቺሬ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 391,
+    "csc_code": "DC08",
+    "csc_name": "ሆሳዕና ዲስትሪክት አገና የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 392,
+    "csc_code": "DC09",
+    "csc_name": "ሆሳዕና ዲስትሪክት ዳርጋዬ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 393,
+    "csc_code": "DC10",
+    "csc_name": "ሆሳዕና ዲስትሪክት ዳሎቻ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 394,
+    "csc_code": "DC11",
+    "csc_name": "ሆሳዕና ዲስትሪክት ቶራ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 395,
+    "csc_code": "DC12",
+    "csc_name": "ሆሳዕና ዲስትሪክት ዱራሜ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 396,
+    "csc_code": "DC13",
+    "csc_name": "ሆሳዕና ዲስትሪክት ጊምቢቹ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 397,
+    "csc_code": "DC14",
+    "csc_name": "ሆሳዕና ዲስትሪክት ሙዱላ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 398,
+    "csc_code": "DC15",
+    "csc_name": "ሆሳዕና ዲስትሪክት ዶዮገና የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 399,
+    "csc_code": "DC16",
+    "csc_name": "ሆሳዕና ዲስትሪክት አንጋጫ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 400,
+    "csc_code": "DC17",
+    "csc_name": "ሆሳዕና ዲስትሪክት ለራ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 401,
+    "csc_code": "DC18",
+    "csc_name": "ሆሳዕና ዲስትሪክት ሞርሲቶ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 402,
+    "csc_code": "DC19",
+    "csc_name": "ሆሳዕና ዲስትሪክት ሳጃ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 403,
+    "csc_code": "DC20",
+    "csc_name": "ሆሳዕና ዲስትሪክት አለም ገበያ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 404,
+    "csc_code": "DC21",
+    "csc_name": "ሆሳዕና ዲስትሪክት ሺንሺቾ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 405,
+    "csc_code": "DC22",
+    "csc_name": "ሆሳዕና ቁ.2",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 406,
+    "csc_code": "DC23",
+    "csc_name": "ሀዋሪያት",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 407,
+    "csc_code": "DC24",
+    "csc_name": "ጎምቦራ",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 408,
+    "csc_code": "DC25",
+    "csc_name": "አረቅት",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 409,
+    "csc_code": "DC26",
+    "csc_name": "ፎንኮ",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 410,
+    "csc_code": "DC27",
+    "csc_name": "ሆሳዕና ዲስትሪክት ድንቁላ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 411,
+    "csc_code": "DC28",
+    "csc_name": "ሆሳዕና ዲስትሪክት ኮሼ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ደቡብ",
+    "region_id": 16
+  },
+  {
+    "id": 412,
+    "csc_code": "DE01",
+    "csc_name": "ወላይታ ሶዶ ቁ.1",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 413,
+    "csc_code": "DE02",
+    "csc_name": "ወላይታ ሶዶ ቁ.2",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 414,
+    "csc_code": "DE03",
+    "csc_name": "አረካ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 415,
+    "csc_code": "DE04",
+    "csc_name": "በደሳ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 416,
+    "csc_code": "DE05",
+    "csc_name": "በሌ ጉኒኖ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 417,
+    "csc_code": "DE06",
+    "csc_name": "ቦዲቲ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 418,
+    "csc_code": "DE08",
+    "csc_name": "ገሱፓ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 419,
+    "csc_code": "DE09",
+    "csc_name": "ሀደሮ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 420,
+    "csc_code": "DE10",
+    "csc_name": "ሁምቦ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 421,
+    "csc_code": "DE11",
+    "csc_name": "ሾኔ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 422,
+    "csc_code": "DE14",
+    "csc_name": "አላባ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 423,
+    "csc_code": "DE15",
+    "csc_name": "ቡሌ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 424,
+    "csc_code": "DE16",
+    "csc_name": "ወናጎ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 425,
+    "csc_code": "DE17",
+    "csc_name": "ይርጋጨፌ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 426,
+    "csc_code": "DE18",
+    "csc_name": "ዲላ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 427,
+    "csc_code": "DE19",
+    "csc_name": "ጨለለቅቱ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 428,
+    "csc_code": "DE20",
+    "csc_name": "ገደብ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 429,
+    "csc_code": "DE21",
+    "csc_name": "ቦረዳ",
+    "region": "ደቡብ",
+    "region_id": 28
+  },
+  {
+    "id": 430,
+    "csc_code": "EA01",
+    "csc_name": "መቀሌ የደንበኞች አገልግሎት ማዕከል 1",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 431,
+    "csc_code": "EA02",
+    "csc_name": "መቀሌ የደንበኞች አገልግሎት ማዕከል 2",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 432,
+    "csc_code": "EA03",
+    "csc_name": "መቀሌ የደንበኞች አገልግሎት ማዕከል 3",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 433,
+    "csc_code": "EA04",
+    "csc_name": "መቀሌ የደንበኞች አገልግሎት ማዕከል 4 (ኢንዱስትሪ ፓርክ)",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 434,
+    "csc_code": "EA05",
+    "csc_name": "ዓዲ ጉዶም",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 435,
+    "csc_code": "EA06",
+    "csc_name": "ዓዲ ሽሁ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 436,
+    "csc_code": "EA07",
+    "csc_name": "ዓፅቢ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 437,
+    "csc_code": "EA08",
+    "csc_name": "ፍሬወይኒ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 438,
+    "csc_code": "EA09",
+    "csc_name": "ሐውዜን",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 439,
+    "csc_code": "EA10",
+    "csc_name": "ኮረም",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 440,
+    "csc_code": "EA11",
+    "csc_name": "መኾኒ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 441,
+    "csc_code": "EA12",
+    "csc_name": "የጭላ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 442,
+    "csc_code": "EA13",
+    "csc_name": "ዛላምበሳ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 443,
+    "csc_code": "EA14",
+    "csc_name": "ዓቢይ ዓዲ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 444,
+    "csc_code": "EA15",
+    "csc_name": "አላማጣ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 445,
+    "csc_code": "EA16",
+    "csc_name": "ማይጨው",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 446,
+    "csc_code": "EA17",
+    "csc_name": "ኩሓ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 447,
+    "csc_code": "EA18",
+    "csc_name": "ውቅሮ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 448,
+    "csc_code": "EA19",
+    "csc_name": "አዲግራት",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 449,
+    "csc_code": "EA20",
+    "csc_name": "ዕዳጋ ሐሙስ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 450,
+    "csc_code": "EA21",
+    "csc_name": "ሳምሬ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 451,
+    "csc_code": "EA22",
+    "csc_name": "ሃገረ ሰላም",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 452,
+    "csc_code": "EA23",
+    "csc_name": "ዶሃን",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 453,
+    "csc_code": "EA24",
+    "csc_name": "ብዘት",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 454,
+    "csc_code": "EA25",
+    "csc_name": "ዋጃ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 455,
+    "csc_code": "EA26",
+    "csc_name": "አጉላኤ",
+    "region": "ትግራይ",
+    "region_id": 18
+  },
+  {
+    "id": 456,
+    "csc_code": "EB01",
+    "csc_name": "ሽሬ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 457,
+    "csc_code": "EB02",
+    "csc_name": "እንዳባጉና",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 458,
+    "csc_code": "EB03",
+    "csc_name": "እንጢቾ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 459,
+    "csc_code": "EB04",
+    "csc_name": "ማይ ፅብሪ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 460,
+    "csc_code": "EB05",
+    "csc_name": "ራማ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 461,
+    "csc_code": "EB06",
+    "csc_name": "ሰለክለካ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 462,
+    "csc_code": "EB07",
+    "csc_name": "ሸራሮ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 463,
+    "csc_code": "EB08",
+    "csc_name": "ውቅሮ ማራይ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 464,
+    "csc_code": "EB09",
+    "csc_name": "ሑመራ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 465,
+    "csc_code": "EB10",
+    "csc_name": "ዓድዋ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 466,
+    "csc_code": "EB11",
+    "csc_name": "አክሱም",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 467,
+    "csc_code": "EB12",
+    "csc_name": "ዕዳጋ ዓርቢ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 468,
+    "csc_code": "EB13",
+    "csc_name": "ዳንሻ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 469,
+    "csc_code": "EB14",
+    "csc_name": "ዓዲ ዳዕሮ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 470,
+    "csc_code": "EB15",
+    "csc_name": "ሰመማ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 471,
+    "csc_code": "EB16",
+    "csc_name": "ማይ ሐንሰ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 472,
+    "csc_code": "EB17",
+    "csc_name": "ነበለት",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 473,
+    "csc_code": "EB18",
+    "csc_name": "ባኸር",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 474,
+    "csc_code": "EB19",
+    "csc_name": "ዓዲ ረመፅ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 475,
+    "csc_code": "EB20",
+    "csc_name": "ማይ ጋባ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 476,
+    "csc_code": "EB21",
+    "csc_name": "ዓዲ ሐገራይ",
+    "region": "ትግራይ",
+    "region_id": 23
+  },
+  {
+    "id": 477,
+    "csc_code": "FA01",
+    "csc_name": "ሠመራ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 478,
+    "csc_code": "FA02",
+    "csc_name": "መልካወረር",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 479,
+    "csc_code": "FA03",
+    "csc_name": "አዋሽ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 480,
+    "csc_code": "FA04",
+    "csc_name": "ተላላክ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 481,
+    "csc_code": "FA05",
+    "csc_name": "ገዋኔ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 482,
+    "csc_code": "FA06",
+    "csc_name": "ሱኑልታ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 483,
+    "csc_code": "FA07",
+    "csc_name": "ዲችኦቶ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 484,
+    "csc_code": "FA08",
+    "csc_name": "ሎግያ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 485,
+    "csc_code": "FA09",
+    "csc_name": "አሣይታ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 486,
+    "csc_code": "FA10",
+    "csc_name": "ዱብቲ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 487,
+    "csc_code": "FA11",
+    "csc_name": "ከለዋን",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 488,
+    "csc_code": "FA12",
+    "csc_name": "ሚሌ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 489,
+    "csc_code": "FA13",
+    "csc_name": "አፍዴራ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 490,
+    "csc_code": "FA14",
+    "csc_name": "በርሃሌ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 491,
+    "csc_code": "FA15",
+    "csc_name": "ጭፍራ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 492,
+    "csc_code": "FA16",
+    "csc_name": "አብአላ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 493,
+    "csc_code": "FA19",
+    "csc_name": "ኩነባ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 494,
+    "csc_code": "FA20",
+    "csc_name": "ኤሊዉሃ",
+    "region": "አፋር",
+    "region_id": 2
+  },
+  {
+    "id": 495,
+    "csc_code": "GA01",
+    "csc_name": "ጋምቤላ ሪጅን ጋምቤላ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ጋምቤላ",
+    "region_id": 13
+  },
+  {
+    "id": 496,
+    "csc_code": "GA02",
+    "csc_name": "ጋምቤላ ሪጅን ኢታንግ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ጋምቤላ",
+    "region_id": 13
+  },
+  {
+    "id": 497,
+    "csc_code": "GA03",
+    "csc_name": "ጋምቤላ ሪጅን አቦቦ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ጋምቤላ",
+    "region_id": 13
+  },
+  {
+    "id": 498,
+    "csc_code": "GA04",
+    "csc_name": "ጋምቤላ ሪጅን ፉኝዶ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ጋምቤላ",
+    "region_id": 13
+  },
+  {
+    "id": 499,
+    "csc_code": "GA05",
+    "csc_name": "ጋምቤላ ሪጅን ዲማ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ጋምቤላ",
+    "region_id": 13
+  },
+  {
+    "id": 500,
+    "csc_code": "GA06",
+    "csc_name": "ባሮ ማዶ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ጋምቤላ",
+    "region_id": 13
+  },
+  {
+    "id": 501,
+    "csc_code": "GA07",
+    "csc_name": "ላሬ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ጋምቤላ",
+    "region_id": 13
+  },
+  {
+    "id": 502,
+    "csc_code": "GA08",
+    "csc_name": "ኩሚ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ጋምቤላ",
+    "region_id": 13
+  },
+  {
+    "id": 503,
+    "csc_code": "GA09",
+    "csc_name": "መቲ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ጋምቤላ",
+    "region_id": 13
+  },
+  {
+    "id": 504,
+    "csc_code": "HA01",
+    "csc_name": "ጅጅጋ ዲስትሪክት አይሻ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 505,
+    "csc_code": "HA02",
+    "csc_name": "ጅጅጋ ዲስትሪክት ኤረር የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 506,
+    "csc_code": "HA03",
+    "csc_name": "ጅጅጋ ዲስትሪክት ኩለን የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 507,
+    "csc_code": "HA04",
+    "csc_name": "ጅጅጋ ዲስትሪክት አዋሬ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 508,
+    "csc_code": "HA05",
+    "csc_name": "ጅጅጋ ዲስትሪክት ሸኮሽ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 509,
+    "csc_code": "HA06",
+    "csc_name": "ጅጅጋ ዲስትሪክት ፊኬ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 510,
+    "csc_code": "HA07",
+    "csc_name": "ጅጅጋ ዲስትሪክት አውበሬ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 511,
+    "csc_code": "HA08",
+    "csc_name": "ጅጅጋ ዲስትሪክት ቀብሪ በያህ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 512,
+    "csc_code": "HA09",
+    "csc_name": "ጅጅጋ ዲስትሪክት ደገሃቡር የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 513,
+    "csc_code": "HA10",
+    "csc_name": "ጅጅጋ ዲስትሪክት ጅጅጋ የደንበኞች አገልግሎት ማዕከል ቁ.1",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 514,
+    "csc_code": "HA11",
+    "csc_name": "ጅጅጋ ዲስትሪክት ጅጅጋ የደንበኞች አገልግሎት ማዕከል ቁ.2",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 515,
+    "csc_code": "HA12",
+    "csc_name": "ፊሌቱ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 516,
+    "csc_code": "HA13",
+    "csc_name": "ጅጅጋ ዲስትሪክት ፋፈን የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 517,
+    "csc_code": "HA14",
+    "csc_name": "ጅጅጋ ዲስትሪክት ቶጎ ውቻሌ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 518,
+    "csc_code": "HB01",
+    "csc_name": "ጎዴ ዲስትሪክት ጎዴ ቅርንጫፍ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 519,
+    "csc_code": "HB03",
+    "csc_name": "ጎዴ ዲስትሪክት ዶሎዶ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 520,
+    "csc_code": "HB04",
+    "csc_name": "ጎዴ ዲስትሪክት ሀርገሌ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 521,
+    "csc_code": "HB05",
+    "csc_name": "ጎዴ ዲስትሪክት ሺላቦ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 522,
+    "csc_code": "HB06",
+    "csc_name": "ጎዴ ዲስትሪክት ጋሻሞ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 523,
+    "csc_code": "HB08",
+    "csc_name": "ጎዴ ዲስትሪክት ቦሄ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 524,
+    "csc_code": "HB09",
+    "csc_name": "ጎዴ ዲስትሪክት ዋርደር የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 525,
+    "csc_code": "HB10",
+    "csc_name": "ጎዴ ዲስትሪክት ቀብሪደሃር የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 526,
+    "csc_code": "HB11",
+    "csc_name": "ጎዴ ዲስትሪክት ደነን የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 527,
+    "csc_code": "HB13",
+    "csc_name": "ጎዴ ዲስትሪክት ኤሚ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሶማሊ",
+    "region_id": 25
+  },
+  {
+    "id": 528,
+    "csc_code": "IA01",
+    "csc_name": "ድሬዳዋ 1",
+    "region": "ድሬደዋ",
+    "region_id": 12
+  },
+  {
+    "id": 529,
+    "csc_code": "IA02",
+    "csc_name": "ድሬዳዋ 2",
+    "region": "ድሬደዋ",
+    "region_id": 12
+  },
+  {
+    "id": 530,
+    "csc_code": "IA04",
+    "csc_name": "መልካ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ድሬደዋ",
+    "region_id": 12
+  },
+  {
+    "id": 531,
+    "csc_code": "IA07",
+    "csc_name": "ጂ.ኤም የደንበኞች አገልግሎት ማዕከል",
+    "region": "ድሬደዋ",
+    "region_id": 12
+  },
+  {
+    "id": 532,
+    "csc_code": "IA06",
+    "csc_name": "ኢንዱስትሪ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ድሬደዋ",
+    "region_id": 12
+  },
+  {
+    "id": 533,
+    "csc_code": "JA01",
+    "csc_name": "ሀረር ሪጅን ሀረር ቁ.1 የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሀረር",
+    "region_id": 15
+  },
+  {
+    "id": 534,
+    "csc_code": "JA02",
+    "csc_name": "ሀረር ሪጅን ሀረር ቁ.2 የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሀረር",
+    "region_id": 15
+  },
+  {
+    "id": 535,
+    "csc_code": "JA03",
+    "csc_name": "ሀረር ሪጅን ደረቲ ያራ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሀረር",
+    "region_id": 15
+  },
+  {
+    "id": 536,
+    "csc_code": "JA04",
+    "csc_name": "ኤረር",
+    "region": "ሀረር",
+    "region_id": 15
+  },
+  {
+    "id": 537,
+    "csc_code": "JA05",
+    "csc_name": "ሶፊ የደንበኞች አገልግሎት ማዕከል",
+    "region": "ሀረር",
+    "region_id": 15
+  },
+  {
+    "id": 538,
+    "csc_code": "KA01",
+    "csc_name": "አሶሳ",
+    "region": "ቤኒሻንጉል",
+    "region_id": 7
+  },
+  {
+    "id": 539,
+    "csc_code": "KA08",
+    "csc_name": "ፓዊ",
+    "region": "ቤኒሻንጉል",
+    "region_id": 7
+  },
+  {
+    "id": 540,
+    "csc_code": "KA05",
+    "csc_name": "ባምባሲ",
+    "region": "ቤኒሻንጉል",
+    "region_id": 7
+  },
+  {
+    "id": 541,
+    "csc_code": "KA02",
+    "csc_name": "መንጌ",
+    "region": "ቤኒሻንጉል",
+    "region_id": 7
+  },
+  {
+    "id": 542,
+    "csc_code": "KA06",
+    "csc_name": "ኩሙሩክ",
+    "region": "ቤኒሻንጉል",
+    "region_id": 7
+  },
+  {
+    "id": 543,
+    "csc_code": "KA07",
+    "csc_name": "ቶንጎ",
+    "region": "ቤኒሻንጉል",
+    "region_id": 7
+  },
+  {
+    "id": 544,
+    "csc_code": "KA11",
+    "csc_name": "መንኩሽ",
+    "region": "ቤኒሻንጉል",
+    "region_id": 7
+  },
+  {
+    "id": 545,
+    "csc_code": "KA03",
+    "csc_name": "ቀማሽ",
+    "region": "ቤኒሻንጉል",
+    "region_id": 7
+  },
+  {
+    "id": 546,
+    "csc_code": "KA04",
+    "csc_name": "ኦዳ",
+    "region": "ቤኒሻንጉል",
+    "region_id": 7
+  },
+  {
+    "id": 547,
+    "csc_code": "KA10",
+    "csc_name": "ደብረ ዘይት",
+    "region": "ቤኒሻንጉል",
+    "region_id": 7
+  },
+  {
+    "id": 548,
+    "csc_code": "KA09",
+    "csc_name": "ሶጌ",
+    "region": "ቤኒሻንጉል",
+    "region_id": 7
+  },
+  {
+    "id": 549,
+    "csc_code": "KA12",
+    "csc_name": "ቡለን",
+    "region": "ቤኒሻንጉል",
+    "region_id": 7
+  },
+  {
+    "id": 550,
+    "csc_code": "LA01",
+    "csc_name": "ሀዋሳ ቁ.1",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 551,
+    "csc_code": "LA02",
+    "csc_name": "ሀዋሳ ቁ.2",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 552,
+    "csc_code": "LA03",
+    "csc_name": "ሀዋሳ ቁ.3",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 553,
+    "csc_code": "LA04",
+    "csc_name": "ሀዋሳ ቁ.4",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 554,
+    "csc_code": "LA05",
+    "csc_name": "አለታ ወንዶ",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 555,
+    "csc_code": "LA06",
+    "csc_name": "ዳዮ",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 556,
+    "csc_code": "LA07",
+    "csc_name": "ሀ/ሰላም",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 557,
+    "csc_code": "LA08",
+    "csc_name": "ይ/ዓለም",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 558,
+    "csc_code": "LA09",
+    "csc_name": "ይርባ",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 559,
+    "csc_code": "LA10",
+    "csc_name": "ለኩ",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 560,
+    "csc_code": "LA11",
+    "csc_name": "አርቤጎና",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 561,
+    "csc_code": "LA12",
+    "csc_name": "ጩኮ",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 562,
+    "csc_code": "LA13",
+    "csc_name": "ግርጃ",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 563,
+    "csc_code": "LA14",
+    "csc_name": "ቀባዶ",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 564,
+    "csc_code": "LA15",
+    "csc_name": "ወንዶ ገነት",
+    "region": "ሲዳማ",
+    "region_id": 24
+  },
+  {
+    "id": 565,
+    "csc_code": "MA01",
+    "csc_name": "ቦንጋ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 566,
+    "csc_code": "MA02",
+    "csc_name": "ማሻ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 567,
+    "csc_code": "MA03",
+    "csc_name": "ሚዛን",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 568,
+    "csc_code": "MA04",
+    "csc_name": "ተፒ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 569,
+    "csc_code": "MA05",
+    "csc_name": "ዳካ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 570,
+    "csc_code": "MA06",
+    "csc_name": "ኦዳ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 571,
+    "csc_code": "MA07",
+    "csc_name": "ጨና",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 572,
+    "csc_code": "MA08",
+    "csc_name": "ብፍቱ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 573,
+    "csc_code": "MA09",
+    "csc_name": "ደብረ ወርቅ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 574,
+    "csc_code": "MA10",
+    "csc_name": "ሸይ ቤንች",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 575,
+    "csc_code": "MA11",
+    "csc_name": "ኮንታ አሜያ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 576,
+    "csc_code": "MA12",
+    "csc_name": "ጭሪ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 577,
+    "csc_code": "MA13",
+    "csc_name": "አዲዮ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 578,
+    "csc_code": "MA14",
+    "csc_name": "ጊምቦ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 579,
+    "csc_code": "MA15",
+    "csc_name": "ጀሙ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 580,
+    "csc_code": "MA16",
+    "csc_name": "ጌሳ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 581,
+    "csc_code": "MA17",
+    "csc_name": "ተርጫ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  },
+  {
+    "id": 582,
+    "csc_code": "MA18",
+    "csc_name": "ቶቻ",
+    "region": "ደቡብ ምዕራብ",
+    "region_id": 26
+  }
+]

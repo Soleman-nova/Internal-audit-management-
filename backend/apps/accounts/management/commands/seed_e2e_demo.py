@@ -44,11 +44,19 @@ class Command(BaseCommand):
 
         dept_proc, _ = Department.objects.get_or_create(
             code="PROC",
-            defaults={"name": "Procurement and Logistics", "head": "Daniel Tekle"},
+            defaults={
+                "name": "Procurement and Logistics",
+                "name_am": "ግዢ እና ሎጂስቲክስ",
+                "head": "Daniel Tekle",
+            },
         )
         dept_fin, _ = Department.objects.get_or_create(
             code="FIN",
-            defaults={"name": "Finance and Accounts", "head": "Abebe Kebede"},
+            defaults={
+                "name": "Finance and Accounts",
+                "name_am": "ፋይናንስ እና ሒሳብ",
+                "head": "Abebe Kebede",
+            },
         )
 
         # Ensure roles

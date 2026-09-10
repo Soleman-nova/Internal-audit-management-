@@ -5,7 +5,9 @@ from apps.accounts.serializers import UserSerializer
 
 class AuditUniverseSerializer(serializers.ModelSerializer):
     department_name = serializers.SerializerMethodField()
+    department_name_am = serializers.SerializerMethodField()
     directorate_name = serializers.SerializerMethodField()
+    directorate_name_am = serializers.SerializerMethodField()
     category_display = serializers.CharField(source='get_category_display', read_only=True)
     due_for_re_audit = serializers.BooleanField(read_only=True)
     latest_risk_assessment = serializers.SerializerMethodField()
@@ -19,9 +21,19 @@ class AuditUniverseSerializer(serializers.ModelSerializer):
             return obj.department.name
         return None
 
+    def get_department_name_am(self, obj):
+        if obj.department:
+            return obj.department.name_am
+        return None
+
     def get_directorate_name(self, obj):
         if obj.directorate:
             return obj.directorate.name
+        return None
+
+    def get_directorate_name_am(self, obj):
+        if obj.directorate:
+            return obj.directorate.name_am
         return None
 
     def get_latest_risk_assessment(self, obj):
@@ -48,6 +60,7 @@ class AuditTeamMemberSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
     department_name = serializers.SerializerMethodField()
+    department_name_am = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
@@ -58,12 +71,19 @@ class ProjectSerializer(serializers.ModelSerializer):
             return obj.department.name
         return None
 
+    def get_department_name_am(self, obj):
+        if obj.department:
+            return obj.department.name_am
+        return None
+
 
 class AuditEngagementSerializer(serializers.ModelSerializer):
     lead_auditor_name = serializers.SerializerMethodField()
     supervisor_name = serializers.SerializerMethodField()
     department_name = serializers.SerializerMethodField()
+    department_name_am = serializers.SerializerMethodField()
     directorate_name = serializers.SerializerMethodField()
+    directorate_name_am = serializers.SerializerMethodField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     engagement_type_display = serializers.CharField(source='get_engagement_type_display', read_only=True)
     team_members = AuditTeamMemberSerializer(many=True, read_only=True)
@@ -90,9 +110,19 @@ class AuditEngagementSerializer(serializers.ModelSerializer):
             return obj.department.name
         return None
 
+    def get_department_name_am(self, obj):
+        if obj.department:
+            return obj.department.name_am
+        return None
+
     def get_directorate_name(self, obj):
         if obj.directorate:
             return obj.directorate.name
+        return None
+
+    def get_directorate_name_am(self, obj):
+        if obj.directorate:
+            return obj.directorate.name_am
         return None
 
     def get_findings_count(self, obj):
@@ -112,6 +142,7 @@ class AuditPlanSerializer(serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     approved_by_name = serializers.SerializerMethodField()
     directorate_name = serializers.SerializerMethodField()
+    directorate_name_am = serializers.SerializerMethodField()
     plan_scope_display = serializers.CharField(source='get_plan_scope_display', read_only=True)
     engagements = AuditEngagementSerializer(many=True, read_only=True)
     engagements_count = serializers.SerializerMethodField()
@@ -134,6 +165,11 @@ class AuditPlanSerializer(serializers.ModelSerializer):
     def get_directorate_name(self, obj):
         if obj.directorate:
             return obj.directorate.name
+        return None
+
+    def get_directorate_name_am(self, obj):
+        if obj.directorate:
+            return obj.directorate.name_am
         return None
 
     def get_engagements_count(self, obj):

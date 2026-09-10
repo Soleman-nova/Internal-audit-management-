@@ -158,6 +158,7 @@ Run the seeders in this order — later ones expect the organizational units the
 python manage.py seed_org_structure        # executive + corporate units
 python manage.py seed_eeu_audit_structure  # IAEO and the four audit directorates
 python manage.py seed_service_centers      # regions and customer service centers
+python manage.py seed_hq_org_units         # detailed head-office units under the chief offices
 python manage.py seed_data                 # demo users, universe, plan, engagements
 python manage.py seed_e2e_demo             # a full worked example end to end
 python manage.py flag_overdue_actions      # populates the overdue CAPA tab
@@ -406,7 +407,8 @@ Run from `backend/` with the virtualenv active.
 |---|---|---|
 | `seed_org_structure` | Executive and corporate organizational units | Once, first |
 | `seed_eeu_audit_structure` | IAEO plus the FPA, TA, ITA and PP directorates | Once, after the above |
-| `seed_service_centers` | EEU regions and their customer service centers | Once, after the above |
+| `seed_service_centers` | EEU regions and their customer service centers. Amharic names are applied from `data/service_centers_am.json` (`--amharic-file` to override; that export covers 445 of the 582 centers) | Once, after the above |
+| `seed_hq_org_units` | The detailed head-office units (CO Treasury, CO Budget, SCADA/DMS, …) under the existing chief offices; merges onto, never duplicates, the seeded units. Amharic names are applied from `data/org_units_am.json` (`--amharic-file` to override) | Once, after the above |
 | `seed_data` | Demo users (`EEU-10001`–`EEU-10005`), risk parameters, universe entries, an approved annual plan, engagements, a program with procedures, one finding and one CAPA, a report template | Development only |
 | `seed_e2e_demo` | A worked example spanning the whole lifecycle | Development only |
 | `flag_overdue_actions` | Flips past-due CAPAs to `overdue` and sends due-soon reminders (`DUE_SOON_DAYS = 3`, override with `--days`). Idempotent, and honours `extended_due_date` over `due_date` | **Daily, scheduled** |

@@ -48,13 +48,17 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source='department.name', read_only=True)
+    # The Amharic variant, so the interface can render the unit in either
+    # language — including retired units that fall outside the org tree.
+    department_name_am = serializers.CharField(source='department.name_am', read_only=True)
     full_name = serializers.SerializerMethodField()
     avatar_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ['id', 'email', 'username', 'first_name', 'last_name', 'full_name',
-                  'role', 'department', 'department_name', 'phone', 'employee_id',
+                  'role', 'department', 'department_name', 'department_name_am',
+                  'phone', 'employee_id',
                   'is_active', 'avatar', 'avatar_url', 'created_at', 'last_login']
         read_only_fields = ['created_at', 'last_login']
 

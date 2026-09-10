@@ -41,7 +41,9 @@ import { useOrgUnits } from '../../hooks/useOrgUnits';
 // Internal Audit → IAEO and hide them, and most auditors are assigned there.
 const TOP_LEVEL_TYPES = ['EXECUTIVE', 'CORPORATE', 'AUDIT'];
 
-// Order of the <optgroup>s in step one, most general first.
+// Order of the flat <optgroup>s in step one, most general first. The CORPORATE
+// units are not a single flat group — each chief office becomes its own optgroup
+// (built below) and follows these two in the list.
 const GROUP_ORDER = ['EXECUTIVE', 'AUDIT', 'CORPORATE'];
 
 const GROUP_LABELS = {
@@ -93,8 +95,14 @@ export const OrgUnitSelect = ({
 
   // ── Options per step ────────────────────────────────────────────────────
   const topLevel = units.filter(u => TOP_LEVEL_TYPES.includes(u.unit_type));
-  const groups = GROUP_ORDER
+
+  // Step one flat groups cover the handful of executive and audit units; the
+  // CORPORATE group is built separately because it is now hundreds deep once
+  // the detailed head-office chart is seeded.
+  const flatGroups = GROUP_ORDER
+    .filter(type => type !== 'CORPORATE')
     .map(type => ({
+      key: type,
       type,
       label: GROUP_LABELS[type][lang] || GROUP_LABELS[type].en,
       options: topLevel
@@ -102,6 +110,46 @@ export const OrgUnitSelect = ({
         .sort((a, b) => nameOf(a).localeCompare(nameOf(b))),
     }))
     .filter(group => group.options.length > 0);
+
+  // The top-level chief office a CORPORATE unit sits under: the highest unit in
+  // its chain whose parent is the executive root (or is unset). Finance is its
+  // own group heading; CO Treasury, CO Budget Control, ... group beneath it.
+  const topOfficeOf = (unit) => {
+    let current = unit;
+    while (current) {
+      const parent = current.parent == null ? null : byId.get(String(current.parent));
+      if (!parent || parent.unit_type === 'EXECUTIVE') return current;
+      current = parent;
+    }
+    return unit;
+  };
+
+  // Group every CORPORATE unit under its top-level office so the head-office
+  // dropdown stays navigable instead of one flat ~150-row list. Each optgroup
+  // holds that office plus its CORPORATE descendants at any depth.
+  const corporateGroups = Array.from(
+    units
+      .filter(u => u.unit_type === 'CORPORATE')
+      .reduce((groupMap, unit) => {
+        const top = topOfficeOf(unit);
+        const key = top ? String(top.id) : '__root__';
+        if (!groupMap.has(key)) groupMap.set(key, { top, members: [] });
+        groupMap.get(key).members.push(unit);
+        return groupMap;
+      }, new Map()).values(),
+  )
+    .map(group => ({
+      key: group.top ? `corporate-${group.top.id}` : 'corporate-root',
+      type: 'CORPORATE',
+      label: group.top ? nameOf(group.top) : (GROUP_LABELS.CORPORATE[lang] || GROUP_LABELS.CORPORATE.en),
+      options: group.members
+        .slice()
+        .sort((a, b) => nameOf(a).localeCompare(nameOf(b))),
+    }))
+    .filter(group => group.options.length > 0)
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  const groups = [...flatGroups, ...corporateGroups];
 
   // Every region, not just those under the step-one choice: regions all hang
   // off Region Coordination, so filtering by step one hid them everywhere else.
@@ -152,7 +200,7 @@ export const OrgUnitSelect = ({
             </option>
           )}
           {groups.map(group => (
-            <optgroup key={group.type} label={group.label}>
+            <optgroup key={group.key} label={group.label}>
               {group.options.map(unit => (
                 <option key={unit.id} value={unit.id}>
                   {nameOf(unit)} ({unit.code})

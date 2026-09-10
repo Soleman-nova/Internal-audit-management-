@@ -21,6 +21,7 @@ class SelfAssessmentSerializer(serializers.ModelSerializer):
 
 class RiskAssessmentSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source='department.name', read_only=True)
+    department_name_am = serializers.CharField(source='department.name_am', read_only=True)
     assessed_by_name = serializers.CharField(source='assessed_by.full_name', read_only=True)
     risk_rating_display = serializers.CharField(source='get_risk_rating_display', read_only=True)
     audit_universe_name = serializers.SerializerMethodField()

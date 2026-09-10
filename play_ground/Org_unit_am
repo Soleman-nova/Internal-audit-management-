@@ -1,0 +1,927 @@
+[
+  {
+    "orgunit": "10000026",
+    "orgunit_name": "የድርጅቱ የውስጥ ኦዲት",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000027",
+    "orgunit_name": "የዋና ሥራ አስፈጻሚ ጽሕፈት ቤት",
+    "location": "HO",
+    "parent_id": null
+  },
+  {
+    "orgunit": "10000028",
+    "orgunit_name": "የድርጅቱ ቴክኒካል ኦዲት",
+    "location": "HO",
+    "parent_id": "10000026"
+  },
+  {
+    "orgunit": "10000029",
+    "orgunit_name": "የድርጅቱ ፋይናንስ እና የሥራ አፈጻጸም ኦዲት",
+    "location": "HO",
+    "parent_id": "10000026"
+  },
+  {
+    "orgunit": "10000030",
+    "orgunit_name": "የድርጅቱ አይቲ (IT) ኦዲት",
+    "location": "HO",
+    "parent_id": "10000026"
+  },
+  {
+    "orgunit": "10000032",
+    "orgunit_name": "የድርጅቱ ቦርድ ሴክሬታሪያት",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000033",
+    "orgunit_name": "የድርጅቱ ሴቶች፣ ሕፃናት እና ወጣቶች ጉዳይ",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000034",
+    "orgunit_name": "የድርጅቱ ኮሙኒኬሽን",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000035",
+    "orgunit_name": "የድርጅቱ ህግ አገልግሎት",
+    "location": "HO",
+    "parent_id": "10003346"
+  },
+  {
+    "orgunit": "10000036",
+    "orgunit_name": "የድርጅቱ ስትራቴጂ እና ኢንቨስትመንት ሥራ አስፈጻሚ",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000037",
+    "orgunit_name": "የድርጅቱ ሰው ሀብት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000038",
+    "orgunit_name": "የድርጅቱ አቅርቦት ሰንሰለት፣ ንብረት እና ጠቅላላ አገልግሎት",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000039",
+    "orgunit_name": "የድርጅቱ ፋይናንስ እና ቁጥጥር",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000041",
+    "orgunit_name": "የድርጅቱ ኢንጂነሪንግ",
+    "location": "HO",
+    "parent_id": "10003304"
+  },
+  {
+    "orgunit": "10000042",
+    "orgunit_name": "የድርጅቱ ሥነ-ምግባር እና ፀረ-ሙስና",
+    "location": "HO",
+    "parent_id": "10003346"
+  },
+  {
+    "orgunit": "10000043",
+    "orgunit_name": "የድርጅቱ የሥራ ሂደት እና ጥራት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000044",
+    "orgunit_name": "የድርጅቱ አካባቢ ጥበቃ፣ ጤና እና ደህንነት (EHS)",
+    "location": "HO",
+    "parent_id": "10003304"
+  },
+  {
+    "orgunit": "10000045",
+    "orgunit_name": "የድርጅቱ መረብ፣ መሠረተ ልማት እና ኦፕሬሽን",
+    "location": "HO",
+    "parent_id": "10003304"
+  },
+  {
+    "orgunit": "10000046",
+    "orgunit_name": "የድርጅቱ ኢንፎርሜሽን ቴክኖሎጂ",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000048",
+    "orgunit_name": "የአዲስ አበባ ሪጅን አስተባባሪ",
+    "location": "HO",
+    "parent_id": "10003356"
+  },
+  {
+    "orgunit": "10000049",
+    "orgunit_name": "የኦሮሚያ ሪጅን አስተባባሪ",
+    "location": "HO",
+    "parent_id": "10003356"
+  },
+  {
+    "orgunit": "10000059",
+    "orgunit_name": "የድርጅቱ ተቋማዊ ግንኙነቶች እና ኩነቶች አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000034"
+  },
+  {
+    "orgunit": "10000060",
+    "orgunit_name": "የድርጅቱ ሚዲያ አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000034"
+  },
+  {
+    "orgunit": "10000061",
+    "orgunit_name": "የድርጅቱ ህትመት እና ዲጂታል ሚዲያ ኮሙኒኬሽን",
+    "location": "HO",
+    "parent_id": "10000034"
+  },
+  {
+    "orgunit": "10000062",
+    "orgunit_name": "የድርጅቱ መከላከያ ህግ እና የሕግ ተገዥነት",
+    "location": "HO",
+    "parent_id": "10000035"
+  },
+  {
+    "orgunit": "10000063",
+    "orgunit_name": "የድርጅቱ አለመግባባት መፍታት እና ክርክር",
+    "location": "HO",
+    "parent_id": "10000035"
+  },
+  {
+    "orgunit": "10000065",
+    "orgunit_name": "የድርጅቱ ኢንቨስትመንት እና ፕሮጀክት ፋይናንሲንግ",
+    "location": "HO",
+    "parent_id": "10000036"
+  },
+  {
+    "orgunit": "10000066",
+    "orgunit_name": "የድርጅቱ ስትራቴጂክ ዕቅድ እና ክትትል",
+    "location": "HO",
+    "parent_id": "10000036"
+  },
+  {
+    "orgunit": "10000067",
+    "orgunit_name": "የድርጅቱ ሥጋት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000036"
+  },
+  {
+    "orgunit": "10000068",
+    "orgunit_name": "የድርጅቱ ሰው ሀብት ዕቅድ እና ድርጅታዊ መዋቅር",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000069",
+    "orgunit_name": "የድርጅቱ ሰራተኛ ቅጥር እና ምደባ",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000070",
+    "orgunit_name": "የድርጅቱ ሰው ሀብት ሥልጠና እና ልማት",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000071",
+    "orgunit_name": "የድርጅቱ የሰራተኞች ግንኙነት እና የሪጅን ሰው ሀብት አስተባባሪ",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000072",
+    "orgunit_name": "የድርጅቱ ሰው ሀብት ካሳ እና ጥቅማጥቅሞች",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000073",
+    "orgunit_name": "የድርጅቱ ኤች.አይ.ቪ/ኤድስ መከላከያ እና መቆጣጠሪያ ጽሕፈት ቤት",
+    "location": "HO",
+    "parent_id": "10000076"
+  },
+  {
+    "orgunit": "10000074",
+    "orgunit_name": "የድርጅቱ ኮርፖሬት ሰው ሀብት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000076",
+    "orgunit_name": "የድርጅቱ የሕክምና አገልግሎት እና ኤች.አይ.ቪ",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000077",
+    "orgunit_name": "የድርጅቱ የሰራተኞች መዝገብ እና HRIS",
+    "location": "HO",
+    "parent_id": "10000074"
+  },
+  {
+    "orgunit": "10000080",
+    "orgunit_name": "የድርጅቱ ግዢ I",
+    "location": "HO",
+    "parent_id": "10003751"
+  },
+  {
+    "orgunit": "10000081",
+    "orgunit_name": "የድርጅቱ ሎጂስቲክስ እና መጋዘን",
+    "location": "HO",
+    "parent_id": "10003342"
+  },
+  {
+    "orgunit": "10000082",
+    "orgunit_name": "የድርጅቱ ንብረት እና ጠቅላላ አገልግሎት",
+    "location": "HO",
+    "parent_id": "10000038"
+  },
+  {
+    "orgunit": "10000083",
+    "orgunit_name": "የድርጅቱ ግዢ II",
+    "location": "HO",
+    "parent_id": "10003751"
+  },
+  {
+    "orgunit": "10000084",
+    "orgunit_name": "የድርጅቱ ተሽከርካሪ እና ህንፃ/መገልገያ ግዢ",
+    "location": "HO",
+    "parent_id": "10003751"
+  },
+  {
+    "orgunit": "10000085",
+    "orgunit_name": "የድርጅቱ መካከለኛ መጋዘን",
+    "location": "HO",
+    "parent_id": "10000081"
+  },
+  {
+    "orgunit": "10000086",
+    "orgunit_name": "የድርጅቱ ህንፃዎች/መገልገያዎች አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000089"
+  },
+  {
+    "orgunit": "10000088",
+    "orgunit_name": "የድርጅቱ ተሽከርካሪ ጥገና እና ትራንስፖርት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000082"
+  },
+  {
+    "orgunit": "10000089",
+    "orgunit_name": "የድርጅቱ ጠቅላላ አገልግሎት",
+    "location": "HO",
+    "parent_id": "10000082"
+  },
+  {
+    "orgunit": "10000090",
+    "orgunit_name": "የድርጅቱ ንብረት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10003335"
+  },
+  {
+    "orgunit": "10000092",
+    "orgunit_name": "የድርጅቱ ንብረት እና ኢንሹራንስ",
+    "location": "HO",
+    "parent_id": "10003335"
+  },
+  {
+    "orgunit": "10000093",
+    "orgunit_name": "የድርጅቱ ሜካኒካል ወርክሾፕ",
+    "location": "HO",
+    "parent_id": "10003336"
+  },
+  {
+    "orgunit": "10000094",
+    "orgunit_name": "የድርጅቱ ግምጃ ቤት (ትሬዠሪ)",
+    "location": "HO",
+    "parent_id": "10000039"
+  },
+  {
+    "orgunit": "10000096",
+    "orgunit_name": "የድርጅቱ የገንዘብ ድጋፍ/በጀት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000039"
+  },
+  {
+    "orgunit": "10000097",
+    "orgunit_name": "የድርጅቱ የውስጥ ዝውውር/ክፍያ",
+    "location": "HO",
+    "parent_id": "10000094"
+  },
+  {
+    "orgunit": "10000098",
+    "orgunit_name": "የድርጅቱ የውጭ ዝውውር/ክፍያ",
+    "location": "HO",
+    "parent_id": "10000094"
+  },
+  {
+    "orgunit": "10000101",
+    "orgunit_name": "የድርጅቱ ጥሬ ገንዘብ እና ባንክ ቁጥጥር",
+    "location": "HO",
+    "parent_id": "10000094"
+  },
+  {
+    "orgunit": "10000106",
+    "orgunit_name": "የድርጅቱ የፋይናንስ ሪፖርት እና የሪጅን አስተባባሪ",
+    "location": "HO",
+    "parent_id": "10000039"
+  },
+  {
+    "orgunit": "10000107",
+    "orgunit_name": "የድርጅቱ ጠቅላላ ሒሳብ",
+    "location": "HO",
+    "parent_id": "NO_PARNT"
+  },
+  {
+    "orgunit": "10000108",
+    "orgunit_name": "የድርጅቱ የበጀት ቁጥጥር",
+    "location": "HO",
+    "parent_id": "NO_PARNT"
+  },
+  {
+    "orgunit": "10000109",
+    "orgunit_name": "የድርጅቱ ዕቃ እና ቋሚ ንብረት ቁጥጥር",
+    "location": "HO",
+    "parent_id": "NO_PARNT"
+  },
+  {
+    "orgunit": "10000111",
+    "orgunit_name": "የድርጅቱ ፖሊሲ እና የፋይናንስ ተገዥነት ኦዲት",
+    "location": "HO",
+    "parent_id": "10000039"
+  },
+  {
+    "orgunit": "10000112",
+    "orgunit_name": "የድርጅቱ የብድር አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000096"
+  },
+  {
+    "orgunit": "10000116",
+    "orgunit_name": "የድርጅቱ የንግድ ገቢ እና የኤሌክትሮኒክስ ክፍያዎች አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000096"
+  },
+  {
+    "orgunit": "10000141",
+    "orgunit_name": "የድርጅቱ የቁሳቁስ ኢንጂነሪንግ",
+    "location": "HO",
+    "parent_id": "10003305"
+  },
+  {
+    "orgunit": "10000142",
+    "orgunit_name": "የድርጅቱ የጥራት ቁጥጥር ቡድን",
+    "location": "HO",
+    "parent_id": "10003305"
+  },
+  {
+    "orgunit": "10000144",
+    "orgunit_name": "የድርጅቱ ትምህርታዊ እና መከላከያ",
+    "location": "HO",
+    "parent_id": "10000042"
+  },
+  {
+    "orgunit": "10000148",
+    "orgunit_name": "የድርጅቱ ሽያጭ እና የደንበኞች አገልግሎት",
+    "location": "HO",
+    "parent_id": "10003313"
+  },
+  {
+    "orgunit": "10000149",
+    "orgunit_name": "የድርጅቱ ንዑስ ማስተላለፊያ እና ማከፋፈያ ጣቢያ (Substation)",
+    "location": "HO",
+    "parent_id": "10003311"
+  },
+  {
+    "orgunit": "10000164",
+    "orgunit_name": "የድርጅቱ የሶፍትዌር/አይቲ አፕሊኬሽኖች",
+    "location": "HO",
+    "parent_id": "10000046"
+  },
+  {
+    "orgunit": "10000165",
+    "orgunit_name": "የድርጅቱ የኃይል/ኢነርጂ አስተዳደር",
+    "location": "HO",
+    "parent_id": "10003313"
+  },
+  {
+    "orgunit": "10000166",
+    "orgunit_name": "የድርጅቱ አይቲ ኦፕሬሽን እና ድጋፍ",
+    "location": "HO",
+    "parent_id": "10000046"
+  },
+  {
+    "orgunit": "10000168",
+    "orgunit_name": "የድርጅቱ አይቲ መሠረተ ልማት ልማት",
+    "location": "HO",
+    "parent_id": "10000046"
+  },
+  {
+    "orgunit": "10000169",
+    "orgunit_name": "የድርጅቱ ሳይበር ደህንነት እና ተገዥነት",
+    "location": "HO",
+    "parent_id": "10000046"
+  },
+  {
+    "orgunit": "10000202",
+    "orgunit_name": "የድርጅቱ አዲስ አበባ ሪጅን የእንጨት ምሰሶ ማምረቻ",
+    "location": "HO",
+    "parent_id": "10003336"
+  },
+  {
+    "orgunit": "10000407",
+    "orgunit_name": "የድርጅቱ ሻሸመኔ የእንጨት ምሰሶ ማምረቻ",
+    "location": "HO",
+    "parent_id": "10003336"
+  },
+  {
+    "orgunit": "10000408",
+    "orgunit_name": "የድርጅቱ ነቀምቴ የእንጨት ምሰሶ ማምረቻ",
+    "location": "HO",
+    "parent_id": "10003336"
+  },
+  {
+    "orgunit": "10000944",
+    "orgunit_name": "የድርጅቱ ባሕር ዳር የእንጨት ምሰሶ ማምረቻ",
+    "location": "HO",
+    "parent_id": "10003336"
+  },
+  {
+    "orgunit": "10002426",
+    "orgunit_name": "የድርጅቱ ክበብ ኦፕሬሽን",
+    "location": "HO",
+    "parent_id": "10003750"
+  },
+  {
+    "orgunit": "10002427",
+    "orgunit_name": "የድርጅቱ ትራንስፖርት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000088"
+  },
+  {
+    "orgunit": "10002428",
+    "orgunit_name": "የድርጅቱ ቆጣሪ አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000148"
+  },
+  {
+    "orgunit": "10002429",
+    "orgunit_name": "የድርጅቱ ጥሪ ማዕከል (Call Center)",
+    "location": "HO",
+    "parent_id": "10003322"
+  },
+  {
+    "orgunit": "10002430",
+    "orgunit_name": "የድርጅቱ መረብ (Network) አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000166"
+  },
+  {
+    "orgunit": "10002432",
+    "orgunit_name": "የድርጅቱ አስተዳደር እና ፋይናንስ",
+    "location": "HO",
+    "parent_id": "10000082"
+  },
+  {
+    "orgunit": "10002433",
+    "orgunit_name": "የድርጅቱ ኢንጂነሪንግ አማካሪነት",
+    "location": "HO",
+    "parent_id": "10000041"
+  },
+  {
+    "orgunit": "10002434",
+    "orgunit_name": "የድርጅቱ የአደጋ ማገገሚያ እና የሥራ ቀጣይነት",
+    "location": "HO",
+    "parent_id": "10000169"
+  },
+  {
+    "orgunit": "10002436",
+    "orgunit_name": "የድርጅቱ ሲቪል ዲዛይን",
+    "location": "HO",
+    "parent_id": "10000041"
+  },
+  {
+    "orgunit": "10002440",
+    "orgunit_name": "የድርጅቱ SCS ተከላ፣ ኦፕሬሽን እና ጥገና",
+    "location": "HO",
+    "parent_id": "10003311"
+  },
+  {
+    "orgunit": "10002443",
+    "orgunit_name": "የድርጅቱ የአገልግሎት መስጫ desk",
+    "location": "HO",
+    "parent_id": "10000166"
+  },
+  {
+    "orgunit": "10002445",
+    "orgunit_name": "የድርጅቱ ERP ቴክኒካል ድጋፍ እና MIS",
+    "location": "HO",
+    "parent_id": "10000164"
+  },
+  {
+    "orgunit": "10002446",
+    "orgunit_name": "የድርጅቱ ዳታ ሴንተር",
+    "location": "HO",
+    "parent_id": "10000166"
+  },
+  {
+    "orgunit": "10002448",
+    "orgunit_name": "የድርጅቱ ሲስተም አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000166"
+  },
+  {
+    "orgunit": "10002449",
+    "orgunit_name": "የድርጅቱ ዳታቤዝ አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000166"
+  },
+  {
+    "orgunit": "10002452",
+    "orgunit_name": "የድርጅቱ ቴክኒካል አፕሊኬሽን አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000164"
+  },
+  {
+    "orgunit": "10002456",
+    "orgunit_name": "የድርጅቱ ተሽከርካሪ ጥገና",
+    "location": "HO",
+    "parent_id": "10000088"
+  },
+  {
+    "orgunit": "10002473",
+    "orgunit_name": "የድርጅቱ DSS ድጋፍ",
+    "location": "HO",
+    "parent_id": "10000164"
+  },
+  {
+    "orgunit": "10002474",
+    "orgunit_name": "የድርጅቱ ሳይበር ክትትል እና ተገዥነት",
+    "location": "HO",
+    "parent_id": "10000169"
+  },
+  {
+    "orgunit": "10003302",
+    "orgunit_name": "የድርጅቱ መረብ ዕቅድ",
+    "location": "HO",
+    "parent_id": "10000036"
+  },
+  {
+    "orgunit": "10003303",
+    "orgunit_name": "የድርጅቱ ስትራቴጂክ የውጭ አገልግሎት አሰጣጥ (Outsourcing)",
+    "location": "HO",
+    "parent_id": "10000036"
+  },
+  {
+    "orgunit": "10003304",
+    "orgunit_name": "የድርጅቱ መረብ መሠረተ ልማት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10003305",
+    "orgunit_name": "የድርጅቱ ቁሳቁስ ኢንጂነሪንግ እና ጥራት ቁጥጥር",
+    "location": "HO",
+    "parent_id": "10000041"
+  },
+  {
+    "orgunit": "10003306",
+    "orgunit_name": "የድርጅቱ መረብ ዲዛይን",
+    "location": "HO",
+    "parent_id": "10000041"
+  },
+  {
+    "orgunit": "10003307",
+    "orgunit_name": "የድርጅቱ ሀብት አስተዳደር እና መሠረተ ልማት አስተባባሪ",
+    "location": "HO",
+    "parent_id": "10000045"
+  },
+  {
+    "orgunit": "10003308",
+    "orgunit_name": "የድርጅቱ DCC እና ሬዲዮ ኮሙኒኬሽን",
+    "location": "HO",
+    "parent_id": "10000045"
+  },
+  {
+    "orgunit": "10003309",
+    "orgunit_name": "የድርጅቱ ሬዲዮ ኮሙኒኬሽን",
+    "location": "HO",
+    "parent_id": "10003308"
+  },
+  {
+    "orgunit": "10003310",
+    "orgunit_name": "የድርጅቱ DCC ኦፕሬሽን",
+    "location": "HO",
+    "parent_id": "10003308"
+  },
+  {
+    "orgunit": "10003311",
+    "orgunit_name": "የድርጅቱ መረብ መሠረተ ልማት ብቃት",
+    "location": "HO",
+    "parent_id": "10000045"
+  },
+  {
+    "orgunit": "10003312",
+    "orgunit_name": "የድርጅቱ መረብ ኦፕሬሽን እና ጥገና ብቃት",
+    "location": "HO",
+    "parent_id": "10003311"
+  },
+  {
+    "orgunit": "10003313",
+    "orgunit_name": "የድርጅቱ ማርኬቲንግ፣ ሽያጭ እና ደንበኞች አገልግሎት",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10003314",
+    "orgunit_name": "የድርጅቱ የኃይል ንግድ",
+    "location": "HO",
+    "parent_id": "10000165"
+  },
+  {
+    "orgunit": "10003315",
+    "orgunit_name": "የድርጅቱ የፍላጎት ወገን አስተዳደር (DSM)",
+    "location": "HO",
+    "parent_id": "10000165"
+  },
+  {
+    "orgunit": "10003316",
+    "orgunit_name": "የድርጅቱ ማርኬቲንግ",
+    "location": "HO",
+    "parent_id": "10003313"
+  },
+  {
+    "orgunit": "10003317",
+    "orgunit_name": "የድርጅቱ የገበያ ጥናት እና ቢዝነስ ልማት",
+    "location": "HO",
+    "parent_id": "NO_PARNT"
+  },
+  {
+    "orgunit": "10003318",
+    "orgunit_name": "የድርጅቱ ዋጋ አወጣጥ እና ታሪፍ አስተዳደር",
+    "location": "HO",
+    "parent_id": "10003316"
+  },
+  {
+    "orgunit": "10003319",
+    "orgunit_name": "የድርጅቱ ቢሊንግ እና ሰብሳቢነት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000148"
+  },
+  {
+    "orgunit": "10003320",
+    "orgunit_name": "የድርጅቱ ሽያጭ እና የደንበኞች ግንኙነት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000148"
+  },
+  {
+    "orgunit": "10003321",
+    "orgunit_name": "የድርጅቱ ቁልፍ ደንበኞች አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000148"
+  },
+  {
+    "orgunit": "10003322",
+    "orgunit_name": "የድርጅቱ ኮንታክት ሴንተር አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000148"
+  },
+  {
+    "orgunit": "10003323",
+    "orgunit_name": "የድርጅቱ ዋና ትስስር ድጋፍ 904",
+    "location": "HO",
+    "parent_id": "10003322"
+  },
+  {
+    "orgunit": "10003333",
+    "orgunit_name": "የድርጅቱ የሶፍትዌር ልማት",
+    "location": "HO",
+    "parent_id": "10000164"
+  },
+  {
+    "orgunit": "10003334",
+    "orgunit_name": "የድርጅቱ የቅድመ ክፍያ ሲስተም ድጋፍ",
+    "location": "HO",
+    "parent_id": "10000164"
+  },
+  {
+    "orgunit": "10003335",
+    "orgunit_name": "የድርጅቱ ንብረት እና ኢንሹራንስ አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000082"
+  },
+  {
+    "orgunit": "10003336",
+    "orgunit_name": "የድርጅቱ ማምረቻ ፋብሪካዎች",
+    "location": "HO",
+    "parent_id": "10000082"
+  },
+  {
+    "orgunit": "10003337",
+    "orgunit_name": "የድርጅቱ ኤሌክትሪካል ወርክሾፕ",
+    "location": "HO",
+    "parent_id": "10003336"
+  },
+  {
+    "orgunit": "10003341",
+    "orgunit_name": "የድርጅቱ የግዢ ውል አስተዳደር",
+    "location": "HO",
+    "parent_id": "10003342"
+  },
+  {
+    "orgunit": "10003342",
+    "orgunit_name": "የድርጅቱ አቅርቦት ሰንሰለት አስተዳደር ስትራቴጂ",
+    "location": "HO",
+    "parent_id": "10000038"
+  },
+  {
+    "orgunit": "10003343",
+    "orgunit_name": "የድርጅቱ ዕቃ ቁጥጥር እና ቤተ-መዝገብ (አርካይቭ)",
+    "location": "HO",
+    "parent_id": "10000081"
+  },
+  {
+    "orgunit": "10003344",
+    "orgunit_name": "የድርጅቱ መጋዘን - ጋራዥ እና ወርክሾፕ",
+    "location": "HO",
+    "parent_id": "10000081"
+  },
+  {
+    "orgunit": "10003345",
+    "orgunit_name": "የድርጅቱ ሰው ሀብት የሥራ አፈጻጸም አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000068"
+  },
+  {
+    "orgunit": "10003346",
+    "orgunit_name": "የድርጅቱ ሕግ አገልግሎት እና ሥነ-ምግባር",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10003347",
+    "orgunit_name": "የድርጅቱ ምርመራዎች እና ሕግ ተገዥነት ክትትል",
+    "location": "HO",
+    "parent_id": "10000042"
+  },
+  {
+    "orgunit": "10003348",
+    "orgunit_name": "የድርጅቱ ሪጅናዊ የሕግ አገልግሎት ድጋፍ እና አስተባባሪ",
+    "location": "HO",
+    "parent_id": "10000035"
+  },
+  {
+    "orgunit": "10003349",
+    "orgunit_name": "የድርጅቱ ፖሊሲ እና የሥራ ሂደት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000043"
+  },
+  {
+    "orgunit": "10003354",
+    "orgunit_name": "የድርጅቱ ብራንድ አስተዳደር",
+    "location": "HO",
+    "parent_id": "10000034"
+  },
+  {
+    "orgunit": "10003355",
+    "orgunit_name": "የድርጅቱ ቤተ-መጻሕፍት እና ሰነድ ማደራጃ",
+    "location": "HO",
+    "parent_id": "10003354"
+  },
+  {
+    "orgunit": "10003356",
+    "orgunit_name": "የኢትዮጵያ ኤሌክትሪክ አገልግሎት ብሔራዊ ኦፕሬሽን አስተባባሪ ጽሕፈት ቤት",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10003450",
+    "orgunit_name": "የድርጅቱ DSMPLES ፕሮጀክት",
+    "location": "HO",
+    "parent_id": "10003302"
+  },
+  {
+    "orgunit": "10003692",
+    "orgunit_name": "የድርጅቱ አገር አቀፍ አቅርቦት ሰንሰለት እና PGS አስተባባሪ",
+    "location": "HO",
+    "parent_id": "NO_PARNT"
+  },
+  {
+    "orgunit": "10003693",
+    "orgunit_name": "የድርጅቱ ሪጅን ኦዲት አስተባባሪ",
+    "location": "HO",
+    "parent_id": "10000026"
+  },
+  {
+    "orgunit": "10003749",
+    "orgunit_name": "የድርጅቱ ባሕር ዳር ዳታ ሴንተር እና የአደጋ ማገገሚያ ማዕከል",
+    "location": "HO",
+    "parent_id": "10002446"
+  },
+  {
+    "orgunit": "10003750",
+    "orgunit_name": "የድርጅቱ ክበብ አገልግሎቶች",
+    "location": "HO",
+    "parent_id": "10000089"
+  },
+  {
+    "orgunit": "10003751",
+    "orgunit_name": "የድርጅቱ ግዢ አስተዳደር",
+    "location": "HO",
+    "parent_id": "10003342"
+  },
+  {
+    "orgunit": "10003752",
+    "orgunit_name": "የድርጅቱ አዲስ አበባ ሪጅን ሥነ-ምግባር እና ፀረ-ሙስና አስተባባሪ",
+    "location": "HO",
+    "parent_id": "10000042"
+  },
+  {
+    "orgunit": "10003819",
+    "orgunit_name": "የ SCADA/DMS ኦፕሬሽን",
+    "location": "HO",
+    "parent_id": "NO_PARNT"
+  },
+  {
+    "orgunit": "10003820",
+    "orgunit_name": "የ SCADA/DMS እና ኮሙኒኬሽን ኦፕሬሽን",
+    "location": "HO",
+    "parent_id": "10003356"
+  },
+  {
+    "orgunit": "10003823",
+    "orgunit_name": "የ SCADA/DMS ጥገና",
+    "location": "HO",
+    "parent_id": "10003820"
+  },
+  {
+    "orgunit": "10003824",
+    "orgunit_name": "የ SCADA/DMS RTU እና የአካባቢ SCADA",
+    "location": "HO",
+    "parent_id": "10003826"
+  },
+  {
+    "orgunit": "10003826",
+    "orgunit_name": "የ SCADA/DMS RTU እና የአካባቢ SCADA H",
+    "location": "HO",
+    "parent_id": "10003820"
+  },
+  {
+    "orgunit": "10003832",
+    "orgunit_name": "የ SCADA/DMS ሶፍትዌር ጥገና",
+    "location": "HO",
+    "parent_id": "10003823"
+  },
+  {
+    "orgunit": "10003833",
+    "orgunit_name": "የ SCADA/DMS ሀርድዌር ጥገና",
+    "location": "HO",
+    "parent_id": "10003823"
+  },
+  {
+    "orgunit": "10003836",
+    "orgunit_name": "የ SCADA/DMS ቁጥጥር እና ሪሌይ ጥበቃ",
+    "location": "HO",
+    "parent_id": "10003826"
+  },
+  {
+    "orgunit": "10003843",
+    "orgunit_name": "የድርጅቱ ዕቅድ እና የሥራ አፈጻጸም ክትትል",
+    "location": "HO",
+    "parent_id": "10000026"
+  },
+  {
+    "orgunit": "10003844",
+    "orgunit_name": "የድርጅቱ ንግድ ፖሊሲ እና የሥራ ሂደት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10003349"
+  },
+  {
+    "orgunit": "10003845",
+    "orgunit_name": "የድርጅቱ የድጋፍ ፖሊሲ እና የሥራ ሂደቶች አስተዳደር",
+    "location": "HO",
+    "parent_id": "10003349"
+  },
+  {
+    "orgunit": "10003846",
+    "orgunit_name": "የድርጅቱ ቴክኒካል ፖሊሲ እና የሥራ ሂደት አስተዳደር",
+    "location": "HO",
+    "parent_id": "10003349"
+  },
+  {
+    "orgunit": "10003847",
+    "orgunit_name": "የድርጅቱ የሥራ ሂደት ጥራት ማረጋገጫ",
+    "location": "HO",
+    "parent_id": "10000043"
+  },
+
+]

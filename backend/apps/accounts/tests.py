@@ -26,6 +26,11 @@ from apps.accounts.management.commands.seed_service_centers import (
     CSC_CODE_PREFIX, is_amharic, repair_mojibake,
 )
 from apps.accounts.management.commands.seed_org_structure import REGION_CODE_PREFIX
+from apps.accounts.management.commands.seed_hq_org_units import (
+    CODE_PREFIX as HO_CODE_PREFIX,
+    DEFAULT_DATA_FILE as HQ_DEFAULT_DATA_FILE,
+    DEFAULT_AM_FILE as HQ_DEFAULT_AM_FILE,
+)
 from apps.audit_planning.models import AuditEngagement, AuditPlan
 from apps.corrective_actions.models import CorrectiveAction
 from apps.findings.models import AuditFinding
@@ -174,6 +179,9 @@ class SeedServiceCentersTest(TestCase):
 
     def seed(self, rows, **options):
         out = StringIO()
+        # Default to an empty Amharic export so these tests exercise the
+        # English/mirroring behaviour independent of the shipped Amharic data.
+        options.setdefault('amharic_file', self.write_data([]))
         call_command(
             'seed_service_centers',
             data_file=self.write_data(rows),
@@ -262,6 +270,280 @@ class SeedServiceCentersTest(TestCase):
             call_command('seed_service_centers', data_file='does-not-exist.json', stdout=StringIO())
 
 
+    def test_applies_amharic_names_from_the_parallel_export(self):
+        self.seed(
+            [{'id': 1, 'csc_code': 'BA01', 'csc_name': 'Adama No.1', 'region': 'BA'}],
+            amharic_file=self.write_data(
+                [{'csc_code': 'BA01', 'csc_name': 'የደንበኞች አገልግሎት ማዕከል 1'}]
+            ),
+        )
+        self.assertEqual(
+            Department.objects.get(code=f'{CSC_CODE_PREFIX}BA01').name_am,
+            'የደንበኞች አገልግሎት ማዕከል 1',
+        )
+
+    def test_amharic_export_wins_over_the_mirrored_source_name(self):
+        self.seed(
+            [{'id': 1, 'csc_code': 'BA01', 'csc_name': 'ሠመራ', 'region': 'BA'}],
+            amharic_file=self.write_data(
+                [{'csc_code': 'BA01', 'csc_name': 'የደንበኞች አገልግሎት ማዕከል ሠመራ'}]
+            ),
+        )
+        self.assertEqual(
+            Department.objects.get(code=f'{CSC_CODE_PREFIX}BA01').name_am,
+            'የደንበኞች አገልግሎት ማዕከል ሠመራ',
+        )
+
+    def test_partial_amharic_export_leaves_uncovered_center_blank(self):
+        """A center the Amharic export does not name keeps a blank name_am."""
+        self.seed(
+            [{'id': 1, 'csc_code': 'BA02', 'csc_name': 'Alemtena', 'region': 'BA'}],
+            amharic_file=self.write_data(
+                [{'csc_code': 'BA01', 'csc_name': 'የደንበኞች አገልግሎት ማዕከል 1'}]
+            ),
+        )
+        self.assertEqual(
+            Department.objects.get(code=f'{CSC_CODE_PREFIX}BA02').name_am, ''
+        )
+
+    def test_missing_amharic_file_is_a_clean_error(self):
+        with self.assertRaises(CommandError):
+            self.seed(
+                [{'id': 1, 'csc_code': 'BA01', 'csc_name': 'Adama No.1', 'region': 'BA'}],
+                amharic_file='does-not-exist.json',
+            )
+
+
+class SeedHqOrgUnitsTest(TestCase):
+    """The seed command that adds the detailed head-office tier."""
+
+    def setUp(self):
+        # Only the anchors the fixture actually touches are needed: the CEO root
+        # (default parent), plus Finance and Marketing which the fixture's merge
+        # rows and orphans hang off. Audit anchors stay uncreated on purpose.
+        self.ceo = Department.objects.create(
+            name='Chief Executive Officer', code='CEO',
+            unit_type=Department.EXECUTIVE,
+        )
+        self.finance = Department.objects.create(
+            name='Finance', code='Finance',
+            unit_type=Department.CORPORATE, parent=self.ceo,
+        )
+        self.marketing = Department.objects.create(
+            name='Marketing, Sales and Customer Service', code='Marketing',
+            unit_type=Department.CORPORATE, parent=self.ceo,
+        )
+
+    def rows(self):
+        """A small fixture: two merge rows, created children under both an
+        anchor and a created node, an orphan, and one skipped row."""
+        return [
+            # Merges onto Finance / Marketing; never re-created.
+            {'orgunit': '10000039', 'orgunit_name': 'CO Finance & Control',
+             'location': 'HO', 'parent_id': '10000027'},
+            {'orgunit': '10003313', 'orgunit_name': 'CO Marketing Sales & Customer Service',
+             'location': 'HO', 'parent_id': '10000027'},
+            # Created children.
+            {'orgunit': '10000094', 'orgunit_name': 'CO Treasury',
+             'location': 'HO', 'parent_id': '10000039'},
+            {'orgunit': '10003316', 'orgunit_name': 'CO Marketing',
+             'location': 'HO', 'parent_id': '10003313'},
+            # Deeper tier whose parent is itself created (CO Marketing above).
+            {'orgunit': '10003318', 'orgunit_name': 'CO Pricing and Tariff Management',
+             'location': 'HO', 'parent_id': '10003316'},
+            # Orphan row re-homed onto Finance by ORPHAN_PARENT.
+            {'orgunit': '10000108', 'orgunit_name': 'CO Budget Control',
+             'location': 'HO', 'parent_id': 'NO_PARNT'},
+            # Skipped row.
+            {'orgunit': '10000048', 'orgunit_name': 'Addis Ababa Region Coordination',
+             'location': 'HO', 'parent_id': '10003356'},
+        ]
+
+    def write_data(self, rows):
+        handle = tempfile.NamedTemporaryFile(
+            mode='w', suffix='.json', delete=False, encoding='utf-8',
+        )
+        json.dump(rows, handle, ensure_ascii=False)
+        handle.close()
+        self.addCleanup(lambda: Path(handle.name).unlink(missing_ok=True))
+        return handle.name
+
+    def seed(self, rows, **options):
+        out = StringIO()
+        call_command(
+            'seed_hq_org_units',
+            data_file=self.write_data(rows),
+            stdout=out,
+            **options,
+        )
+        return out.getvalue()
+
+    def test_creates_units_wired_under_the_right_office(self):
+        output = self.seed(self.rows())
+        # Merge rows are reported but Finance/Marketing are not duplicated.
+        self.assertIn('10000039 "CO Finance & Control" merges into existing Finance', output)
+        self.assertEqual(Department.objects.filter(code='Finance').count(), 1)
+        self.assertFalse(Department.objects.filter(code=f'{HO_CODE_PREFIX}10000039').exists())
+        # New units get HO- codes, CORPORATE type, and the resolved parent.
+        treasury = Department.objects.get(code=f'{HO_CODE_PREFIX}10000094')
+        self.assertEqual(treasury.name, 'CO Treasury')
+        self.assertEqual(treasury.unit_type, Department.CORPORATE)
+        self.assertEqual(treasury.parent, self.finance)
+        # A parent that is itself created (CO Marketing) is created first.
+        pricing = Department.objects.get(code=f'{HO_CODE_PREFIX}10003318')
+        marketing = Department.objects.get(code=f'{HO_CODE_PREFIX}10003316')
+        self.assertEqual(pricing.parent, marketing)
+        self.assertEqual(marketing.parent, self.marketing)
+        # Skipped rows never land.
+        self.assertFalse(Department.objects.filter(code=f'{HO_CODE_PREFIX}10000048').exists())
+
+    def test_rehomes_orphans_onto_their_office(self):
+        self.seed(self.rows())
+        budget = Department.objects.get(code=f'{HO_CODE_PREFIX}10000108')
+        self.assertEqual(budget.name, 'CO Budget Control')
+        self.assertEqual(budget.parent, self.finance)
+
+    def test_is_idempotent(self):
+        rows = self.rows()
+        self.seed(rows)
+        output = self.seed(rows)
+        self.assertIn('created: 0', output)
+        self.assertIn('unchanged: 4', output)  # the four created rows above
+        self.assertEqual(
+            Department.objects.filter(code__startswith=HO_CODE_PREFIX).count(), 4
+        )
+
+    def test_dry_run_writes_nothing(self):
+        output = self.seed(self.rows(), dry_run=True)
+        self.assertIn('rolled back', output)
+        self.assertFalse(Department.objects.filter(code__startswith=HO_CODE_PREFIX).exists())
+
+    def test_update_existing_overwrites_names(self):
+        rows = [{'orgunit': '10000094', 'orgunit_name': 'Old Name',
+                 'location': 'HO', 'parent_id': '10000039'}]
+        self.seed(rows)
+        self.seed(
+            [{'orgunit': '10000094', 'orgunit_name': 'CO Treasury',
+              'location': 'HO', 'parent_id': '10000039'}],
+            update_existing=True,
+        )
+        self.assertEqual(
+            Department.objects.get(code=f'{HO_CODE_PREFIX}10000094').name,
+            'CO Treasury',
+        )
+
+    def test_reports_unresolved_parents_instead_of_crashing(self):
+        rows = [{'orgunit': '10000094', 'orgunit_name': 'CO Treasury',
+                 'location': 'HO', 'parent_id': '99999999'}]
+        output = self.seed(rows)
+        self.assertIn('parent "99999999" not found', output)
+        # The row still lands, under the CEO default, so nothing is dropped.
+        self.assertEqual(
+            Department.objects.get(code=f'{HO_CODE_PREFIX}10000094').parent,
+            self.ceo,
+        )
+
+    def test_requires_an_anchor_it_references(self):
+        self.finance.delete()
+        # The child's parent ERP id (10000039) is a merge row -> Finance anchor.
+        rows = [{'orgunit': '10000094', 'orgunit_name': 'CO Treasury',
+                 'location': 'HO', 'parent_id': '10000039'}]
+        with self.assertRaises(CommandError) as ctx:
+            self.seed(rows)
+        self.assertIn('Finance', str(ctx.exception))
+        self.assertIn('seed_org_structure', str(ctx.exception))
+
+    def test_missing_data_file_is_a_clean_error(self):
+        with self.assertRaises(CommandError):
+            call_command('seed_hq_org_units', data_file='does-not-exist.json', stdout=StringIO())
+
+    def test_applies_amharic_names_from_the_parallel_export(self):
+        self.seed(
+            self.rows(),
+            amharic_file=self.write_data(
+                [{'orgunit': '10000094', 'orgunit_name': 'የድርጅቱ ግምጃ ቤት'}]
+            ),
+        )
+        self.assertEqual(
+            Department.objects.get(code=f'{HO_CODE_PREFIX}10000094').name_am,
+            'የድርጅቱ ግምጃ ቤት',
+        )
+
+    def test_amharic_name_is_blank_when_the_export_lacks_the_unit(self):
+        self.seed(
+            self.rows(),
+            amharic_file=self.write_data(
+                [{'orgunit': '10003316', 'orgunit_name': 'ግብይት'}]
+            ),
+        )
+        # 10000094 is absent from the Amharic export -> falls back to English.
+        self.assertEqual(
+            Department.objects.get(code=f'{HO_CODE_PREFIX}10000094').name_am, ''
+        )
+
+    def test_missing_amharic_file_is_a_clean_error(self):
+        with self.assertRaises(CommandError):
+            self.seed(self.rows(), amharic_file='does-not-exist.json')
+
+
+class SeedDataLegacyDepartmentAmharicTest(TestCase):
+    """The three legacy demo departments must carry Amharic names.
+
+    Without them the Amharic interface falls back to English for exactly these
+    units while every other department renders in Amharic.
+    """
+
+    def test_seed_data_gives_legacy_departments_amharic_names(self):
+        call_command('seed_data', stdout=StringIO())
+        for code, name_am in [
+            ('FIN', 'ፋይናንስ እና ሒሳብ'),
+            ('PROC', 'ግዢ እና ሎጂስቲክስ'),
+            ('DIST', 'የኃይል ስርጭት'),
+        ]:
+            self.assertEqual(Department.objects.get(code=code).name_am, name_am)
+
+
+class ShippedHqOrgUnitsDataTest(TestCase):
+    """Guard the committed head-office export against silent corruption."""
+
+    def setUp(self):
+        self.rows = json.loads(HQ_DEFAULT_DATA_FILE.read_text(encoding='utf-8'))
+
+    def test_has_all_154_units_with_unique_codes(self):
+        codes = {row['orgunit'] for row in self.rows}
+        self.assertEqual(len(self.rows), 154)
+        self.assertEqual(len(codes), 154)
+        # The placeholder/sentinel rows never made it into the committed file.
+        self.assertFalse(any(str(code).startswith('DEV') for code in codes))
+        self.assertNotIn('NO_PARNT', codes)
+
+    def test_every_parent_is_resolvable(self):
+        """Every parent_id is null, the NO_PARNT sentinel, or another row —
+        otherwise the seed would silently re-home units onto the CEO root."""
+        codes = {row['orgunit'] for row in self.rows}
+        for row in self.rows:
+            parent = row.get('parent_id')
+            if parent is None or str(parent).strip().upper() == 'NO_PARNT':
+                continue
+            self.assertIn(
+                str(parent), codes,
+                f"{row['orgunit']} points at missing parent {parent}",
+            )
+
+    def test_amharic_file_covers_the_same_units_with_no_blanks(self):
+        """The Amharic export keys the same units 1:1, so no head-office unit
+        ends up without an Amharic name."""
+        english = json.loads(HQ_DEFAULT_DATA_FILE.read_text(encoding='utf-8'))
+        amharic = json.loads(HQ_DEFAULT_AM_FILE.read_text(encoding='utf-8'))
+        self.assertEqual(len(amharic), len(english))
+        self.assertEqual(
+            {row['orgunit'] for row in amharic},
+            {row['orgunit'] for row in english},
+        )
+        self.assertTrue(all(str(row['orgunit_name']).strip() for row in amharic))
+
+
+
 class ShippedServiceCenterDataTest(TestCase):
     """Guard the committed export against silent corruption or truncation."""
 
@@ -286,6 +568,22 @@ class ShippedServiceCenterDataTest(TestCase):
 
     def test_no_blank_names(self):
         self.assertEqual([r['csc_code'] for r in self.rows if not r['csc_name'].strip()], [])
+
+    def test_amharic_export_covers_every_center_with_no_blanks(self):
+        """The Amharic export names all 582 centers and must never be corrupt:
+        every code it names exists in the main export, and none is blank."""
+        from apps.accounts.management.commands.seed_service_centers import DEFAULT_AM_FILE
+        amharic = json.loads(DEFAULT_AM_FILE.read_text(encoding='utf-8'))
+        main_codes = {row['csc_code'] for row in self.rows}
+        am_codes = [row['csc_code'] for row in amharic]
+        self.assertEqual(len(am_codes), len(self.rows))
+        self.assertEqual(len(set(am_codes)), len(am_codes))  # no duplicate keys
+        self.assertEqual(set(am_codes), main_codes)  # 1:1 with the main export
+        self.assertEqual([r['csc_code'] for r in amharic if not r['csc_name'].strip()], [])
+        self.assertEqual(
+            [r['csc_code'] for r in amharic if repair_mojibake(r['csc_name']) != r['csc_name']],
+            [],
+        )
 
 
 class DashboardStatsDirectorateTest(TestCase):
