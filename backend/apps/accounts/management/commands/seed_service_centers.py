@@ -7,7 +7,11 @@ the result in the ``department`` foreign keys that already exist.
 
 The source data lives in ``data/service_centers.json`` beside this module rather
 than in Python literals: 582 rows are too many to inline, and reading the names
-from a UTF-8 file is what keeps the Amharic ones intact.
+from a UTF-8 file is what keeps the Amharic ones intact. Amharic names for the
+centers come from the parallel ``data/service_centers_am.json`` (``--amharic-file``
+to override), which names all 582 centers; the lookup stays subset-tolerant, so a
+partial export leaves the centers it does not cover to the mirrored-from-source
+behaviour.
 
 Idempotent — re-running creates nothing. Pass ``--update-existing`` to overwrite
 names and parents on rows that are already there, and ``--dry-run`` to preview.
@@ -23,6 +27,12 @@ from .seed_org_structure import REGION_CODE_PREFIX
 
 
 DEFAULT_DATA_FILE = Path(__file__).resolve().parent / 'data' / 'service_centers.json'
+
+# Amharic names for the same centers, keyed by the same csc_code. Optional: the
+# committed export covers all 582 centers, but an absent entry still leaves
+# name_am as it was (mirrored from the source name when that is Amharic), so a
+# partial override passed via --amharic-file is fine.
+DEFAULT_AM_FILE = Path(__file__).resolve().parent / 'data' / 'service_centers_am.json'
 
 # Service-center codes are two-letter region + serial ('BA07'). Prefixed for the
 # same reason regions are: a bare code is a poor unique key in a table shared
@@ -71,6 +81,15 @@ class Command(BaseCommand):
             help=f'JSON export to read (default: {DEFAULT_DATA_FILE.name} beside this command).',
         )
         parser.add_argument(
+            '--amharic-file',
+            default=str(DEFAULT_AM_FILE),
+            metavar='PATH',
+            help=(
+                'JSON export with Amharic names for the same centers, keyed by '
+                f'csc_code (default: {DEFAULT_AM_FILE.name} beside this command).'
+            ),
+        )
+        parser.add_argument(
             '--update-existing',
             action='store_true',
             help='Overwrite names and parents on service centers that already exist.',
@@ -91,6 +110,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING('DRY RUN — no changes will be saved.'))
 
         rows = self.load_rows(data_file)
+        amharic_names = self.load_amharic_names(Path(options['amharic_file']))
+        if amharic_names:
+            self.stdout.write(
+                f'  applying {len(amharic_names)} Amharic names from '
+                f'{Path(options["amharic_file"]).name}'
+            )
         regions = self.load_regions()
         if not regions:
             raise CommandError(
@@ -129,9 +154,9 @@ class Command(BaseCommand):
 
             defaults = {
                 'name': name,
-                # Some centers are recorded only in Amharic; there is no English
-                # name to fall back on, so the one name serves both languages.
-                'name_am': name if is_amharic(name) else '',
+                # Prefer the parallel Amharic export; otherwise some centers are
+                # recorded only in Amharic, so the one name serves both languages.
+                'name_am': amharic_names.get(csc_code) or (name if is_amharic(name) else ''),
                 'unit_type': Department.SERVICE_CENTER,
                 'directorate_type': 'OTHER',
                 'parent': region,
@@ -183,6 +208,26 @@ class Command(BaseCommand):
         if not isinstance(rows, list):
             raise CommandError(f'{data_file} must contain a JSON list of service centers.')
         return rows
+
+    def load_amharic_names(self, am_file):
+        """csc_code -> Amharic name, from the parallel Amharic export.
+
+        Optional: a checkout without the default file proceeds with the source
+        names only, while an explicitly passed path that does not exist errors.
+        The lookup is subset-tolerant, so codes a partial file does not cover are
+        simply absent.
+        """
+        if not am_file.exists():
+            if str(am_file) != str(DEFAULT_AM_FILE):
+                raise CommandError(f'Amharic data file not found: {am_file}')
+            return {}
+        return {
+            str(row.get('csc_code', '')).strip(): repair_mojibake(
+                str(row.get('csc_name', ''))
+            ).strip()
+            for row in self.load_rows(am_file)
+            if str(row.get('csc_name', '')).strip()
+        }
 
     def load_regions(self):
         """Region code ('HA') → Department, for parenting each service center."""

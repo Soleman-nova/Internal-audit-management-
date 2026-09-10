@@ -4,6 +4,7 @@ import { planningApi, usersApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useI18n } from '../../context/I18nContext';
+import { localizedName } from '../../utils/localizedName';
 import { validateForm, validators, hasErrors } from '../../utils/validation';
 import Modal from '../../components/ui/Modal';
 import Badge from '../../components/ui/Badge';
@@ -24,7 +25,7 @@ const ENGAGEMENT_STATUSES = [
 
 function PlanningPage() {
   const toast = useToast();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { canWriteAudit, canApprovePlans } = usePermissions();
 
   // ── Deep links from notifications ────────────────────────────────
@@ -300,7 +301,7 @@ function PlanningPage() {
     setEditingUniverseId(item.id);
     // department_name is tracked separately from the form payload so the picker
     // can still name a retired unit, which the org tree omits.
-    setEditingUniverseDeptName(item.department_name || '');
+    setEditingUniverseDeptName(localizedName(lang, item.department_name, item.department_name_am) || '');
     setNewUniverse({
       name: item.name || '', code: item.code || '', category: item.category || 'system',
       risk_score: item.risk_score ?? 3.5, audit_frequency: item.audit_frequency || 'Annually',
@@ -571,7 +572,7 @@ function PlanningPage() {
 
   const openEditEngagement = (eng) => {
     setEditingEngagementId(eng.id);
-    setEditingEngagementDeptName(eng.department_name || '');
+    setEditingEngagementDeptName(localizedName(lang, eng.department_name, eng.department_name_am) || '');
     setNewEngagement({
       title: eng.title || '', plan: eng.plan || '', audit_universe: eng.audit_universe || '',
       department: eng.department || '', engagement_type: eng.engagement_type || 'operational',
@@ -785,7 +786,7 @@ function PlanningPage() {
                         <td><strong>{item.code}</strong></td>
                         <td>{item.name}</td>
                         <td><span className="badge badge-outline">{item.category?.toUpperCase()}</span></td>
-                        <td>{item.department_name || 'N/A'}</td>
+                        <td>{localizedName(lang, item.department_name, item.department_name_am) || 'N/A'}</td>
                         <td>
                           <span className={`risk-tag ${item.risk_score >= 4 ? 'critical' : item.risk_score >= 3 ? 'high' : 'medium'}`}>
                             {item.risk_score}
@@ -862,7 +863,7 @@ function PlanningPage() {
                       <div className="plan-meta-row">
                         <div><span>Year:</span><strong>{plan.year}</strong></div>
                         <div><span>Scope:</span><strong>{plan.plan_scope_display || plan.plan_scope}</strong></div>
-                        <div><span>Directorate:</span><strong>{plan.directorate_name || '—'}</strong></div>
+                        <div><span>Directorate:</span><strong>{localizedName(lang, plan.directorate_name, plan.directorate_name_am) || '—'}</strong></div>
                         <div><span>Budget Days:</span><strong>{plan.total_budget_days} Days</strong></div>
                       </div>
                       <div className="plan-dates text-sm">

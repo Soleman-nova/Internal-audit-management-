@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { usersApi, planningApi } from '../api';
+import { useI18n } from '../context/I18nContext';
 import { Building2, Users, FolderKanban, Activity, ShieldAlert, ChevronDown, ChevronRight } from 'lucide-react';
 
 const DIRECTORATE_COLORS = {
-    IAEO: '#2563eb',
+    IAEO: '#f2801f',
     FPA: '#10b981',
     TA: '#f59e0b',
     ITA: '#8b5cf6',
-    PP: '#06b6d4',
+    PP: '#00a651',
 };
 
 const DIRECTORATE_ICONS = {
@@ -175,6 +176,7 @@ function EEUOrgChart({ onSelectDirectorate }) {
 }
 
 function OrgNode({ dept, stats, isRoot, expanded, onToggle, onSelect }) {
+    const { lang } = useI18n();
     const Icon = DIRECTORATE_ICONS[dept.directorate_type] || Building2;
     const color = DIRECTORATE_COLORS[dept.directorate_type] || '#64748b';
     const isPP = dept.directorate_type === 'PP';
@@ -190,7 +192,7 @@ function OrgNode({ dept, stats, isRoot, expanded, onToggle, onSelect }) {
                     <Icon size={18} />
                 </div>
                 <div className="org-node-title">
-                    <h4>{dept.name}</h4>
+                    <h4>{lang === 'am' && dept.name_am ? dept.name_am : dept.name}</h4>
                     <span className="org-node-code">{dept.code}</span>
                 </div>
                 {!isRoot && dept.children && dept.children.length > 0 && (

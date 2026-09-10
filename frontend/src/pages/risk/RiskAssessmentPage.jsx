@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useI18n } from '../../context/I18nContext';
+import { localizedName } from '../../utils/localizedName';
 import { validateForm, validators, hasErrors } from '../../utils/validation';
 import Modal from '../../components/ui/Modal';
 import Badge from '../../components/ui/Badge';
@@ -16,7 +17,7 @@ import { TrendingUp, Sliders, Plus, RefreshCw, AlertOctagon, ClipboardList, Chec
 function RiskAssessmentPage() {
   const toast = useToast();
   const auth = useAuth();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { canWriteAudit } = usePermissions();
   const [activePageTab, setActivePageTab] = useState('matrix'); // 'matrix' or 'selfAssessment'
   const [formErrors, setFormErrors] = useState({});
@@ -334,7 +335,7 @@ function RiskAssessmentPage() {
                       selectedCell.items.map((item, i) => (
                         <div key={i} className="risk-item-detail">
                           <div className="flex justify-between items-center mb-1">
-                            <h4>{item.department__name || item.department_name || `Dept #${item.department}`}</h4>
+                            <h4>{localizedName(lang, item.department__name || item.department_name, item.department_name_am) || `Dept #${item.department}`}</h4>
                             <span className="risk-score-value">Score: {item.risk_score || (item.likelihood * item.impact)}</span>
                           </div>
                           <p className="text-sm text-secondary">
@@ -364,7 +365,7 @@ function RiskAssessmentPage() {
                       assessments.map(item => (
                         <div key={item.id} className="risk-list-row-item">
                           <div className="risk-row-left">
-                            <h4>{item.department_name || `Department #${item.department}`}</h4>
+                            <h4>{localizedName(lang, item.department_name, item.department_name_am) || `Department #${item.department}`}</h4>
                             <span className="text-xs text-muted">{item.assessment_period} {item.year}</span>
                           </div>
                           <div className="risk-row-right flex items-center gap-2">
@@ -523,7 +524,7 @@ function RiskAssessmentPage() {
                     ) : (
                       selfAssessments.map(sa => (
                         <tr key={sa.id}>
-                          <td><strong>{sa.risk_assessment?.department_name || `Dept #${sa.risk_assessment?.department}`}</strong></td>
+                          <td><strong>{localizedName(lang, sa.risk_assessment?.department_name, sa.risk_assessment?.department_name_am) || `Dept #${sa.risk_assessment?.department}`}</strong></td>
                           <td>{sa.risk_assessment?.year} {sa.risk_assessment?.assessment_period}</td>
                           <td>
                             <span className="block text-xs font-semibold">L: {sa.likelihood_self} | I: {sa.impact_self} | C: {sa.control_effectiveness_self}</span>
@@ -746,7 +747,7 @@ function RiskAssessmentPage() {
         {selectedSelfAss && (
           <form id="mgr-review-form" onSubmit={handleSubmitReview}>
             <div className="mb-4 p-3 rounded" style={{ background: 'var(--bg-card-secondary)' }}>
-              <p className="text-sm font-semibold">Department: {selectedSelfAss.risk_assessment?.department_name || `Dept #${selectedSelfAss.risk_assessment?.department}`}</p>
+              <p className="text-sm font-semibold">Department: {localizedName(lang, selectedSelfAss.risk_assessment?.department_name, selectedSelfAss.risk_assessment?.department_name_am) || `Dept #${selectedSelfAss.risk_assessment?.department}`}</p>
               <p className="text-xs text-muted">Auditee Proposed Scores: L={selectedSelfAss.likelihood_self} | I={selectedSelfAss.impact_self} | C={selectedSelfAss.control_effectiveness_self}</p>
               <p className="text-xs text-muted mt-2">Justification: &quot;{selectedSelfAss.justification}&quot;</p>
               {selectedSelfAss.mitigating_controls && (

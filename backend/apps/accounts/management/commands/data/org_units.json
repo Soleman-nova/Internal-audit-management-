@@ -1,0 +1,926 @@
+[
+  {
+    "orgunit": "10000026",
+    "orgunit_name": "CO Internal Audit",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000027",
+    "orgunit_name": "CEO Office",
+    "location": "HO",
+    "parent_id": null
+  },
+  {
+    "orgunit": "10000028",
+    "orgunit_name": "CO Technical Audit",
+    "location": "HO",
+    "parent_id": "10000026"
+  },
+  {
+    "orgunit": "10000029",
+    "orgunit_name": "CO Financial and Performance A",
+    "location": "HO",
+    "parent_id": "10000026"
+  },
+  {
+    "orgunit": "10000030",
+    "orgunit_name": "CO IT Audit",
+    "location": "HO",
+    "parent_id": "10000026"
+  },
+  {
+    "orgunit": "10000032",
+    "orgunit_name": "CO Board Secretariat",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000033",
+    "orgunit_name": "CO Women, Children and Youth Affairs",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000034",
+    "orgunit_name": "CO Communication",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000035",
+    "orgunit_name": "CO Legal",
+    "location": "HO",
+    "parent_id": "10003346"
+  },
+  {
+    "orgunit": "10000036",
+    "orgunit_name": "CO Strategic and Investment Executive",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000037",
+    "orgunit_name": "CO Human Resource Management",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000038",
+    "orgunit_name": "CO Supply Chain&Property & Gen service",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000039",
+    "orgunit_name": "CO Finance & Control",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000041",
+    "orgunit_name": "CO Enginering",
+    "location": "HO",
+    "parent_id": "10003304"
+  },
+  {
+    "orgunit": "10000042",
+    "orgunit_name": "CO Ethics & Anti corruption",
+    "location": "HO",
+    "parent_id": "10003346"
+  },
+  {
+    "orgunit": "10000043",
+    "orgunit_name": "CO Process and Quality Management",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000044",
+    "orgunit_name": "CO EHS",
+    "location": "HO",
+    "parent_id": "10003304"
+  },
+  {
+    "orgunit": "10000045",
+    "orgunit_name": "CO NW & Infrastructure & Operation",
+    "location": "HO",
+    "parent_id": "10003304"
+  },
+  {
+    "orgunit": "10000046",
+    "orgunit_name": "CO Information Technology",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10000048",
+    "orgunit_name": "Addis Ababa Region Coordination",
+    "location": "HO",
+    "parent_id": "10003356"
+  },
+  {
+    "orgunit": "10000049",
+    "orgunit_name": "Oromia Region Coordination",
+    "location": "HO",
+    "parent_id": "10003356"
+  },
+  {
+    "orgunit": "10000059",
+    "orgunit_name": "CO Institutional Relations&Events Mngmnt",
+    "location": "HO",
+    "parent_id": "10000034"
+  },
+  {
+    "orgunit": "10000060",
+    "orgunit_name": "CO Media Management",
+    "location": "HO",
+    "parent_id": "10000034"
+  },
+  {
+    "orgunit": "10000061",
+    "orgunit_name": "CO Print and Digital Media Communication",
+    "location": "HO",
+    "parent_id": "10000034"
+  },
+  {
+    "orgunit": "10000062",
+    "orgunit_name": "CO Preventive Law& Regulatory Compliance",
+    "location": "HO",
+    "parent_id": "10000035"
+  },
+  {
+    "orgunit": "10000063",
+    "orgunit_name": "CO Dispute Resolution and Litigation",
+    "location": "HO",
+    "parent_id": "10000035"
+  },
+  {
+    "orgunit": "10000065",
+    "orgunit_name": "CO Investment and Project Financing",
+    "location": "HO",
+    "parent_id": "10000036"
+  },
+  {
+    "orgunit": "10000066",
+    "orgunit_name": "CO Strategic Planning and Monitoring",
+    "location": "HO",
+    "parent_id": "10000036"
+  },
+  {
+    "orgunit": "10000067",
+    "orgunit_name": "CO Risk Management",
+    "location": "HO",
+    "parent_id": "10000036"
+  },
+  {
+    "orgunit": "10000068",
+    "orgunit_name": "CO HR Planning and Organization",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000069",
+    "orgunit_name": "CO Hiring & Staffing",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000070",
+    "orgunit_name": "CO HR Training and Development",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000071",
+    "orgunit_name": "CO Employee Relation& Reg HRCoordination",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000072",
+    "orgunit_name": "CO HR Compensation and Benefits",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000073",
+    "orgunit_name": "CO HIV AIDS  Preven & Control offic",
+    "location": "HO",
+    "parent_id": "10000076"
+  },
+  {
+    "orgunit": "10000074",
+    "orgunit_name": "CO Corporate HR Administration",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000076",
+    "orgunit_name": "CO Medical Services and HIV",
+    "location": "HO",
+    "parent_id": "10000037"
+  },
+  {
+    "orgunit": "10000077",
+    "orgunit_name": "CO Employee Records and HRIS",
+    "location": "HO",
+    "parent_id": "10000074"
+  },
+  {
+    "orgunit": "10000080",
+    "orgunit_name": "CO Procurement I",
+    "location": "HO",
+    "parent_id": "10003751"
+  },
+  {
+    "orgunit": "10000081",
+    "orgunit_name": "CO Logistics and W/H",
+    "location": "HO",
+    "parent_id": "10003342"
+  },
+  {
+    "orgunit": "10000082",
+    "orgunit_name": "CO Property and General Services",
+    "location": "HO",
+    "parent_id": "10000038"
+  },
+  {
+    "orgunit": "10000083",
+    "orgunit_name": "CO Procurement II",
+    "location": "HO",
+    "parent_id": "10003751"
+  },
+  {
+    "orgunit": "10000084",
+    "orgunit_name": "CO Fleet and Facility Procurement",
+    "location": "HO",
+    "parent_id": "10003751"
+  },
+  {
+    "orgunit": "10000085",
+    "orgunit_name": "CO Warehouse -Central",
+    "location": "HO",
+    "parent_id": "10000081"
+  },
+  {
+    "orgunit": "10000086",
+    "orgunit_name": "CO Facilities Management",
+    "location": "HO",
+    "parent_id": "10000089"
+  },
+  {
+    "orgunit": "10000088",
+    "orgunit_name": "CO Vehicle Maintenance &Transport Mgt",
+    "location": "HO",
+    "parent_id": "10000082"
+  },
+  {
+    "orgunit": "10000089",
+    "orgunit_name": "CO General Services",
+    "location": "HO",
+    "parent_id": "10000082"
+  },
+  {
+    "orgunit": "10000090",
+    "orgunit_name": "CO Property management",
+    "location": "HO",
+    "parent_id": "10003335"
+  },
+  {
+    "orgunit": "10000092",
+    "orgunit_name": "CO Property and insuranc",
+    "location": "HO",
+    "parent_id": "10003335"
+  },
+  {
+    "orgunit": "10000093",
+    "orgunit_name": "Co Mechanical Workshop",
+    "location": "HO",
+    "parent_id": "10003336"
+  },
+  {
+    "orgunit": "10000094",
+    "orgunit_name": "CO Treasury",
+    "location": "HO",
+    "parent_id": "10000039"
+  },
+  {
+    "orgunit": "10000096",
+    "orgunit_name": "CO Funding Management",
+    "location": "HO",
+    "parent_id": "10000039"
+  },
+  {
+    "orgunit": "10000097",
+    "orgunit_name": "CO Internal Transaction",
+    "location": "HO",
+    "parent_id": "10000094"
+  },
+  {
+    "orgunit": "10000098",
+    "orgunit_name": "CO External Transaction",
+    "location": "HO",
+    "parent_id": "10000094"
+  },
+  {
+    "orgunit": "10000101",
+    "orgunit_name": "CO Cash & Bank Control",
+    "location": "HO",
+    "parent_id": "10000094"
+  },
+  {
+    "orgunit": "10000106",
+    "orgunit_name": "CO Financial Reporting &RegCoordination",
+    "location": "HO",
+    "parent_id": "10000039"
+  },
+  {
+    "orgunit": "10000107",
+    "orgunit_name": "CO General Account",
+    "location": "HO",
+    "parent_id": "NO_PARNT"
+  },
+  {
+    "orgunit": "10000108",
+    "orgunit_name": "CO Budget Control",
+    "location": "HO",
+    "parent_id": "NO_PARNT"
+  },
+  {
+    "orgunit": "10000109",
+    "orgunit_name": "CO Material and Fixed Asset Control",
+    "location": "HO",
+    "parent_id": "NO_PARNT"
+  },
+  {
+    "orgunit": "10000111",
+    "orgunit_name": "CO Policy and Fin Compliance A",
+    "location": "HO",
+    "parent_id": "10000039"
+  },
+  {
+    "orgunit": "10000112",
+    "orgunit_name": "CO loan Mgt",
+    "location": "HO",
+    "parent_id": "10000096"
+  },
+  {
+    "orgunit": "10000116",
+    "orgunit_name": "CO Commercial Income & E-payments Mngmnt",
+    "location": "HO",
+    "parent_id": "10000096"
+  },
+  {
+    "orgunit": "10000141",
+    "orgunit_name": "CO Material Engineering",
+    "location": "HO",
+    "parent_id": "10003305"
+  },
+  {
+    "orgunit": "10000142",
+    "orgunit_name": "CO Quality Control Team",
+    "location": "HO",
+    "parent_id": "10003305"
+  },
+  {
+    "orgunit": "10000144",
+    "orgunit_name": "CO Educative and Preventive",
+    "location": "HO",
+    "parent_id": "10000042"
+  },
+  {
+    "orgunit": "10000148",
+    "orgunit_name": "CO Sales and Customer Service",
+    "location": "HO",
+    "parent_id": "10003313"
+  },
+  {
+    "orgunit": "10000149",
+    "orgunit_name": "CO Sub Transmission & Substation",
+    "location": "HO",
+    "parent_id": "10003311"
+  },
+  {
+    "orgunit": "10000164",
+    "orgunit_name": "CO IT Applications",
+    "location": "HO",
+    "parent_id": "10000046"
+  },
+  {
+    "orgunit": "10000165",
+    "orgunit_name": "CO Energy Mgmt",
+    "location": "HO",
+    "parent_id": "10003313"
+  },
+  {
+    "orgunit": "10000166",
+    "orgunit_name": "CO IT Operations & Support",
+    "location": "HO",
+    "parent_id": "10000046"
+  },
+  {
+    "orgunit": "10000168",
+    "orgunit_name": "CO IT Infrastructure Development",
+    "location": "HO",
+    "parent_id": "10000046"
+  },
+  {
+    "orgunit": "10000169",
+    "orgunit_name": "CO Cyber Security & Compliance",
+    "location": "HO",
+    "parent_id": "10000046"
+  },
+  {
+    "orgunit": "10000202",
+    "orgunit_name": "CO AAR Wooden Pole Production",
+    "location": "HO",
+    "parent_id": "10003336"
+  },
+  {
+    "orgunit": "10000407",
+    "orgunit_name": "CO Shashmine Wooden Pole Production",
+    "location": "HO",
+    "parent_id": "10003336"
+  },
+  {
+    "orgunit": "10000408",
+    "orgunit_name": "CO Nekemt Wooden Pole Production",
+    "location": "HO",
+    "parent_id": "10003336"
+  },
+  {
+    "orgunit": "10000944",
+    "orgunit_name": "CO Bahir Dar Wooden Pole Production",
+    "location": "HO",
+    "parent_id": "10003336"
+  },
+  {
+    "orgunit": "10002426",
+    "orgunit_name": "CO Club Operations",
+    "location": "HO",
+    "parent_id": "10003750"
+  },
+  {
+    "orgunit": "10002427",
+    "orgunit_name": "CO Transport Management",
+    "location": "HO",
+    "parent_id": "10000088"
+  },
+  {
+    "orgunit": "10002428",
+    "orgunit_name": "CO Meter Management",
+    "location": "HO",
+    "parent_id": "10000148"
+  },
+  {
+    "orgunit": "10002429",
+    "orgunit_name": "CO Call Center",
+    "location": "HO",
+    "parent_id": "10003322"
+  },
+  {
+    "orgunit": "10002430",
+    "orgunit_name": "CO Network Administration",
+    "location": "HO",
+    "parent_id": "10000166"
+  },
+  {
+    "orgunit": "10002432",
+    "orgunit_name": "CO Admin &Finance",
+    "location": "HO",
+    "parent_id": "10000082"
+  },
+  {
+    "orgunit": "10002433",
+    "orgunit_name": "CO Engineering Consultancy",
+    "location": "HO",
+    "parent_id": "10000041"
+  },
+  {
+    "orgunit": "10002434",
+    "orgunit_name": "CO Disaster Recovery&Business Continuity",
+    "location": "HO",
+    "parent_id": "10000169"
+  },
+  {
+    "orgunit": "10002436",
+    "orgunit_name": "CO Civil Design",
+    "location": "HO",
+    "parent_id": "10000041"
+  },
+  {
+    "orgunit": "10002440",
+    "orgunit_name": "CO SCS Errection,Operation & Maintainan.",
+    "location": "HO",
+    "parent_id": "10003311"
+  },
+  {
+    "orgunit": "10002443",
+    "orgunit_name": "CO Service Desk",
+    "location": "HO",
+    "parent_id": "10000166"
+  },
+  {
+    "orgunit": "10002445",
+    "orgunit_name": "CO ERP Technical Support and MIS",
+    "location": "HO",
+    "parent_id": "10000164"
+  },
+  {
+    "orgunit": "10002446",
+    "orgunit_name": "CO Data Centre",
+    "location": "HO",
+    "parent_id": "10000166"
+  },
+  {
+    "orgunit": "10002448",
+    "orgunit_name": "Co System Administration",
+    "location": "HO",
+    "parent_id": "10000166"
+  },
+  {
+    "orgunit": "10002449",
+    "orgunit_name": "CO Database Administration",
+    "location": "HO",
+    "parent_id": "10000166"
+  },
+  {
+    "orgunit": "10002452",
+    "orgunit_name": "CO Technical Application Administration",
+    "location": "HO",
+    "parent_id": "10000164"
+  },
+  {
+    "orgunit": "10002456",
+    "orgunit_name": "CO Vechicle Maintainance",
+    "location": "HO",
+    "parent_id": "10000088"
+  },
+  {
+    "orgunit": "10002473",
+    "orgunit_name": "CO DSS Suport",
+    "location": "HO",
+    "parent_id": "10000164"
+  },
+  {
+    "orgunit": "10002474",
+    "orgunit_name": "CO Cyber Monitoring & Compliance",
+    "location": "HO",
+    "parent_id": "10000169"
+  },
+  {
+    "orgunit": "10003302",
+    "orgunit_name": "Co Network Planning",
+    "location": "HO",
+    "parent_id": "10000036"
+  },
+  {
+    "orgunit": "10003303",
+    "orgunit_name": "Co Strategic Outsourcing",
+    "location": "HO",
+    "parent_id": "10000036"
+  },
+  {
+    "orgunit": "10003304",
+    "orgunit_name": "Co Network Infrastructure Management",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10003305",
+    "orgunit_name": "CO Material Engineering&Quality Control",
+    "location": "HO",
+    "parent_id": "10000041"
+  },
+  {
+    "orgunit": "10003306",
+    "orgunit_name": "Co Network Design",
+    "location": "HO",
+    "parent_id": "10000041"
+  },
+  {
+    "orgunit": "10003307",
+    "orgunit_name": "Co Asset Mngmt&Infrastructure Coordinat",
+    "location": "HO",
+    "parent_id": "10000045"
+  },
+  {
+    "orgunit": "10003308",
+    "orgunit_name": "CO DCC & Radio communication",
+    "location": "HO",
+    "parent_id": "10000045"
+  },
+  {
+    "orgunit": "10003309",
+    "orgunit_name": "CO Radio Communication",
+    "location": "HO",
+    "parent_id": "10003308"
+  },
+  {
+    "orgunit": "10003310",
+    "orgunit_name": "CO DCC Operation",
+    "location": "HO",
+    "parent_id": "10003308"
+  },
+  {
+    "orgunit": "10003311",
+    "orgunit_name": "CO Network Infrastructure Excellence",
+    "location": "HO",
+    "parent_id": "10000045"
+  },
+  {
+    "orgunit": "10003312",
+    "orgunit_name": "CO Network Operations & Maint Excellence",
+    "location": "HO",
+    "parent_id": "10003311"
+  },
+  {
+    "orgunit": "10003313",
+    "orgunit_name": "CO Marketing Sales & Customer Service",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10003314",
+    "orgunit_name": "CO Energy Trading",
+    "location": "HO",
+    "parent_id": "10000165"
+  },
+  {
+    "orgunit": "10003315",
+    "orgunit_name": "CO Demand Side Management",
+    "location": "HO",
+    "parent_id": "10000165"
+  },
+  {
+    "orgunit": "10003316",
+    "orgunit_name": "CO Marketing",
+    "location": "HO",
+    "parent_id": "10003313"
+  },
+  {
+    "orgunit": "10003317",
+    "orgunit_name": "CO Market Research&Business Development",
+    "location": "HO",
+    "parent_id": "NO_PARNT"
+  },
+  {
+    "orgunit": "10003318",
+    "orgunit_name": "CO Pricing and Tariff Management",
+    "location": "HO",
+    "parent_id": "10003316"
+  },
+  {
+    "orgunit": "10003319",
+    "orgunit_name": "CO Billing and Collection Management",
+    "location": "HO",
+    "parent_id": "10000148"
+  },
+  {
+    "orgunit": "10003320",
+    "orgunit_name": "CO Sales& Customer Relationship Mngmnt",
+    "location": "HO",
+    "parent_id": "10000148"
+  },
+  {
+    "orgunit": "10003321",
+    "orgunit_name": "CO Key Customers Management",
+    "location": "HO",
+    "parent_id": "10000148"
+  },
+  {
+    "orgunit": "10003322",
+    "orgunit_name": "CO Contact Centre Management",
+    "location": "HO",
+    "parent_id": "10000148"
+  },
+  {
+    "orgunit": "10003323",
+    "orgunit_name": "CO Key Connect Support 904",
+    "location": "HO",
+    "parent_id": "10003322"
+  },
+  {
+    "orgunit": "10003333",
+    "orgunit_name": "CO Software Development",
+    "location": "HO",
+    "parent_id": "10000164"
+  },
+  {
+    "orgunit": "10003334",
+    "orgunit_name": "CO Prepaid System Support",
+    "location": "HO",
+    "parent_id": "10000164"
+  },
+  {
+    "orgunit": "10003335",
+    "orgunit_name": "CO Property and insurance Management",
+    "location": "HO",
+    "parent_id": "10000082"
+  },
+  {
+    "orgunit": "10003336",
+    "orgunit_name": "CO Production Plants",
+    "location": "HO",
+    "parent_id": "10000082"
+  },
+  {
+    "orgunit": "10003337",
+    "orgunit_name": "CO Electrical Workshop",
+    "location": "HO",
+    "parent_id": "10003336"
+  },
+  {
+    "orgunit": "10003341",
+    "orgunit_name": "CO Procurement Contract Management",
+    "location": "HO",
+    "parent_id": "10003342"
+  },
+  {
+    "orgunit": "10003342",
+    "orgunit_name": "CO Supply Chain Management Strategy",
+    "location": "HO",
+    "parent_id": "10000038"
+  },
+  {
+    "orgunit": "10003343",
+    "orgunit_name": "CO Stock control and archive",
+    "location": "HO",
+    "parent_id": "10000081"
+  },
+  {
+    "orgunit": "10003344",
+    "orgunit_name": "CO Warehouse -Garage & workshop",
+    "location": "HO",
+    "parent_id": "10000081"
+  },
+  {
+    "orgunit": "10003345",
+    "orgunit_name": "CO HR Performance management",
+    "location": "HO",
+    "parent_id": "10000068"
+  },
+  {
+    "orgunit": "10003346",
+    "orgunit_name": "CO Legal Service and Ethics",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10003347",
+    "orgunit_name": "CO Investigations&Compliance Monitoring",
+    "location": "HO",
+    "parent_id": "10000042"
+  },
+  {
+    "orgunit": "10003348",
+    "orgunit_name": "CO Reg Legal Service supp &coordination",
+    "location": "HO",
+    "parent_id": "10000035"
+  },
+  {
+    "orgunit": "10003349",
+    "orgunit_name": "CO Policy and Process Management",
+    "location": "HO",
+    "parent_id": "10000043"
+  },
+  {
+    "orgunit": "10003354",
+    "orgunit_name": "CO Brand Management",
+    "location": "HO",
+    "parent_id": "10000034"
+  },
+  {
+    "orgunit": "10003355",
+    "orgunit_name": "CO Library and Documenation",
+    "location": "HO",
+    "parent_id": "10003354"
+  },
+  {
+    "orgunit": "10003356",
+    "orgunit_name": "EEU National Operation Coordination Off",
+    "location": "HO",
+    "parent_id": "10000027"
+  },
+  {
+    "orgunit": "10003450",
+    "orgunit_name": "CO DSMPLES PROJECT",
+    "location": "HO",
+    "parent_id": "10003302"
+  },
+  {
+    "orgunit": "10003692",
+    "orgunit_name": "CO Country Supply Chain&PGS Coordination",
+    "location": "HO",
+    "parent_id": "NO_PARNT"
+  },
+  {
+    "orgunit": "10003693",
+    "orgunit_name": "CO Regional Audit Coordination",
+    "location": "HO",
+    "parent_id": "10000026"
+  },
+  {
+    "orgunit": "10003749",
+    "orgunit_name": "CO B/D Data Center & Disaster Rec Center",
+    "location": "HO",
+    "parent_id": "10002446"
+  },
+  {
+    "orgunit": "10003750",
+    "orgunit_name": "CO Club Services",
+    "location": "HO",
+    "parent_id": "10000089"
+  },
+  {
+    "orgunit": "10003751",
+    "orgunit_name": "CO Procurement Management",
+    "location": "HO",
+    "parent_id": "10003342"
+  },
+  {
+    "orgunit": "10003752",
+    "orgunit_name": "CO AA Region Ethics & Anti-Corruptio Coo",
+    "location": "HO",
+    "parent_id": "10000042"
+  },
+  {
+    "orgunit": "10003819",
+    "orgunit_name": "SCADA/DMS Operation",
+    "location": "HO",
+    "parent_id": "NO_PARNT"
+  },
+  {
+    "orgunit": "10003820",
+    "orgunit_name": "SCADA/DMS & Communication Operation",
+    "location": "HO",
+    "parent_id": "10003356"
+  },
+  {
+    "orgunit": "10003823",
+    "orgunit_name": "SCADA/DMS Maintenance",
+    "location": "HO",
+    "parent_id": "10003820"
+  },
+  {
+    "orgunit": "10003824",
+    "orgunit_name": "SCADA/DMS RTU and Local SCADA",
+    "location": "HO",
+    "parent_id": "10003826"
+  },
+  {
+    "orgunit": "10003826",
+    "orgunit_name": "SCADA/DMS RTU and Local SCADA H",
+    "location": "HO",
+    "parent_id": "10003820"
+  },
+  {
+    "orgunit": "10003832",
+    "orgunit_name": "SCADA/DMS Software Maintenance",
+    "location": "HO",
+    "parent_id": "10003823"
+  },
+  {
+    "orgunit": "10003833",
+    "orgunit_name": "SCADA/DMS Hardware Maintenance",
+    "location": "HO",
+    "parent_id": "10003823"
+  },
+  {
+    "orgunit": "10003836",
+    "orgunit_name": "SCADA/DMS Control & Relay Protection",
+    "location": "HO",
+    "parent_id": "10003826"
+  },
+  {
+    "orgunit": "10003843",
+    "orgunit_name": "CO Planning & performance Monitoring",
+    "location": "HO",
+    "parent_id": "10000026"
+  },
+  {
+    "orgunit": "10003844",
+    "orgunit_name": "CO Commercial policy& Process Management",
+    "location": "HO",
+    "parent_id": "10003349"
+  },
+  {
+    "orgunit": "10003845",
+    "orgunit_name": "CO Support policy&Processes Management",
+    "location": "HO",
+    "parent_id": "10003349"
+  },
+  {
+    "orgunit": "10003846",
+    "orgunit_name": "CO Technical policy&Process Management",
+    "location": "HO",
+    "parent_id": "10003349"
+  },
+  {
+    "orgunit": "10003847",
+    "orgunit_name": "CO Process Quality Assurance",
+    "location": "HO",
+    "parent_id": "10000043"
+  }
+]

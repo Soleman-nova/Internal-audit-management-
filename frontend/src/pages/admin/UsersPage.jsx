@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { usersApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
+import { localizedName } from '../../utils/localizedName';
 import { validateForm, validators, hasErrors, clearFieldError } from '../../utils/validation';
 import Modal from '../../components/ui/Modal';
 import DataTable from '../../components/ui/DataTable';
@@ -36,7 +37,7 @@ const EMPTY_NEW_USER = {
 
 function UsersPage() {
   const toast = useToast();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [users, setUsers] = useState([]);
   const [formErrors, setFormErrors] = useState({});
   const [accountActivity, setAccountActivity] = useState([]);
@@ -685,7 +686,7 @@ function UsersPage() {
                   label="Department / Unit"
                   value={editingUser.department || ''}
                   onChange={(id) => setEditingUserField('department', id)}
-                  valueLabel={editingUser.department_name}
+                  valueLabel={localizedName(lang, editingUser.department_name, editingUser.department_name_am)}
                 />
                 <div className="form-group">
                   <label className="form-label" htmlFor="edit_role">Security Role</label>

@@ -336,7 +336,7 @@ function DashboardPage() {
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                 <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
                 <Bar dataKey="Completed" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="InProgress" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="InProgress" fill="#f2801f" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -392,8 +392,8 @@ function DashboardPage() {
               <AreaChart data={complianceTrend} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#00a651" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#00a651" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -403,7 +403,7 @@ function DashboardPage() {
                     would push its line off the bottom of the chart. */}
                 <YAxis domain={[0, 100]} stroke="#64748b" tick={{ fontSize: 12 }} />
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                <Area type="monotone" dataKey="score" stroke="#2563eb" strokeWidth={2} fill="url(#areaGrad)" />
+                <Area type="monotone" dataKey="score" stroke="#00a651" strokeWidth={2} fill="url(#areaGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
