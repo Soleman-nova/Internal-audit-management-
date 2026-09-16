@@ -5,47 +5,40 @@ import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
 import { hasCapability, getCurrentUser, CAPABILITIES } from '../../hooks/usePermissions';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell, AreaChart, Area
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts';
 import {
-  TrendingUp, AlertTriangle, FolderKanban, Clock, Building2, Filter,
-  Inbox, ShieldAlert, ClipboardCheck, ChevronRight
+  TrendingUp, AlertTriangle, FolderKanban, Clock, Inbox, ShieldAlert,
+  ClipboardCheck, ChevronRight, RefreshCw, Activity,
 } from 'lucide-react';
-import EEUOrgChart from '../../components/EEUOrgChart';
+import DirectorateStrip from '../../components/DirectorateStrip';
+import ChartTooltip from '../../components/ui/ChartTooltip';
+import EmptyState from '../../components/ui/EmptyState';
+import { useChartTheme, toSeverityChartData, toStatusChartData } from '../../utils/chartTheme';
 
-const CHART_TOOLTIP_STYLE = { backgroundColor: '#1a2235', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', color: '#f1f5f9', fontSize: '12px' };
-
-// Severity buckets, worst first, keyed by the backend's AuditFinding.SEVERITY_CHOICES values.
-const SEVERITY_META = [
-  { key: 'critical', name: 'Critical', color: '#ef4444' },
-  { key: 'high', name: 'High', color: '#f59e0b' },
-  { key: 'medium', name: 'Medium', color: '#3b82f6' },
-  { key: 'low', name: 'Low', color: '#10b981' },
-  { key: 'informational', name: 'Informational', color: '#64748b' },
-];
-
-// The four directorates the filter switcher offers. IAEO is the parent office —
+// The four directorates the scope strip offers. IAEO is the parent office —
 // scoping to it means "everything", which is what the consolidated option does.
 const DIRECTORATE_TYPES = ['FPA', 'TA', 'ITA', 'PP'];
 
-/** Turn the API's [{severity, count}] rows into the donut's {name, value, color} shape. */
-function toSeverityChartData(rows) {
-  const counts = new Map((rows || []).map(r => [r.severity, r.count]));
-  return SEVERITY_META
-    .map(meta => ({ name: meta.name, value: counts.get(meta.key) || 0, color: meta.color }))
-    .filter(entry => entry.value > 0);
+/** Colour a KPI by whether its value needs attention, not by decoration. */
+function complianceTone(score) {
+  if (score == null) return 'neutral';
+  if (score >= 90) return 'ok';
+  if (score >= 70) return 'warn';
+  return 'alert';
 }
 
 function DashboardPage() {
   const toast = useToast();
   const { t } = useI18n();
+  const chart = useChartTheme();
 
-  // ── Directorate Filter Switcher ──
+  // ── Directorate Scope ──
   // Drives every fetch below: 'all' means the EEU consolidated view.
   const [directorates, setDirectorates] = useState([]);
+  const [directoratesLoading, setDirectoratesLoading] = useState(true);
   const [selectedDirectorate, setSelectedDirectorate] = useState('all');
-  const [directorateStats, setDirectorateStats] = useState(null);
 
   // One bundle for everything the directorate scopes, tagged with the scope it
   // was fetched for. `scope` doubles as the loading signal — while it disagrees
@@ -55,17 +48,25 @@ function DashboardPage() {
   const [scoped, setScoped] = useState({
     scope: null,
     stats: null,
+    statusData: [],
     findingsData: [],
     monthlyAudits: [],
     complianceTrend: [],
     myWork: null,
+    error: false,
   });
   const [activities, setActivities] = useState([]);
 
   const statsLoading = scoped.scope !== selectedDirectorate;
-  const { stats, findingsData, monthlyAudits, complianceTrend, myWork } = scoped;
+  const { stats, statusData, findingsData, monthlyAudits, complianceTrend, myWork, error } = scoped;
 
-  // Mount-only: the directorate list for the switcher and the enterprise-wide
+  // The audit trail is gated behind VIEW_AUDIT_TRAIL even for reads, and
+  // auditors and auditees hold no such capability — so the feed is neither
+  // fetched nor rendered for them, rather than producing a guaranteed 403 on
+  // every dashboard load and an empty card on screen.
+  const canViewTrail = hasCapability(getCurrentUser(), CAPABILITIES.VIEW_AUDIT_TRAIL);
+
+  // Mount-only: the directorate list for the scope strip and the enterprise-wide
   // activity feed. Neither depends on the selected directorate — the audit trail
   // carries no directorate link, so the feed stays EEU-wide.
   useEffect(() => {
@@ -80,14 +81,10 @@ function DashboardPage() {
           .filter(d => DIRECTORATE_TYPES.includes(d.directorate_type));
         setDirectorates(list);
       })
-      .catch(() => {/* switcher falls back to the consolidated option only */ });
+      .catch(() => {/* strip falls back to the consolidated option only */ })
+      .finally(() => { if (!cancelled) setDirectoratesLoading(false); });
 
-    // The feed is the same record the /audit-trail page shows, and the backend
-    // gates that endpoint behind VIEW_AUDIT_TRAIL even for reads (auditors and
-    // auditees hold no such capability). Firing it unconditionally produced a
-    // guaranteed 403 in the console on every dashboard load for those roles, so
-    // it is fetched only when the signed-in user could actually open it.
-    if (hasCapability(getCurrentUser(), CAPABILITIES.VIEW_AUDIT_TRAIL)) {
+    if (canViewTrail) {
       usersApi.getAuditTrail({ page_size: 5 })
         .then(res => {
           if (cancelled) return;
@@ -104,150 +101,104 @@ function DashboardPage() {
     }
 
     return () => { cancelled = true; };
-  }, []);
+  }, [canViewTrail]);
 
-  // Refetch every KPI and chart series whenever the directorate changes.
-  useEffect(() => {
-    let cancelled = false;
-    const scope = selectedDirectorate;
-
+  // Refetch every KPI and chart series whenever the scope changes.
+  const applyScope = useCallback((scope) => {
     const params = scope === 'all' ? {} : { directorate: scope };
     usersApi.getDashboardStats(params)
       .then(d => {
-        if (cancelled) return;
         setScoped({
           scope,
           stats: {
             activeAudits: d.active_engagements ?? 0,
+            totalEngagements: d.total_engagements ?? 0,
             openFindings: d.open_findings ?? 0,
+            criticalFindings: d.critical_findings ?? 0,
+            highFindings: d.high_findings ?? 0,
             overdueActions: d.overdue_actions ?? 0,
+            openActions: d.open_actions ?? 0,
             complianceScore: d.compliance_score ?? 0,
+            totalFindings: d.total_findings ?? 0,
           },
-          findingsData: toSeverityChartData(d.open_findings_by_severity),
+          statusData: toStatusChartData(d.engagements_by_status, t),
+          findingsData: toSeverityChartData(d.open_findings_by_severity, t),
           monthlyAudits: d.monthly_engagements || [],
           complianceTrend: d.compliance_trend || [],
           myWork: d.my_work || null,
+          error: false,
         });
       })
       .catch(() => {
-        if (cancelled) return;
-        toast.error('Failed to load dashboard statistics');
+        toast.error(t('dashboardLoadError'));
         // Settle on this scope with nothing in it rather than leaving the
         // previous directorate's numbers on screen under a new label.
         setScoped({
-          scope, stats: null, findingsData: [], monthlyAudits: [],
-          complianceTrend: [], myWork: null,
+          scope, stats: null, statusData: [], findingsData: [], monthlyAudits: [],
+          complianceTrend: [], myWork: null, error: true,
         });
       });
+  }, [toast, t]);
 
-    return () => { cancelled = true; };
-    // toast is stable for the life of the provider; refetching on it would loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDirectorate]);
+  useEffect(() => {
+    applyScope(selectedDirectorate);
+  }, [selectedDirectorate, applyScope]);
 
-  // Shared by the switcher and the org chart, which can hand us any node in the
-  // tree — the IAEO root, a directorate, or a sub-unit beneath one.
+  // Shared by the scope strip. It only ever hands us a top-level directorate or
+  // null, but the roll-up is kept so any future caller passing a sub-unit still
+  // resolves to the directorate that actually owns the data.
   const handleDirectorateSelect = useCallback((dept) => {
     if (!dept || dept.directorate_type === 'IAEO') {
       // IAEO owns every directorate, so scoping to it *is* the consolidated view.
       setSelectedDirectorate('all');
-      setDirectorateStats(null);
       return;
     }
 
-    // A sub-unit has no <option> of its own; roll it up to its parent
-    // directorate so the select and the data stay in agreement.
     const target = DIRECTORATE_TYPES.includes(dept.directorate_type)
       ? dept
       : directorates.find(d => d.id === dept.parent);
 
-    if (!target) {
-      setSelectedDirectorate('all');
-      setDirectorateStats(null);
-      return;
-    }
-
-    setSelectedDirectorate(target.id);
-    setDirectorateStats({
-      name: target.name,
-      code: target.directorate_type,
-      head: target.head,
-      staffCount: target.staff_count,
-    });
+    setSelectedDirectorate(target ? target.id : 'all');
   }, [directorates]);
 
-  const handleFilterChange = (e) => {
-    const value = e.target.value;
-    if (value === 'all') {
-      handleDirectorateSelect(null);
-    } else {
-      const dept = directorates.find(d => d.id === Number(value));
-      if (dept) handleDirectorateSelect(dept);
-    }
-  };
-
-  // Dash while a fetch is in flight and until the first response lands. Never
-  // show the previous directorate's numbers under the new one's label — and
-  // never substitute a placeholder for a real 0.
-  const kpi = (value, suffix = '') => (statsLoading || !stats ? '—' : `${value}${suffix}`);
-  // Appended to the class of every box whose data is directorate-scoped, so a
-  // switch visibly reads as "working" rather than as "nothing happened".
-  const refreshing = statsLoading ? ' is-refreshing' : '';
+  const refreshing = statsLoading && stats ? ' is-refreshing' : '';
 
   return (
     <div className="dashboard-view">
 
-      {/* ── Directorate Filter Switcher ── */}
-      <div className="directorate-filter-bar">
-        <div className="directorate-filter-label">
-          <Filter size={16} />
-          <span>{selectedDirectorate === 'all' ? t('enterpriseConsolidatedView') : t('directorateView')}</span>
-        </div>
-        <select
-          className="directorate-filter-select"
-          value={selectedDirectorate}
-          onChange={handleFilterChange}
-          aria-label="Filter by directorate"
-        >
-          <option value="all">EEU Consolidated Master View</option>
-          {directorates.map(d => (
-            <option key={d.id} value={d.id}>{d.name}</option>
-          ))}
-        </select>
-        {directorateStats && (
-          <div className="directorate-filter-info">
-            <span className="directorate-filter-head">Head: {directorateStats.head}</span>
-            <span className="directorate-filter-staff">Staff: {directorateStats.staffCount}</span>
-          </div>
-        )}
-      </div>
+      {/* ── A. Scope command bar ── */}
+      <DirectorateStrip
+        directorates={directorates}
+        selected={selectedDirectorate}
+        onSelect={handleDirectorateSelect}
+        loading={directoratesLoading}
+      />
 
-      {/* ── KPI Cards ── */}
-      <div className={`kpi-grid${refreshing}`} aria-busy={statsLoading}>
-        <StatCard icon={<FolderKanban size={22} />} label={t('activeAudits')} value={kpi(stats?.activeAudits)} sub={t('ongoingEngagements')} color="blue" />
-        <StatCard icon={<AlertTriangle size={22} />} label={t('openFindings')} value={kpi(stats?.openFindings)} sub={t('highSeverityItems')} color="orange" />
-        <StatCard icon={<Clock size={22} />} label={t('overdueCapas')} value={kpi(stats?.overdueActions)} sub={t('requireEscalation')} color="red" />
-        {/* The subtitle is "verified closed", not "vs last quarter": the value is
-            a point-in-time verified-closure rate, no delta is computed, and only
-            findings a CLOSE_FINDINGS holder has signed off count towards it. */}
-        <StatCard icon={<TrendingUp size={22} />} label={t('overallCompliance')} value={kpi(stats?.complianceScore, '%')} sub={t('verifiedClosures')} color="green" />
-      </div>
+      {/* ── B. KPI band ── */}
+      <KpiBand
+        stats={stats}
+        refreshing={!!refreshing}
+        error={error}
+        onRetry={() => applyScope(selectedDirectorate)}
+      />
 
-      {/* ── My Work ──
+      {/* ── C. My Work ──
           Personal queue, straight from the dashboard payload. It is the only
-          block the directorate switcher does not rescope: an auditee's findings
-          may sit outside the selected directorate, and hiding them there would
-          leave that role staring at an EEU-wide dashboard with nothing on it
-          they can act on. */}
+          block the scope strip does not rescope: an auditee's findings may sit
+          outside the selected directorate, and hiding them there would leave
+          that role staring at an EEU-wide dashboard with nothing on it they can
+          act on. */}
       {myWork && (
         <div className="my-work-section">
-          <div className="chart-box-header">
-            <h3><Inbox size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />{t('myWork')}</h3>
-            <span>{t('myWorkSub')}</span>
+          <div className="chart-box-header chart-box-header-row">
+            <div>
+              <h3><Inbox size={15} className="chart-box-header-icon" />{t('myWork')}</h3>
+              <span>{t('myWorkSub')}</span>
+            </div>
           </div>
           <div className="my-work-grid">
             <MyWorkCard
-              icon={<ShieldAlert size={16} />}
+              icon={<ShieldAlert size={14} />}
               title={t('myFindings')}
               count={myWork.findings_count}
               empty={t('nothingAssigned')}
@@ -259,7 +210,7 @@ function DashboardPage() {
                   <span className={`risk-tag tag-xs ${f.severity === 'critical' ? 'critical' : f.severity === 'high' ? 'high' : 'medium'}`}>
                     {f.severity?.toUpperCase()}
                   </span>
-                  <span className="my-work-meta">
+                  <span className="my-work-meta num">
                     {f.target_resolution_date || t('noDueDate')}
                   </span>
                   <ChevronRight size={14} className="my-work-chevron" />
@@ -268,7 +219,7 @@ function DashboardPage() {
             </MyWorkCard>
 
             <MyWorkCard
-              icon={<Clock size={16} />}
+              icon={<Clock size={14} />}
               title={t('myCapas')}
               count={myWork.actions_count}
               badge={myWork.overdue_actions_count > 0
@@ -280,7 +231,7 @@ function DashboardPage() {
                 <Link key={a.id} to={`/capa/${a.id}`} className="my-work-row">
                   <span className="my-work-ref">{a.action_number}</span>
                   <span className="my-work-title">{a.title}</span>
-                  <span className={`badge ${a.is_overdue ? 'badge-danger' : 'badge-outline'}`}>
+                  <span className={`badge ${a.is_overdue ? 'badge-danger' : 'badge-outline'} num`}>
                     {a.due_date}
                   </span>
                   <ChevronRight size={14} className="my-work-chevron" />
@@ -289,7 +240,7 @@ function DashboardPage() {
             </MyWorkCard>
 
             <MyWorkCard
-              icon={<ClipboardCheck size={16} />}
+              icon={<ClipboardCheck size={14} />}
               title={myWork.assessments_are_for_review
                 ? t('assessmentsToReview')
                 : t('mySelfAssessments')}
@@ -299,7 +250,7 @@ function DashboardPage() {
               {myWork.assessments.map(s => (
                 <Link key={s.id} to="/risk" className="my-work-row">
                   <span className="my-work-title">{s.department || '—'}</span>
-                  <span className="my-work-meta">{s.period} {s.year}</span>
+                  <span className="my-work-meta num">{s.period} {s.year}</span>
                   <span className="badge badge-outline">{s.status?.toUpperCase()}</span>
                   <ChevronRight size={14} className="my-work-chevron" />
                 </Link>
@@ -309,138 +260,337 @@ function DashboardPage() {
         </div>
       )}
 
-      {/* ── Organizational Structure ── */}
-      <div className="chart-box org-chart-box">
-        <div className="chart-box-header">
-          <h3><Building2 size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />EEU Internal Audit Organizational Structure</h3>
-          <span>Executive Office & Directorate Hierarchy — click a card to filter the dashboard</span>
-        </div>
-        <EEUOrgChart onSelectDirectorate={handleDirectorateSelect} />
-      </div>
-
-      {/* ── Main Charts Row ── */}
-      <div className="charts-row">
-
-        {/* Bar Chart */}
+      {/* ── D. Trend + severity composition ── */}
+      <div className="charts-row charts-row-wide">
         <div className={`chart-box${refreshing}`} aria-busy={statsLoading}>
           <div className="chart-box-header">
-            <h3>{t('auditExecutionStatus')}</h3>
-            <span>{t('monthlyCompletedVsActive')}</span>
+            <h3>{t('complianceRatingTrend')}</h3>
+            <span>{t('quarterlyAuditScoreHistory')}</span>
           </div>
-          <div style={{ width: '100%', height: 280 }}>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={monthlyAudits} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="month" stroke="#64748b" tick={{ fontSize: 12 }} />
-                <YAxis stroke="#64748b" tick={{ fontSize: 12 }} allowDecimals={false} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
-                <Bar dataKey="Completed" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="InProgress" fill="#f2801f" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {complianceTrend.length === 0 ? (
+            <div className="chart-canvas chart-canvas-empty">
+              <EmptyState
+                icon={TrendingUp}
+                title={statsLoading ? t('loadingDashboard') : t('noTrendForScope')}
+                description={t('noTrendForScopeSub')}
+              />
+            </div>
+          ) : (
+            <div className="chart-canvas">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={complianceTrend} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#00a651" stopOpacity={chart.areaFrom} />
+                      <stop offset="95%" stopColor="#00a651" stopOpacity={chart.areaTo} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={chart.grid} vertical={false} />
+                  <XAxis dataKey="name" {...chart.axisProps} />
+                  {/* Full 0-100 range: a single directorate can legitimately sit far
+                      below the enterprise average, and an [80, 100] domain would
+                      push its line off the bottom of the chart. */}
+                  <YAxis domain={[0, 100]} {...chart.axisProps} />
+                  <Tooltip content={<ChartTooltip valueFormatter={v => `${v}%`} />} />
+                  <Area
+                    type="monotone"
+                    dataKey="score"
+                    stroke="#00a651"
+                    strokeWidth={2}
+                    fill="url(#areaGrad)"
+                    dot={false}
+                    activeDot={{ r: 4, strokeWidth: 0 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
-        {/* Donut Chart */}
         <div className={`chart-box${refreshing}`} aria-busy={statsLoading}>
           <div className="chart-box-header">
             <h3>{t('findingsBySeverity')}</h3>
             <span>{t('distributionOfOpenFindings')}</span>
           </div>
           {findingsData.length === 0 ? (
-            <div className="chart-empty">
-              {statsLoading ? t('loadingDashboard') : t('noOpenFindingsForScope')}
+            <div className="chart-canvas chart-canvas-empty">
+              <EmptyState
+                icon={ShieldAlert}
+                title={statsLoading ? t('loadingDashboard') : t('noOpenFindingsForScope')}
+                description={t('noOpenFindingsForScopeSub')}
+              />
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 24, height: 280 }}>
-              <div style={{ width: 180, height: 180, flexShrink: 0 }}>
-                <ResponsiveContainer width={180} height={180}>
+            <div className="donut-wrap">
+              <div className="donut-canvas">
+                <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={findingsData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value">
+                    <Pie
+                      data={findingsData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius="64%"
+                      outerRadius="92%"
+                      paddingAngle={2}
+                      dataKey="value"
+                      stroke="none"
+                    >
                       {findingsData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Pie>
-                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                    <Tooltip content={<ChartTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
+                <div className="donut-center">
+                  <span className="donut-total num">
+                    {findingsData.reduce((sum, e) => sum + e.value, 0)}
+                  </span>
+                  <span className="donut-total-label">{t('open')}</span>
+                </div>
               </div>
-              <div className="pie-legend-list">
+              <ul className="pie-legend-list">
                 {findingsData.map(e => (
-                  <div key={e.name} className="pie-legend-item">
+                  <li key={e.name} className="pie-legend-item">
                     <span className="pie-dot" style={{ background: e.color }} />
                     <span>{e.name}</span>
-                    <strong>{e.value}</strong>
-                  </div>
+                    <strong className="num">{e.value}</strong>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Bottom Row ── */}
+      {/* ── E. Execution over time + lifecycle composition ── */}
       <div className="charts-row">
-
-        {/* Area Chart */}
         <div className={`chart-box${refreshing}`} aria-busy={statsLoading}>
           <div className="chart-box-header">
-            <h3>{t('complianceRatingTrend')}</h3>
-            <span>{t('quarterlyAuditScoreHistory')}</span>
+            <h3>{t('auditExecutionStatus')}</h3>
+            <span>{t('monthlyCompletedVsActive')}</span>
           </div>
-          <div style={{ width: '100%', height: 240 }}>
-            <ResponsiveContainer width="100%" height={240}>
-              <AreaChart data={complianceTrend} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#00a651" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#00a651" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 12 }} />
-                {/* Full 0-100 range: a single directorate can legitimately sit far
-                    below the enterprise average, and the old [80, 100] domain
-                    would push its line off the bottom of the chart. */}
-                <YAxis domain={[0, 100]} stroke="#64748b" tick={{ fontSize: 12 }} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                <Area type="monotone" dataKey="score" stroke="#00a651" strokeWidth={2} fill="url(#areaGrad)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          {monthlyAudits.length === 0 ? (
+            <div className="chart-canvas chart-canvas-sm chart-canvas-empty">
+              <EmptyState
+                icon={FolderKanban}
+                title={statsLoading ? t('loadingDashboard') : t('noEngagementsForScope')}
+                description={t('noEngagementsForScopeSub')}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="chart-canvas chart-canvas-sm">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyAudits} margin={{ top: 8, right: 8, left: -18, bottom: 0 }} barGap={2}>
+                    <CartesianGrid stroke={chart.grid} vertical={false} />
+                    <XAxis dataKey="month" {...chart.axisProps} />
+                    <YAxis {...chart.axisProps} allowDecimals={false} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: chart.grid }} />
+                    {/* `name` is what the tooltip prints — without it recharts
+                        falls back to the raw dataKey ("InProgress"). */}
+                    <Bar dataKey="Completed" name={t('legendCompleted')} fill="#10b981" radius={[3, 3, 0, 0]} maxBarSize={26} />
+                    <Bar dataKey="InProgress" name={t('legendInProgress')} fill="#f2801f" radius={[3, 3, 0, 0]} maxBarSize={26} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="chart-legend">
+                <li><span className="chart-legend-dot" style={{ background: '#10b981' }} />{t('legendCompleted')}</li>
+                <li><span className="chart-legend-dot" style={{ background: '#f2801f' }} />{t('legendInProgress')}</li>
+              </ul>
+            </>
+          )}
         </div>
 
-        {/* Activity Feed — enterprise-wide, so it is not dimmed on a directorate switch. */}
+        <div className={`chart-box${refreshing}`} aria-busy={statsLoading}>
+          <div className="chart-box-header">
+            <h3><Activity size={15} className="chart-box-header-icon" />{t('engagementLifecycle')}</h3>
+            <span>{t('engagementLifecycleSub')}</span>
+          </div>
+          {statusData.length === 0 ? (
+            <div className="chart-canvas chart-canvas-sm chart-canvas-empty">
+              <EmptyState
+                icon={FolderKanban}
+                title={statsLoading ? t('loadingDashboard') : t('noEngagementsForScope')}
+                description={t('noEngagementsForScopeSub')}
+              />
+            </div>
+          ) : (
+            <LifecycleStrip data={statusData} />
+          )}
+        </div>
+      </div>
+
+      {/* ── F. Activity feed — enterprise-wide, so it is not dimmed on a scope change. ── */}
+      {canViewTrail && (
         <div className="chart-box">
           <div className="chart-box-header">
             <h3>{t('recentSystemActivity')}</h3>
             <span>{t('realTimeAuditTrail')}</span>
           </div>
-          <div className="activity-feed">
-            {activities.slice(0, 5).map(act => (
-              <div key={act.id} className="activity-row">
-                <div className="activity-bullet" />
-                <div className="activity-body">
-                  <p><strong>{act.user}</strong> {act.action} <em>{act.target}</em></p>
-                  <span className="activity-ts">{act.time}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+          {activities.length === 0 ? (
+            <EmptyState
+              icon={Inbox}
+              title={t('noActivityTitle')}
+              description={t('noActivityData')}
+            />
+          ) : (
+            <ul className="timeline timeline-scroll">
+              {activities.slice(0, 5).map(act => (
+                <li key={act.id} className="timeline-item">
+                  <span className="timeline-time num">{act.time}</span>
+                  <span className="timeline-title">{act.user}</span>
+                  <span className="timeline-desc">
+                    {act.action} <em>{act.target}</em>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-function StatCard({ icon, label, value, sub, color }) {
-  return (
-    <div className={`kpi-card kpi-${color}`}>
-      <div className={`kpi-icon kpi-icon-${color}`}>{icon}</div>
-      <div className="kpi-body">
-        <span className="kpi-label">{label}</span>
-        <h2 className="kpi-value">{value}</h2>
-        <span className="kpi-sub">{sub}</span>
+/**
+ * The four headline metrics on a single hairline-divided surface.
+ *
+ * Three states, deliberately distinct: a first load with no data yet shows
+ * skeletons, a scope change over existing data dims it, and a failed fetch
+ * shows a persistent retry block — the old version rendered `—` for all three,
+ * so a dead backend was indistinguishable from a slow one and the toast was
+ * the only signal, long after it had faded.
+ */
+function KpiBand({ stats, refreshing, error, onRetry }) {
+  const { t } = useI18n();
+
+  if (!stats) {
+    return error ? (
+      <div className="kpi-band kpi-band-error">
+        <AlertTriangle size={18} className="kpi-band-error-icon" />
+        <div className="kpi-band-error-body">
+          <strong>{t('dashboardLoadError')}</strong>
+          <span>{t('dashboardLoadErrorSub')}</span>
+        </div>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onRetry}>
+          <RefreshCw size={13} />{t('retry')}
+        </button>
       </div>
+    ) : (
+      <div className="kpi-band" aria-busy="true">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="kpi-cell">
+            <span className="skeleton skeleton-line skeleton-line-short" />
+            <span className="skeleton skeleton-num" />
+            <span className="skeleton skeleton-line" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const openFindingsTone = stats.criticalFindings > 0
+    ? 'alert'
+    : stats.highFindings > 0 ? 'warn' : 'neutral';
+
+  const cells = [
+    {
+      key: 'activeAudits',
+      icon: FolderKanban,
+      tone: 'neutral',
+      label: t('activeAudits'),
+      value: stats.activeAudits,
+      sub: t('ofTotalEngagements', stats.totalEngagements),
+    },
+    {
+      key: 'openFindings',
+      icon: AlertTriangle,
+      tone: openFindingsTone,
+      label: t('openFindings'),
+      value: stats.openFindings,
+      sub: t('openFindingsSub', stats.criticalFindings, stats.highFindings),
+    },
+    {
+      key: 'overdueCapas',
+      icon: Clock,
+      // Only flags when there is something to escalate — which is what makes
+      // the colour mean anything.
+      tone: stats.overdueActions > 0 ? 'alert' : 'neutral',
+      label: t('overdueCapas'),
+      value: stats.overdueActions,
+      sub: t('overdueActionsSub', stats.openActions),
+    },
+    {
+      key: 'overallCompliance',
+      icon: TrendingUp,
+      tone: complianceTone(stats.complianceScore),
+      label: t('overallCompliance'),
+      value: stats.complianceScore,
+      suffix: '%',
+      // The denominator, not a delta: the value is a point-in-time
+      // verified-closure rate and the backend computes no previous period, so
+      // any "vs last quarter" here would be invented.
+      sub: t('complianceSub', stats.totalFindings),
+    },
+  ];
+
+  return (
+    <div className={`kpi-band${refreshing ? ' is-refreshing' : ''}`} aria-busy={refreshing}>
+      {cells.map(cell => {
+        const Icon = cell.icon;
+        return (
+          <div key={cell.key} className={`kpi-cell kpi-cell-${cell.tone}`}>
+            <span className="kpi-cell-head">
+              <Icon size={14} className="kpi-cell-icon" />
+              <span className="kpi-label">{cell.label}</span>
+            </span>
+            <span className="kpi-value num">
+              {cell.value}{cell.suffix || ''}
+            </span>
+            <span className="kpi-sub num">{cell.sub}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Engagement lifecycle as one proportionally divided bar.
+ *
+ * Hand-rolled rather than a second donut chart: it is compact enough to share a
+ * row, and plain elements mean the segments inherit theme tokens and carry real
+ * text labels for screen readers instead of an SVG `title` per slice.
+ */
+function LifecycleStrip({ data }) {
+  const { t } = useI18n();
+  const total = data.reduce((sum, s) => sum + s.count, 0);
+  const summary = data.map(s => `${s.label}: ${s.count}`).join(', ');
+
+  return (
+    <div className="lifecycle">
+      <div className="lifecycle-bar" role="img" aria-label={summary}>
+        {data.map(seg => (
+          <span
+            key={seg.key}
+            className="lifecycle-seg"
+            style={{ flexGrow: seg.count, background: seg.color }}
+            title={`${seg.label}: ${seg.count}`}
+          />
+        ))}
+      </div>
+      <ul className="lifecycle-legend">
+        {data.map(seg => (
+          <li key={seg.key} className="lifecycle-legend-item">
+            <span className="pie-dot" style={{ background: seg.color }} />
+            <span className="lifecycle-legend-label">{seg.label}</span>
+            <strong className="num">{seg.count}</strong>
+            <span className="lifecycle-legend-pct num">
+              {total ? Math.round((100 * seg.count) / total) : 0}%
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="lifecycle-total num">{t('engagementsTotal', total)}</p>
     </div>
   );
 }
@@ -457,7 +607,7 @@ function MyWorkCard({ icon, title, count, badge, empty, children }) {
     <div className="my-work-card">
       <div className="my-work-card-header">
         <h4>{icon} {title}</h4>
-        <span className="my-work-count">{count ?? 0}</span>
+        <span className="my-work-count num">{count ?? 0}</span>
         {badge && <span className="badge badge-danger">{badge}</span>}
       </div>
       {rows.length === 0 ? (

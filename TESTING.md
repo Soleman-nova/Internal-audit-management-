@@ -47,6 +47,26 @@ Two conventions worth knowing when reading a failure:
 - **403 vs 404 is deliberate.** A 403 means the record is visible but the caller is not named on it. A 404 means read scoping hid the row entirely, so `get_object` never reached the object check. Both are asserted explicitly; neither is papered over with `assertIn(status, (403, 404))`.
 - **Report generation is threaded.** `enqueue_report_generation` starts a raw thread, so tests either patch it or call `_generate_report_task` / `generate_report_file` synchronously. A real thread would touch the test database outside the transaction the test case rolls back.
 
+### Clearing the database
+
+`reset_business_data` empties the transactional tables without touching accounts — `manage.py flush` cannot be used because it would take `User` and `Role` with it.
+
+```bash
+cd backend
+python manage.py reset_business_data --dry-run    # report counts, delete nothing
+python manage.py reset_business_data              # type `wipe` to confirm
+```
+
+**Deleted:** audit universe, plans, engagements, team members, risk assessments and self-assessments, programs, procedures, working papers, findings, evidence, finding comments, CAPAs, action responses, follow-ups, generated reports, notifications, and the audit trail.
+
+**Kept:** users, roles, departments (the whole org tree), report templates, system settings, projects, and risk parameters.
+
+The command does not reset PK sequences and does not need to: reference numbers come from `Max()` over existing rows in [reference_numbers.py](backend/apps/common/reference_numbers.py), so `FND-<year>-0001` starts at 0001 again once the tables are empty. It leaves `media/` alone by default — files are not rows — and reports how many uploads it orphaned; pass `--purge-files` to remove those four directories as well.
+
+Every run ends with a verification pass, also available standalone as `--verify`. It asserts the business tables are empty, the kept tables are unchanged, every role still has an active user, an active admin remains, the capability matrix covers every role, and the org tree still has a root. It exits non-zero on failure, so it can gate a script.
+
+After a wipe, **do not re-run `seed_data` / `seed_e2e_demo`** unless you want the demo lifecycle back — they only add. The five demo accounts the Playwright suite signs in as live in `User` and survive the wipe, so §3 still works on an otherwise empty database.
+
 ---
 
 ## 2. Role × capability matrix
@@ -101,13 +121,18 @@ A user with no department falls back to records naming them personally. This is 
 
 ```bash
 cd backend
+# On Windows, set PYTHONUTF8=1 first (bash): export PYTHONUTF8=1
+# seed_e2e_demo prints a ✓ its summary; the default cp1252 console cannot encode it
+# and the command dies part-way with a UnicodeEncodeError otherwise.
 python manage.py migrate
 python manage.py seed_org_structure && python manage.py seed_eeu_audit_structure
-python manage.py seed_service_centers
+python manage.py seed_service_centers && python manage.py seed_hq_org_units
 python manage.py seed_data && python manage.py seed_e2e_demo
 python manage.py flag_overdue_actions      # populates the overdue CAPA tab
 python manage.py runserver
 ```
+
+For a **live, role-by-role presentation** — starting at entity creation and ending at a generated report — run `seed_demo_case` instead of the fully-completed `seed_e2e_demo`. It seeds one case up to a checkpoint and leaves the rest to be performed live (fieldwork → findings → CAPA → report); the walkthrough is [DEMO.md](DEMO.md). `seed_e2e_demo` still seeds its completed lifecycle alongside, so both can coexist on a demo database.
 
 ```bash
 cd frontend && npm install && npm run dev
@@ -118,12 +143,25 @@ cd frontend && npm install && npm run dev
 | Role | Employee ID | Password |
 |---|---|---|
 | System Admin | `EEU-10001` | `admin123` |
-| Audit Manager | `EEU-10002` | `User1234` |
+| Audit Manager | `EEU-10002` | `user123` |
 | Supervisor | `EEU-10003` | `user123` |
 | Lead Auditor | `EEU-10004` | `user123` |
 | Auditee | `EEU-10005` | `user123` |
 
 `EEU-10001` is created by `seed_data` only. The other four exist after either seed command.
+
+**An executable version of this walkthrough now exists.** `frontend/e2e/` is a Playwright suite that performs one real UI login per role, then drives every section below through the browser — including the refresh-after-mutation checks that a backend test cannot catch. Run it with:
+
+```bash
+# terminal 1 — backend (restart it if you have run the suite before, so the
+# 1000/hour authenticated throttle resets)
+cd backend && export PYTHONUTF8=1 && python manage.py runserver
+
+# terminal 2
+cd frontend && npx playwright install chromium && npx playwright test
+```
+
+The tables below remain the human-readable spec; the Playwright suite is its automated execution.
 
 Fill in the **Result** column as ✅ / ❌ and note the actual behaviour when it differs.
 
@@ -170,7 +208,7 @@ Fill in the **Result** column as ✅ / ❌ and note the actual behaviour when it
 | 2.8 | Planning → create an Annual Audit Plan | Created as `draft` | |
 | 2.9 | Submit the plan | Status → `submitted`; approvers are notified, and you are not notified about your own submission | |
 | 2.10 | Approve the plan | Status → `approved`, with `approved_by`/`approved_at` stamped; the author is notified; the audit trail records an APPROVE | |
-| 2.11 | Planning → Engagements → schedule one under the plan, assigning lead auditor + supervisor | Engagement number is assigned as `ENG-#####` **by the server**; lead and supervisor are notified | |
+| 2.11 | Planning → Engagements → schedule one under the plan, assigning lead auditor + supervisor | Engagement number is assigned as `ENG-YYYY-NNNN` **by the server**; lead and supervisor are notified | |
 | 2.12 | Engagements → add a team member | Member appears on the engagement | |
 | 2.13 | Reports → generate a PDF report for that engagement | Row appears as `GENERATING`, then flips to `READY` **without a manual refresh** | |
 | 2.14 | Download the ready report | A valid PDF, named from the report title. Check the URL: no `localhost:8000`, and the JWT is attached | |
@@ -212,13 +250,13 @@ Fill in the **Result** column as ✅ / ❌ and note the actual behaviour when it
 | 4.9 | Click **Submit for Review** on the program | 200, status → `submitted`, supervisor notified. **This button used to 404** — it called `submit-for-review/` when the route is `submit/` | |
 | 4.10 | Upload a working paper with a file | Created with you as preparer; the file is downloadable | |
 | 4.11 | Try to review your own working paper | Blocked — review needs APPROVE_PLANS | |
-| 4.12 | Findings → **Log Finding** (severity, condition, criteria, cause, effect, recommendation, assignee, auditee) | Created. The number is `FND-#####` **assigned by the server** — the form no longer invents a `FIND-####` the record never gets | |
+| 4.12 | Findings → **Log Finding** (severity, condition, criteria, cause, effect, recommendation, assignee, auditee) | Created. The number is `FND-YYYY-NNNN` **assigned by the server** — the form no longer invents a `FIND-####` the record never gets | |
 | 4.13 | Assignee and auditee check their bell | Both were notified; you were not notified about your own finding | |
 | 4.14 | Open the finding's detail page → add a comment | Comment appears in the thread; the rest of the thread is notified | |
 | 4.15 | Detail page → upload evidence | Evidence listed and downloadable | |
 | 4.16 | Detail page → **Resolve** | Status → `resolved` with a resolution date | |
 | 4.17 | With more than 20 findings in the register, deep-link straight to the 25th finding's detail page | It renders. It used to say "Finding not found" — the page fetched page 1 of the list and searched it client-side | |
-| 4.18 | CAPA → create an action from that finding (owner, priority, due date) | Number is `CAPA-#####` from the server; the owner is notified with the due date in the message | |
+| 4.18 | CAPA → create an action from that finding (owner, priority, due date) | Number is `CAPA-YYYY-NNNN` from the server; the owner is notified with the due date in the message | |
 | 4.19 | Reports → generate a draft report | Generates and downloads | |
 | 4.20 | Try to approve a plan | Blocked (403) | |
 
@@ -279,10 +317,26 @@ Some of these are hard to see through the UI. Use the browser console with your 
 | 7.2 | `GET /api/corrective/actions/overdue/` | A paginated `{count, results}`, and `?page_size=1` returns one row with the full count. It also has to be correct **before** `flag_overdue_actions` has ever run, since it derives from the due date | |
 | 7.3 | `GET /api/corrective/actions/overdue/` with an action due **today** | Today is not overdue; yesterday is | |
 | 7.4 | `GET /api/planning/universe/due-for-re-audit/?as_of=2030-01-01` | Everything lapsed is listed; `?as_of=not-a-date` returns 400 mentioning `YYYY-MM-DD` | |
-| 7.5 | `POST /api/findings/findings/` with your own `finding_number` | Ignored; the server's `FND-#####` wins | |
+| 7.5 | `POST /api/findings/findings/` with your own `finding_number` | Ignored; the server's `FND-YYYY-NNNN` wins | |
 | 7.6 | `PATCH /api/findings/findings/<id>/ {"identified_by": <other user>}` | Ignored — read-only | |
 | 7.7 | `GET /api/reports/generated/<id>/export/` on a row still `generating` | 400, not an empty file | |
 | 7.8 | `GET /api/auth/audit-trail/` as an auditor | 403 — the trail requires the capability even to read | |
+
+---
+
+### 8. Org structure, regions & service centres
+
+These cover the newer organisational-unit work (commit `414a79b`) that the earlier sections predate. Login as any role with a department (the audit manager works) and sign in with the language set to English first, then repeat the Amharic steps with the language set to Amharic.
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| 8.1 | Dashboard → the EEU org chart | The executive/corporate/audit tree renders; expanding a node shows its children; clicking a directorate rescopes the KPIs and charts | |
+| 8.2 | Dashboard → directorate selector | FPA, TA, ITA and PP appear; choosing one rescopes every card, not just a label | |
+| 8.3 | Planning → Audit Universe → Add → Department picker | The cascading picker shows three steps: chief office → region → service centre. Step one lists Executive Office, Internal Audit and Chief Offices groups; step two lists every region; step three lists the service centres of the chosen region | |
+| 8.4 | Pick a region at step two only | Saving records the region as the department — stopping early is legitimate | |
+| 8.5 | Pick a service centre at step three | Saving records the service centre | |
+| 8.6 | Settings → System → language → Amharic, then repeat 8.1–8.5 | Amharic names from `org_units_am.json` / `service_centers_am.json` are shown in the picker and org chart; no raw keys leak | |
+| 8.7 | Admin → Users → Add → Department picker | Same three-step picker; the saved unit shows as the user's department | |
 
 ---
 
@@ -291,4 +345,7 @@ Some of these are hard to see through the UI. Use the browser console with your 
 - **Report generation runs on a raw thread**, not a task queue. It is enough for a single-worker deployment: if the process restarts mid-compile the row stays `generating` with no retry. Swap `enqueue_report_generation` for a Celery task if durability matters.
 - **`departments/tree` is deliberately unpaginated** — the cascading picker needs the whole tree in one response. Every other list endpoint is paginated.
 - **`generate_report_file` has no branch for an unknown format.** The three known formats are covered; an unrecognised one would leave the row on `generating` rather than `failed`.
-- **No frontend unit tests.** UI behaviour is covered by the walkthrough above, deliberately — the project has no JS test runner installed, and adding one was out of scope.
+- **No frontend *unit* tests.** The project still has no JS unit-test runner. UI behaviour is now covered by the Playwright suite in `frontend/e2e/` (§3), which drives the real browser as each role — the refresh-after-mutation checks are exactly the class of defect backend tests cannot catch.
+- **The in-app Help modal's role checklists still reference email logins** (`admin@eeu.com` and similar). Authentication is by Employee ID; [USER_MANUAL.md](USER_MANUAL.md) is correct and the modal text has not been updated.
+- **Repeated E2E runs against one long-lived backend can trip the authenticated throttle** (1000/hour). A single `npx playwright test` run makes a few hundred requests, so one run is fine; restarting `manage.py runserver` resets the in-memory throttle cache before a re-run. The suite also retries a 429 once with a short backoff.
+

@@ -18,10 +18,10 @@ from django.db.models import Count, Q
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 
-from .models import User, Department, AuditTrail
+from .models import User, Department, AuditTrail, Role
 from apps.corrective_actions.models import CorrectiveAction
-from apps.audit_planning.models import AuditEngagement, AuditPlan
-from apps.findings.models import AuditFinding
+from apps.audit_planning.models import AuditEngagement, AuditPlan, AuditTeamMember
+from apps.findings.models import AuditFinding, FindingComment
 from apps.risk_assessment.models import SelfAssessment
 from apps.common.permissions import (
     CanManageUsers, CanManageSettings, CanViewAuditTrail, CanWriteAudit,
@@ -134,6 +134,85 @@ class UserViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             log_audit(self.request, 'DELETE', instance)
             instance.delete()
+
+    # --- Deletion guards ---------------------------------------------------
+    #
+    # A user row is not self-contained. AuditTeamMember and FindingComment both
+    # CASCADE off it, so a bare DELETE silently drops the person from every
+    # engagement team and destroys their comments on findings — unrecoverable
+    # audit history. AuditTrail is SET_NULL, so the trail itself survives but
+    # the operator on those rows goes blank. The first two therefore block the
+    # delete, and the UI offers deactivation instead.
+    #
+    # Enforced here rather than only in the interface because the button is not
+    # the only way to reach this endpoint.
+    def _deletion_blockers(self, user):
+        """Reasons `user` must not be hard-deleted, each with a readable message."""
+        blockers = []
+
+        if user.pk == self.request.user.pk:
+            blockers.append({
+                'type': 'self',
+                'count': 0,
+                'message': 'You cannot delete your own account.',
+            })
+
+        # Counts active admins *and* superusers: either can administer the
+        # system, so losing the last of them locks everyone out.
+        if user.role == Role.ADMIN or user.is_superuser:
+            others_exist = User.objects.filter(
+                Q(role=Role.ADMIN) | Q(is_superuser=True), is_active=True
+            ).exclude(pk=user.pk).exists()
+            if not others_exist:
+                blockers.append({
+                    'type': 'last_admin',
+                    'count': 0,
+                    'message': 'This is the last active administrator. Promote '
+                               'another account before deleting this one.',
+                })
+
+        team_count = AuditTeamMember.objects.filter(user=user).count()
+        if team_count:
+            blockers.append({
+                'type': 'engagement_teams',
+                'count': team_count,
+                'message': f'Member of {team_count} engagement '
+                           f'team{"" if team_count == 1 else "s"}.',
+            })
+
+        comment_count = FindingComment.objects.filter(author=user).count()
+        if comment_count:
+            blockers.append({
+                'type': 'finding_comments',
+                'count': comment_count,
+                'message': f'Author of {comment_count} finding '
+                           f'comment{"" if comment_count == 1 else "s"}.',
+            })
+
+        return blockers
+
+    @action(detail=True, methods=['post'], url_path='deletion-check')
+    def deletion_check(self, request, pk=None):
+        """Preflight for the delete button.
+
+        Lets the dialog explain what a delete would destroy *before* the admin
+        commits, rather than rejecting the request after they have already
+        confirmed. POST rather than GET so the viewset's capability check
+        applies — safe methods are open to any authenticated user.
+        """
+        user = self.get_object()
+        blockers = self._deletion_blockers(user)
+        return Response({'can_delete': not blockers, 'blockers': blockers})
+
+    def destroy(self, request, *args, **kwargs):
+        user = self.get_object()
+        blockers = self._deletion_blockers(user)
+        if blockers:
+            return Response(
+                {'detail': blockers[0]['message'], 'blockers': blockers},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'], url_path='me')
     def me(self, request):
