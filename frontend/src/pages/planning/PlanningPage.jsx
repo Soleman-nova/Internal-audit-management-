@@ -221,13 +221,15 @@ function PlanningPage() {
     }
   };
 
-  // Reference data that never paginates: users (lead/supervisor pickers), the
-  // PPM project registry, the due-for-re-audit badge, and the FULL universe/plan
-  // catalogs that back the modal dropdowns (the arrays in state are slices).
+  // Reference data for the modal dropdowns: every user (lead/supervisor
+  // pickers — getAllUsers walks the pages, the endpoint only serves 20 at a
+  // time), the PPM project registry, the due-for-re-audit badge, and the FULL
+  // universe/plan catalogs that back those dropdowns (the arrays in state are
+  // slices).
   const fetchReferences = async () => {
     try {
       const [usersRes, projectsRes, dueRes, univCatRes, plansCatRes] = await Promise.all([
-        usersApi.getUsers(),
+        usersApi.getAllUsers(),
         planningApi.getProjects(),
         planningApi.getDueForReAudit(),
         planningApi.getUniverse(),

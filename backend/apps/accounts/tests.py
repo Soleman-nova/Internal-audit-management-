@@ -31,9 +31,9 @@ from apps.accounts.management.commands.seed_hq_org_units import (
     DEFAULT_DATA_FILE as HQ_DEFAULT_DATA_FILE,
     DEFAULT_AM_FILE as HQ_DEFAULT_AM_FILE,
 )
-from apps.audit_planning.models import AuditEngagement, AuditPlan
+from apps.audit_planning.models import AuditEngagement, AuditPlan, AuditTeamMember
 from apps.corrective_actions.models import CorrectiveAction
-from apps.findings.models import AuditFinding
+from apps.findings.models import AuditFinding, FindingComment
 
 User = get_user_model()
 
@@ -1193,3 +1193,142 @@ class DepartmentListQueryCountTest(TestCase):
         response = self.client.get(f'/api/auth/departments/{parent.id}/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual([child['code'] for child in response.data['children']], ['CSC-Y'])
+
+
+class UserDeletionGuardTest(TestCase):
+    """Hard-deleting a user row takes engagement-team membership and finding
+    comments with it — both relations CASCADE off User — so the endpoint has to
+    refuse when either would be destroyed, and when the account is the caller's
+    own or the last one able to administer the system."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username='admin', employee_id='T100', email='admin1@test.com',
+            password='pass', role=Role.ADMIN,
+        )
+        self.other_admin = User.objects.create_user(
+            username='admin2', employee_id='T101', email='admin2@test.com',
+            password='pass', role=Role.ADMIN,
+        )
+        self.target = User.objects.create_user(
+            username='target', employee_id='T102', email='target@test.com',
+            password='pass', role=Role.AUDITOR,
+        )
+        self.client.force_authenticate(user=self.admin)
+
+    def _blocker_types(self, response):
+        return {b['type'] for b in response.data['blockers']}
+
+    def _give_engagement_membership(self, user):
+        plan = AuditPlan.objects.create(title='2026 Plan', year=2026)
+        engagement = AuditEngagement.objects.create(
+            plan=plan, title='Cash Audit', engagement_number='ENG-001',
+        )
+        return AuditTeamMember.objects.create(
+            engagement=engagement, user=user, role='member',
+        )
+
+    def _give_finding_comment(self, user):
+        plan = AuditPlan.objects.create(title='2026 Plan', year=2026)
+        engagement = AuditEngagement.objects.create(
+            plan=plan, title='Cash Audit', engagement_number='ENG-002',
+        )
+        finding = AuditFinding.objects.create(
+            engagement=engagement, finding_number='F-001', title='Weak control',
+            description='Segregation of duties is absent.', severity='high',
+        )
+        return FindingComment.objects.create(
+            finding=finding, author=user, comment='Agreed, will fix.',
+        )
+
+    def test_deletes_an_account_with_no_history(self):
+        response = self.client.delete(f'/api/auth/users/{self.target.pk}/')
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(User.objects.filter(pk=self.target.pk).exists())
+
+    def test_deletion_is_recorded_in_the_audit_trail(self):
+        self.client.delete(f'/api/auth/users/{self.target.pk}/')
+        entry = AuditTrail.objects.filter(
+            model_name='User', action='DELETE', object_id=str(self.target.pk),
+        ).first()
+        self.assertIsNotNone(entry, 'the delete has to leave a trail entry')
+
+    def test_refuses_to_delete_your_own_account(self):
+        response = self.client.delete(f'/api/auth/users/{self.admin.pk}/')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('self', self._blocker_types(response))
+        self.assertTrue(User.objects.filter(pk=self.admin.pk).exists())
+
+    def test_solo_administrator_also_reports_the_last_admin_blocker(self):
+        """Deleting the only administrator is both a self-delete and a lockout;
+        the invariant is reported outright rather than inferred from `self`."""
+        # Take the second admin out of the picture without deleting them.
+        User.objects.filter(pk=self.other_admin.pk).update(is_active=False)
+        response = self.client.post(
+            f'/api/auth/users/{self.admin.pk}/deletion-check/',
+        )
+        self.assertFalse(response.data['can_delete'])
+        self.assertEqual(
+            self._blocker_types(response), {'self', 'last_admin'},
+        )
+
+    def test_a_second_administrator_is_not_the_last_one(self):
+        response = self.client.post(
+            f'/api/auth/users/{self.other_admin.pk}/deletion-check/',
+        )
+        self.assertTrue(response.data['can_delete'])
+        self.assertEqual(response.data['blockers'], [])
+
+    def test_refuses_when_the_account_is_on_an_engagement_team(self):
+        membership = self._give_engagement_membership(self.target)
+        response = self.client.delete(f'/api/auth/users/{self.target.pk}/')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('engagement_teams', self._blocker_types(response))
+        # The whole point of refusing: the team row has to survive.
+        self.assertTrue(AuditTeamMember.objects.filter(pk=membership.pk).exists())
+        self.assertTrue(User.objects.filter(pk=self.target.pk).exists())
+
+    def test_refuses_when_the_account_authored_finding_comments(self):
+        comment = self._give_finding_comment(self.target)
+        response = self.client.delete(f'/api/auth/users/{self.target.pk}/')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('finding_comments', self._blocker_types(response))
+        self.assertTrue(FindingComment.objects.filter(pk=comment.pk).exists())
+
+    def test_preflight_reports_blockers_with_readable_counts(self):
+        self._give_engagement_membership(self.target)
+        self._give_finding_comment(self.target)
+        response = self.client.post(
+            f'/api/auth/users/{self.target.pk}/deletion-check/',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data['can_delete'])
+        messages = [b['message'] for b in response.data['blockers']]
+        self.assertTrue(any('engagement team' in m for m in messages))
+        self.assertTrue(any('finding comment' in m for m in messages))
+        # Counts drive the message, so they must be present and non-zero.
+        self.assertTrue(all(b['count'] > 0 for b in response.data['blockers']))
+
+    def test_preflight_requires_the_manage_users_capability(self):
+        """POST rather than GET precisely so this is gated — the viewset opens
+        safe methods to any authenticated user."""
+        auditor = User.objects.create_user(
+            username='auditor', employee_id='T103', email='auditor@test.com',
+            password='pass', role=Role.AUDITOR,
+        )
+        self.client.force_authenticate(user=auditor)
+        response = self.client.post(
+            f'/api/auth/users/{self.target.pk}/deletion-check/',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_requires_the_manage_users_capability(self):
+        auditor = User.objects.create_user(
+            username='auditor2', employee_id='T104', email='auditor2@test.com',
+            password='pass', role=Role.AUDITOR,
+        )
+        self.client.force_authenticate(user=auditor)
+        response = self.client.delete(f'/api/auth/users/{self.target.pk}/')
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(User.objects.filter(pk=self.target.pk).exists())

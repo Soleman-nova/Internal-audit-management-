@@ -161,7 +161,16 @@ python manage.py seed_service_centers      # regions and customer service center
 python manage.py seed_hq_org_units         # detailed head-office units under the chief offices
 python manage.py seed_data                 # demo users, universe, plan, engagements
 python manage.py seed_e2e_demo             # a full worked example end to end
+python manage.py seed_demo_case            # one case, checkpointed for a LIVE demo
 python manage.py flag_overdue_actions      # populates the overdue CAPA tab
+```
+
+For a **live presentation** (entity → plan → engagement → fieldwork → findings → CAPA → report, walked through role by role), use `seed_demo_case` instead of the fully-completed `seed_e2e_demo` — it seeds the case up to a checkpoint and leaves the rest to be performed live. The role-by-role script is [DEMO.md](DEMO.md).
+
+```bash
+python manage.py seed_demo_case --to engagement   # default: stop after engagement+team
+python manage.py seed_demo_case --to plan         # stop after plan approval
+python manage.py seed_demo_case --to universe     # seed only the entity
 ```
 
 > **On Windows, set `PYTHONUTF8=1` first.** `seed_e2e_demo` prints a `✓` in its summary, which the default `cp1252` console cannot encode — the command dies part-way with `UnicodeEncodeError: 'charmap' codec can't encode character '✓'`. Run `set PYTHONUTF8=1` (cmd), `$env:PYTHONUTF8=1` (PowerShell), or `export PYTHONUTF8=1` (bash) before the seed chain. Verified: the chain completes cleanly with it set and fails without it.
@@ -189,7 +198,7 @@ npm run dev                       # http://localhost:5173
 
 `EEU-10001` is created by `seed_data` only; the other four exist after either seed command. These are development credentials — change or remove them before any real deployment.
 
-> **The login page's one-click "Audit Manager" button does not work on a freshly seeded database.** It submits `User1234`, but every seeder sets the non-admin passwords to `user123` ([seed_data.py:107](backend/apps/accounts/management/commands/seed_data.py#L107), [seed_e2e_demo.py:74](backend/apps/accounts/management/commands/seed_e2e_demo.py#L74)). Type `EEU-10002` / `user123` into the form instead, or fix the constant in [LoginPage.jsx:13](frontend/src/pages/auth/LoginPage.jsx#L13). The other four buttons are correct. `TESTING.md` carries the same stale `User1234`.
+> All five one-click demo buttons on the login page match these credentials. The Audit Manager button used to send a stale `User1234` that no seeder assigns; it now sends `user123` like the others.
 
 To create your own administrator instead:
 
@@ -410,7 +419,8 @@ Run from `backend/` with the virtualenv active.
 | `seed_service_centers` | EEU regions and their customer service centers. Amharic names are applied from `data/service_centers_am.json` (`--amharic-file` to override; that export covers 445 of the 582 centers) | Once, after the above |
 | `seed_hq_org_units` | The detailed head-office units (CO Treasury, CO Budget, SCADA/DMS, …) under the existing chief offices; merges onto, never duplicates, the seeded units. Amharic names are applied from `data/org_units_am.json` (`--amharic-file` to override) | Once, after the above |
 | `seed_data` | Demo users (`EEU-10001`–`EEU-10005`), risk parameters, universe entries, an approved annual plan, engagements, a program with procedures, one finding and one CAPA, a report template | Development only |
-| `seed_e2e_demo` | A worked example spanning the whole lifecycle | Development only |
+| `seed_e2e_demo` | A worked example spanning the whole lifecycle, every stage completed | Development only |
+| `seed_demo_case` | One case seeded up to a `--to universe|plan|engagement` checkpoint so a presenter can demonstrate the remaining workflow live, role by role. Re-runnable: deletes the previous DEMO case first. Script in [DEMO.md](DEMO.md) | Development only |
 | `flag_overdue_actions` | Flips past-due CAPAs to `overdue` and sends due-soon reminders (`DUE_SOON_DAYS = 3`, override with `--days`). Idempotent, and honours `extended_due_date` over `due_date` | **Daily, scheduled** |
 | `fail_stuck_reports` | Moves reports stranded on `generating` to `failed` — the recovery path when a process restarts mid-compile | **Periodically, scheduled** |
 | `reassign_legacy_department_users` | Moves users off retired departments onto the current org tree | One-off migration |
@@ -426,8 +436,9 @@ Scheduling examples are in the [administrator runbook](USER_MANUAL.md#scheduled-
 
 ```bash
 cd backend
-python manage.py test                              # 334 tests, ~7 min
+python manage.py test                              # ~376 tests, ~18 min
 python manage.py test apps.findings -v 2           # one app
+python manage.py test apps.common.test_e2e_lifecycle -v 2   # the cross-app walk
 python manage.py check
 python manage.py makemigrations --check --dry-run   # no model drift
 ```
@@ -438,11 +449,22 @@ npm run lint
 npm run build
 ```
 
+**End-to-end UI suite (Playwright).** [TESTING.md §3](TESTING.md#3-manual-role-walkthrough) is executable now: `frontend/e2e/` signs in as each of the five roles through the real login page and drives the whole lifecycle in the browser — the refresh-after-mutation checks that backend tests cannot catch. Requires the seeded backend to be running:
+
+```bash
+cd backend && export PYTHONUTF8=1 && python manage.py runserver   # terminal 1
+cd frontend && npx playwright install chromium && npx playwright test   # terminal 2
+```
+
+Restart `manage.py runserver` before a re-run: repeated runs against one long-lived backend can trip the 1000/hour authenticated throttle (a single run makes a few hundred requests).
+
 Tests run against a throwaway SQLite database and redirect `MEDIA_ROOT` to a temp directory, so neither `db.sqlite3` nor `media/` is touched and no seed data is needed. Shared fixtures in [backend/apps/common/role_fixtures.py](backend/apps/common/role_fixtures.py) build all five roles once per class; `assert_status_by_role` runs one request per role against an expectation table that **must** name every role, so a partially filled table fails rather than silently skipping a role.
 
 A passing run still prints a `GeneratedReport.DoesNotExist` traceback. That is expected: `test_a_missing_report_does_not_crash_the_worker` deletes a report out from under the background task to prove the worker survives it, and the handler in [backend/apps/reports/jobs.py](backend/apps/reports/jobs.py) logs the exception on the way past. Trust the final `OK`, not the traceback.
 
-Coverage by app, the full role matrix, and a manual browser walkthrough for each of the five roles are in [TESTING.md](TESTING.md). The walkthrough exists because a handler that mutates local state and shows a success toast without calling the API passes every backend test ever written — only a refresh catches it.
+Coverage by app, the full role matrix, and a manual browser walkthrough for each of the five roles are in [TESTING.md](TESTING.md). The walkthrough exists because a handler that mutates local state and shows a success toast without calling the API passes every backend test ever written — only a refresh catches it. Since the Playwright suite was added, that walkthrough is executable: `frontend/e2e/` performs those same role-by-role steps in the real browser, refresh checks included.
+
+A backend lifecycle test — [backend/apps/common/test_e2e_lifecycle.py](backend/apps/common/test_e2e_lifecycle.py) — walks universe → plan → engagement → program → procedure → working paper → finding → CAPA → report in one continuous run carrying real ids across app seams, asserting the capability matrix at each step. The per-app suites each build their upstream objects from factories, so only a cross-app run can catch a seam breaking.
 
 ---
 
@@ -465,9 +487,9 @@ Coverage by app, the full role matrix, and a manual browser walkthrough for each
 - **Report generation runs on a raw daemon thread**, not a task queue ([apps/reports/jobs.py](backend/apps/reports/jobs.py)). Adequate for a single-worker deployment, but if the process restarts mid-compile the row stays `generating` with no retry — `fail_stuck_reports` is the manual recovery. `celery` is pinned as the intended replacement; no broker is configured and no task is defined.
 - **`generate_report_file` has no branch for an unknown format.** The three known formats are covered; an unrecognised one would leave the row on `generating` rather than `failed`.
 - **`departments/tree` is deliberately unpaginated** — the cascading picker needs the whole tree in one response. Every other list endpoint is paginated.
-- **No frontend unit tests.** There is no JS test runner installed; UI behaviour is covered by the manual walkthrough in `TESTING.md` instead.
+- **No frontend unit tests.** There is no JS unit-test runner installed. UI behaviour is covered by the Playwright E2E suite in `frontend/e2e/` instead (see [Testing](#testing)), which drives the real browser as each role.
 - **`npm run lint` is not clean.** The current tree reports around 120 problems — mostly unused variables and `react-hooks/exhaustive-deps` warnings across `src/pages/**` and `src/utils/validation.js`. `npm run build` succeeds, so none of them break the bundle, but do not expect a green lint run until they are worked through.
-- **Two seeding papercuts on Windows**, both verified against a scratch database: `seed_e2e_demo` crashes on a `cp1252` console unless `PYTHONUTF8=1` is set, and the login page's Audit Manager demo button carries a password no seeder assigns. Both are described in [Quick start](#4-sign-in).
+- **One seeding papercut on Windows**, verified against a scratch database: `seed_e2e_demo` crashes on a `cp1252` console unless `PYTHONUTF8=1` is set. (The login page's Audit Manager demo button previously carried a stale `User1234` password that no seeder assigned; it now matches the seeded `user123`.)
 - **The in-app Help modal's role checklists still reference email logins** (`admin@eeu.com` and similar). Authentication is by Employee ID. [USER_MANUAL.md](USER_MANUAL.md) is correct; the modal text has not been updated.
 
 ---

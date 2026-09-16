@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { usersApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
+import { usePermissions } from '../../hooks/usePermissions';
 import { localizedName } from '../../utils/localizedName';
 import { validateForm, validators, hasErrors, clearFieldError } from '../../utils/validation';
 import Modal from '../../components/ui/Modal';
 import DataTable from '../../components/ui/DataTable';
+import Pagination from '../../components/ui/Pagination';
 import Badge from '../../components/ui/Badge';
 import FormField from '../../components/ui/FormField';
 import OrgUnitSelect from '../../components/ui/OrgUnitSelect';
-import { UserPlus, Shield, Activity, UserCheck, Edit2, Key, ArrowRight } from 'lucide-react';
+import { UserPlus, Shield, Activity, UserCheck, Edit2, Key, ArrowRight, Trash2 } from 'lucide-react';
 
 // Turn a DRF error body into one readable sentence. Raw JSON.stringify output
 // ("{"email":["..."]}") is unreadable in a toast.
@@ -35,14 +37,22 @@ const EMPTY_NEW_USER = {
   department: '', phone: ''
 };
 
+const DEFAULT_PAGE_SIZE = 20;
+
 function UsersPage() {
   const toast = useToast();
   const { t, lang } = useI18n();
+  const { user: currentUser } = usePermissions();
   const [users, setUsers] = useState([]);
   const [formErrors, setFormErrors] = useState({});
   const [accountActivity, setAccountActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // The users list is server-paginated; the account-activity panel is not.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [totalUsers, setTotalUsers] = useState(0);
 
   // Add User State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -52,6 +62,15 @@ function UsersPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [resetPasswordVal, setResetPasswordVal] = useState('');
+
+  // Delete User State. `deleteBlockers` is null while the preflight request is
+  // still in flight, [] when the account is safe to remove, and a non-empty
+  // list when the delete must be refused.
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteBlockers, setDeleteBlockers] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  // Monotonic tag for in-flight preflight checks; see openDeleteModal.
+  const deleteRequestRef = useRef(0);
 
   // Field edits clear their own error so a corrected field stops showing stale
   // feedback before the next submit.
@@ -75,34 +94,52 @@ function UsersPage() {
     setFormErrors({});
   };
 
-  useEffect(() => {
-    fetchUsersAndTrail();
-  }, []);
-
-  const fetchUsersAndTrail = async () => {
+  const fetchUsers = async () => {
     setLoading(true);
     try {
-      // Departments are no longer fetched here — OrgUnitSelect loads the org
-      // tree itself through useOrgUnits and shares one request across forms.
-      //
-      // model_name: 'User' is what makes this a *security* log rather than a
-      // second copy of the Audit Trail page. log_audit stores
-      // instance.__class__.__name__, and every account event — login, logout,
-      // create, edit, activate, deactivate, password reset/change, profile
-      // update — is logged against the User instance. Drop this filter and the
-      // panel silently becomes the global feed again.
-      const [usersRes, trailRes] = await Promise.all([
-        usersApi.getUsers(),
-        usersApi.getAuditTrail({ model_name: 'User', page_size: 10 })
-      ]);
-      setUsers(usersRes || []);
-      setAccountActivity(trailRes?.results || trailRes || []);
+      const res = await usersApi.getUsers({ page, page_size: pageSize });
+      setUsers(Array.isArray(res) ? res : res.results || []);
+      setTotalUsers(Array.isArray(res) ? res.length : res.count || 0);
     } catch (err) {
+      // An out-of-range page is a 404, not a real failure — step back to the
+      // first page rather than showing an error over an empty table.
+      if (err.response?.status === 404 && page > 1) {
+        setPage(1);
+        return;
+      }
       toast.error('Failed to load user management data');
     } finally {
       setLoading(false);
     }
   };
+
+  // Departments are no longer fetched here — OrgUnitSelect loads the org tree
+  // itself through useOrgUnits and shares one request across forms.
+  //
+  // model_name: 'User' is what makes this a *security* log rather than a second
+  // copy of the Audit Trail page. log_audit stores instance.__class__.__name__,
+  // and every account event — login, logout, create, edit, activate,
+  // deactivate, password reset/change, profile update — is logged against the
+  // User instance. Drop this filter and the panel silently becomes the global
+  // feed again.
+  const fetchAccountActivity = async () => {
+    try {
+      const trailRes = await usersApi.getAuditTrail({ model_name: 'User', page_size: 10 });
+      setAccountActivity(trailRes?.results || trailRes || []);
+    } catch (err) {
+      toast.error('Failed to load account activity');
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
+
+  useEffect(() => {
+    fetchAccountActivity();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAddUser = async (e) => {
     e.preventDefault();
@@ -128,13 +165,17 @@ function UsersPage() {
       if (payload.department === '') {
         payload.department = null;
       }
-      const res = await usersApi.createUser(payload);
-      setUsers([...users, res]);
+      await usersApi.createUser(payload);
       setShowAddModal(false);
       // Reset
       setNewUser(EMPTY_NEW_USER);
       toast.success('User created successfully!');
-      fetchUsersAndTrail(); // Refresh audit trail for user creation
+      // Refetch rather than appending locally: the list is paginated, so an
+      // extra row would push past the page size and the count would go stale.
+      // The roster is ordered by name, so the new account lands wherever it
+      // sorts — not necessarily on the page currently on screen.
+      fetchUsers();
+      fetchAccountActivity();
     } catch (err) {
       // Map DRF field errors ({ email: [...] }) back onto the form so the
       // offending input is highlighted rather than only named in a toast.
@@ -178,11 +219,13 @@ function UsersPage() {
       if (dataToUpdate.department === '') {
         dataToUpdate.department = null;
       }
-      const res = await usersApi.updateUser(id, dataToUpdate);
-      setUsers(users.map(u => u.id === id ? res : u));
+      await usersApi.updateUser(id, dataToUpdate);
       setShowEditModal(false);
       toast.success('User updated successfully!');
-      fetchUsersAndTrail();
+      // A renamed account can sort onto a different page, so refetch the
+      // current one instead of patching the row in place.
+      fetchUsers();
+      fetchAccountActivity();
     } catch (err) {
       const data = err.response?.data;
       if (data && typeof data === 'object' && !Array.isArray(data)) {
@@ -214,6 +257,82 @@ function UsersPage() {
       const msg = formatApiError(err);
       setFormErrors((prev) => ({ ...prev, reset_password: msg }));
       toast.error('Failed to reset password: ' + msg);
+    }
+  };
+
+  // Ask the server what a delete would destroy before showing the dialog, so
+  // the admin sees "this will erase 12 comments" up front rather than having a
+  // confirmed delete rejected after the fact.
+  const openDeleteModal = async (u) => {
+    // A preflight can outlive the dialog it was opened for — the admin cancels
+    // on a slow connection and immediately opens a different row. Tag each
+    // request and drop any response that a newer one (or a close) superseded,
+    // so blockers for one account can never render against another.
+    const requestId = deleteRequestRef.current + 1;
+    deleteRequestRef.current = requestId;
+    setDeleteTarget(u);
+    setDeleteBlockers(null);
+    setDeleting(false);
+    try {
+      const res = await usersApi.checkUserDeletion(u.id);
+      if (deleteRequestRef.current !== requestId) return;
+      setDeleteBlockers(res?.blockers || []);
+    } catch (err) {
+      if (deleteRequestRef.current !== requestId) return;
+      toast.error('Could not check this account: ' + formatApiError(err));
+      setDeleteTarget(null);
+    }
+  };
+
+  const closeDeleteModal = () => {
+    deleteRequestRef.current += 1;
+    setDeleteTarget(null);
+    setDeleteBlockers(null);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await usersApi.deleteUser(deleteTarget.id);
+      toast.success(`${deleteTarget.first_name} ${deleteTarget.last_name} deleted.`);
+      const wasLastRowOnPage = users.length === 1 && page > 1;
+      closeDeleteModal();
+      fetchAccountActivity();
+      // Deleting the only row on a page would leave an empty table behind.
+      if (wasLastRowOnPage) {
+        setPage(page - 1);
+      } else {
+        fetchUsers();
+      }
+    } catch (err) {
+      // A blocker can appear between the preflight and the delete (someone
+      // else's edit, or a second admin tab). Surface the server's reason.
+      const blockers = err.response?.data?.blockers;
+      if (blockers?.length) {
+        setDeleteBlockers(blockers);
+      }
+      toast.error('Failed to delete user: ' + formatApiError(err));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // The alternative the blocked dialog offers. Deactivation keeps every
+  // engagement-team and comment row intact and is reversible.
+  const handleDeactivateInstead = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await usersApi.deactivateUser(deleteTarget.id);
+      toast.success(`${deleteTarget.first_name} ${deleteTarget.last_name} deactivated.`);
+      closeDeleteModal();
+      fetchUsers();
+      fetchAccountActivity();
+    } catch (err) {
+      toast.error('Failed to deactivate user: ' + formatApiError(err));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -264,37 +383,63 @@ function UsersPage() {
                         </span>
                       </td>
                       <td className="text-right">
-                        <button
-                          className="btn btn-sm btn-outline flex items-center gap-1 ml-auto"
-                          onClick={() => {
-                            setEditingUser({
-                              id: u.id,
-                              username: u.username,
-                              email: u.email,
-                              first_name: u.first_name,
-                              last_name: u.last_name,
-                              role: u.role,
-                              employee_id: u.employee_id || '',
-                              phone: u.phone || '',
-                              department: u.department || '',
-                              // Carried so OrgUnitSelect can still name a
-                              // retired unit, which the org tree omits.
-                              department_name: u.department_name || '',
-                              is_active: u.is_active
-                            });
-                            setResetPasswordVal('');
-                            setFormErrors({});
-                            setShowEditModal(true);
-                          }}
-                        >
-                          <Edit2 size={12} /> Edit / Reset
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            className="btn btn-sm btn-outline flex items-center gap-1"
+                            onClick={() => {
+                              setEditingUser({
+                                id: u.id,
+                                username: u.username,
+                                email: u.email,
+                                first_name: u.first_name,
+                                last_name: u.last_name,
+                                role: u.role,
+                                employee_id: u.employee_id || '',
+                                phone: u.phone || '',
+                                department: u.department || '',
+                                // Carried so OrgUnitSelect can still name a
+                                // retired unit, which the org tree omits.
+                                department_name: u.department_name || '',
+                                is_active: u.is_active
+                              });
+                              setResetPasswordVal('');
+                              setFormErrors({});
+                              setShowEditModal(true);
+                            }}
+                          >
+                            <Edit2 size={12} /> Edit / Reset
+                          </button>
+                          {/* Hidden on your own row — the server refuses
+                              self-deletion, so offering it would only
+                              produce an error. */}
+                          {String(currentUser?.id) !== String(u.id) && (
+                            <button
+                              className="btn btn-sm btn-danger flex items-center gap-1"
+                              onClick={() => openDeleteModal(u)}
+                              aria-label={`Delete ${u.first_name} ${u.last_name}`}
+                            >
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          )}
+
+          {!loading && (
+            <Pagination
+              page={page}
+              pageCount={Math.max(1, Math.ceil(totalUsers / pageSize))}
+              totalCount={totalUsers}
+              onPageChange={setPage}
+              pageSize={pageSize}
+              onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+              showPageSize
+            />
           )}
         </div>
       </div>
@@ -717,6 +862,104 @@ function UsersPage() {
                 </label>
               </div>
             </form>
+          </>
+        )}
+      </Modal>
+
+      {/* Delete User Confirmation. Three states: preflight in flight, safe to
+          delete, or blocked with the reasons listed. */}
+      <Modal
+        isOpen={Boolean(deleteTarget)}
+        onClose={deleting ? () => {} : closeDeleteModal}
+        title={
+          deleteBlockers?.length
+            ? 'Cannot delete this account'
+            : `Delete ${deleteTarget?.first_name || ''} ${deleteTarget?.last_name || ''}?`
+        }
+        size="md"
+        footer={
+          deleteBlockers === null ? (
+            <button type="button" className="btn btn-outline" onClick={closeDeleteModal}>
+              Cancel
+            </button>
+          ) : deleteBlockers.length > 0 ? (
+            <>
+              <button type="button" className="btn btn-outline" onClick={closeDeleteModal}>
+                Cancel
+              </button>
+              {deleteTarget?.is_active && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleDeactivateInstead}
+                  disabled={deleting}
+                >
+                  {deleting ? 'Deactivating…' : 'Deactivate instead'}
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <button type="button" className="btn btn-outline" onClick={closeDeleteModal} disabled={deleting}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-danger" onClick={handleDeleteUser} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete user'}
+              </button>
+            </>
+          )
+        }
+      >
+        {deleteBlockers === null ? (
+          <p className="text-muted">Checking this account…</p>
+        ) : deleteBlockers.length > 0 ? (
+          <>
+            <div className="alert alert-red" role="alert">
+              <span className="alert-icon">!</span>
+              <span>
+                Deleting this account would erase audit history that cannot be
+                recovered.
+              </span>
+            </div>
+            <ul className="list-disc pl-5 mt-4 space-y-1.5">
+              {deleteBlockers.map((b) => (
+                <li key={b.type}>{b.message}</li>
+              ))}
+            </ul>
+            {deleteTarget?.is_active && (
+              <p className="text-sm text-muted mt-4">
+                Deactivating keeps all of it intact and can be undone later. The
+                account can no longer sign in.
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="alert alert-red" role="alert">
+              <span className="alert-icon">!</span>
+              <span>This cannot be undone.</span>
+            </div>
+            <dl className="mt-4 space-y-1 text-sm">
+              <div className="flex gap-2">
+                <dt className="text-muted w-28">Name</dt>
+                <dd className="font-medium">
+                  {deleteTarget?.first_name} {deleteTarget?.last_name}
+                </dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="text-muted w-28">Employee ID</dt>
+                <dd className="font-mono">{deleteTarget?.employee_id || 'N/A'}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="text-muted w-28">Email</dt>
+                <dd>{deleteTarget?.email}</dd>
+              </div>
+            </dl>
+            <p className="text-sm text-muted mt-4">
+              The account row is removed permanently. Allowing the same email or
+              Employee ID to be re-registered later. The deletion is recorded in
+              the audit trail.
+            </p>
           </>
         )}
       </Modal>

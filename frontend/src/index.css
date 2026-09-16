@@ -36,6 +36,23 @@
   --danger: #ef4444;
   --info: var(--brand-orange);
 
+  /* Semantic ramps for data (severity, engagement lifecycle).
+     These mirror the literal hexes in src/utils/chartTheme.js — recharts
+     renders fill/stroke as SVG presentation attributes, where var() does not
+     resolve, so the palette has to exist on both sides. chartTheme.js is the
+     source of truth; change a colour there and here together. */
+  --sev-critical: #ef4444;
+  --sev-high: #f59e0b;
+  --sev-medium: #3b82f6;
+  --sev-low: #10b981;
+  --sev-info: #64748b;
+  --st-planned: #64748b;
+  --st-progress: #f2801f;
+  --st-fieldwork: #3b82f6;
+  --st-reporting: #8b5cf6;
+  --st-completed: #10b981;
+  --st-cancelled: #475569;
+
   --bg-dark: #0a0f1e;
   --bg-card: #111827;
   --bg-card2: #1a2235;
@@ -1671,7 +1688,10 @@ tbody tr:hover {
   font-size: 13px;
 }
 
-/* ── Timeline ── */
+/* ── Timeline ──
+   Shared: the dashboard's recent-activity feed renders through these classes.
+   The dots used to carry a coloured glow; it has been dropped so the rail reads
+   as a quiet chronological marker rather than competing with the feed's text. */
 .timeline {
   list-style: none;
   position: relative;
@@ -1688,9 +1708,19 @@ tbody tr:hover {
   background: var(--border);
 }
 
+/* Caps the feed's height and lets it scroll instead of stretching the card. */
+.timeline-scroll {
+  max-height: 268px;
+  overflow-y: auto;
+}
+
 .timeline-item {
   position: relative;
-  padding: 0 0 20px 20px;
+  padding: 0 0 18px 20px;
+}
+
+.timeline-item:last-child {
+  padding-bottom: 0;
 }
 
 .timeline-item::before {
@@ -1698,36 +1728,34 @@ tbody tr:hover {
   position: absolute;
   left: -8px;
   top: 6px;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--primary);
-  border: 2px solid var(--bg-dark);
-  box-shadow: 0 0 8px rgba(242, 128, 31, 0.5);
+  border: 2px solid var(--bg-card);
 }
 
 .timeline-item.green::before {
   background: var(--success);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
 }
 
 .timeline-item.orange::before {
   background: var(--warning);
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
 }
 
 .timeline-item.red::before {
   background: var(--danger);
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
 }
 
 .timeline-time {
+  display: block;
   font-size: 11px;
   color: var(--text-muted);
   margin-bottom: 4px;
 }
 
 .timeline-title {
+  display: block;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
@@ -1735,8 +1763,15 @@ tbody tr:hover {
 }
 
 .timeline-desc {
+  display: block;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+/* The record an action was taken against — a reference, not an emphasis. */
+.timeline-desc em {
+  color: var(--primary-light);
+  font-style: normal;
 }
 
 /* The legacy .modal-overlay / .modal / .modal-header / .modal-body /
@@ -3475,121 +3510,232 @@ textarea.form-control {
   gap: 24px;
 }
 
-/* KPI Cards */
-.kpi-grid {
+/* ── KPI band ────────────────────────────────────────────────────────
+   Four metrics on one surface, divided by hairlines rather than split into
+   four bordered cards. Colour is semantic rather than decorative: a cell is
+   tinted only when its value needs attention, so the accent means something.
+   Replaces the old .kpi-grid / .kpi-card / .kpi-icon-* block, whose gradient
+   top-bars and hover lift decorated read-only data. */
+.kpi-band {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-}
-
-@media (max-width: 1200px) {
-  .kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 600px) {
-  .kpi-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.kpi-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 20px 22px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  position: relative;
   overflow: hidden;
-  transition: var(--transition);
 }
 
-.kpi-card::before {
+.kpi-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  position: relative;
+  border-left: 1px solid var(--border);
+  min-width: 0;
+}
+
+.kpi-cell:first-child {
+  border-left: none;
+}
+
+/* Status rail: a 2px inset edge marking a value that needs attention. */
+.kpi-cell-alert::before,
+.kpi-cell-warn::before,
+.kpi-cell-ok::before {
   content: '';
   position: absolute;
-  top: 0;
   left: 0;
-  right: 0;
-  height: 3px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
 }
 
-.kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-  border-color: rgba(255, 255, 255, 0.1);
+.kpi-cell-alert::before {
+  background: var(--danger);
 }
 
-.kpi-blue::before {
-  background: linear-gradient(90deg, #f2801f, #00a651);
+.kpi-cell-warn::before {
+  background: var(--warning);
 }
 
-.kpi-orange::before {
-  background: linear-gradient(90deg, #f59e0b, #ef4444);
+.kpi-cell-ok::before {
+  background: var(--success);
 }
 
-.kpi-red::before {
-  background: linear-gradient(90deg, #ef4444, #dc2626);
-}
-
-.kpi-green::before {
-  background: linear-gradient(90deg, #10b981, #34d399);
-}
-
-.kpi-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-sm);
+.kpi-cell-head {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.kpi-cell-alert .kpi-cell-head {
+  color: var(--danger);
+}
+
+.kpi-cell-warn .kpi-cell-head {
+  color: var(--warning);
+}
+
+.kpi-cell-ok .kpi-cell-head {
+  color: var(--success);
+}
+
+/* The label is 11px uppercase, so it needs the 4.5:1 text threshold rather than
+   the 3:1 one its colour clears as a graphic. --warning is only 3.3:1 on white
+   and --success only just reaches 4.5:1, so both step down a shade here. */
+[data-theme="light"] .kpi-cell-warn .kpi-cell-head {
+  color: #b45309;
+}
+
+[data-theme="light"] .kpi-cell-alert .kpi-cell-head {
+  color: #b91c1c;
+}
+
+[data-theme="light"] .kpi-cell-ok .kpi-cell-head {
+  color: #047857;
+}
+
+.kpi-cell-icon {
   flex-shrink: 0;
 }
 
-.kpi-icon-blue {
-  background: rgba(242, 128, 31, 0.15);
-  color: #f8a24d;
-}
-
-.kpi-icon-orange {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-}
-
-.kpi-icon-red {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-}
-
-.kpi-icon-green {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-}
-
-.kpi-body {
-  flex: 1;
-}
-
 .kpi-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 500;
-  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: inherit;
 }
 
 .kpi-value {
-  font-size: 28px;
-  font-weight: 800;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
   color: var(--text-primary);
-  line-height: 1.1;
-  margin: 2px 0;
 }
 
 .kpi-sub {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Failed fetch. Distinct from both the skeleton (nothing loaded yet) and
+   .is-refreshing (a scope change over data already on screen), because a dead
+   backend used to render the same "—" as a slow one. */
+.kpi-band-error {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 22px;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.kpi-band-error-icon {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+
+.kpi-band-error-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.kpi-band-error-body strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.kpi-band-error-body span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 1100px) {
+  .kpi-band {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* With two rows, the first cell of each row is the one to un-border. */
+  .kpi-cell:nth-child(odd) {
+    border-left: none;
+  }
+
+  .kpi-cell:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 560px) {
+  .kpi-band {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-cell,
+  .kpi-cell:nth-child(odd) {
+    border-left: none;
+  }
+
+  .kpi-cell + .kpi-cell {
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* ── Skeleton placeholders ──
+   Shown only on a first load, where there is no previous data to dim. */
+@keyframes skeletonSweep {
+  0% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 0.9;
+  }
+
+  100% {
+    opacity: 0.45;
+  }
+}
+
+.skeleton {
+  display: block;
+  border-radius: 4px;
+  background: var(--bg-card2);
+  animation: skeletonSweep 1.4s ease-in-out infinite;
+}
+
+.skeleton-line {
+  height: 10px;
+  width: 100%;
+}
+
+.skeleton-line-short {
+  width: 42%;
+}
+
+.skeleton-num {
+  height: 30px;
+  width: 56%;
+  border-radius: 6px;
+}
+
+/* ── Numerals ──
+   Tabular figures wherever a value can change, so digits keep their column. */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.recharts-cartesian-axis-tick-value {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Charts row */
@@ -3599,8 +3745,15 @@ textarea.form-control {
   gap: 20px;
 }
 
+/* A headline series beside a compact companion — 2:1 rather than 1:1. */
+.charts-row-wide {
+  grid-template-columns: 2fr 1fr;
+}
+
 @media (max-width: 1000px) {
-  .charts-row {
+
+  .charts-row,
+  .charts-row-wide {
     grid-template-columns: 1fr;
   }
 }
@@ -3610,10 +3763,23 @@ textarea.form-control {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 20px 22px;
+  /* A flex column so a card shorter than its row-mate can centre its content
+     in the leftover height instead of stacking all the slack at the bottom. */
+  display: flex;
+  flex-direction: column;
 }
 
 .chart-box-header {
   margin-bottom: 14px;
+}
+
+/* Optional leading icon on a card title. Sits on the text baseline rather than
+   centring against the whole h3, so it lines up with the label in both the
+   single-line and title-plus-subtitle cases. */
+.chart-box-header-icon {
+  vertical-align: -2px;
+  margin-right: 6px;
+  color: var(--text-muted);
 }
 
 .chart-box-header h3 {
@@ -3626,6 +3792,13 @@ textarea.form-control {
 .chart-box-header span {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.chart-box-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 /* Pie legend */
@@ -3655,10 +3828,188 @@ textarea.form-control {
   flex-shrink: 0;
 }
 
+/* ── Chart canvas ──
+   A fixed box for the plot itself. Recharts' ResponsiveContainer needs a
+   definite height from a parent, and holding it here keeps every card in a row
+   the same height whether it is plotting, empty, or loading. */
+.chart-canvas {
+  width: 100%;
+  height: 260px;
+}
+
+.chart-canvas-sm {
+  height: 232px;
+}
+
+.chart-canvas-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Chart legend ──
+   Replaces recharts' <Legend/>, whose typography and spacing could not be
+   brought in line with the rest of the page. */
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  list-style: none;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.chart-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.chart-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Severity donut ── */
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  min-height: 260px;
+}
+
+.donut-canvas {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  flex-shrink: 0;
+}
+
+/* Centred total: the one number the ring is a breakdown of, so it belongs
+   inside the ring rather than in the legend. */
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  pointer-events: none;
+}
+
+.donut-total {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.donut-total-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ── Engagement lifecycle strip ──
+   One bar divided in proportion to the status counts, with a text legend.
+   Hand-rolled rather than a second donut: it fits a narrow card, the segments
+   inherit theme tokens, and the legend carries real text for screen readers. */
+.lifecycle {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 8px;
+  /* Grows into the card's leftover height and centres there, so the strip sits
+     level with the bar chart beside it rather than floating at the top. */
+  flex: 1;
+  justify-content: center;
+}
+
+.lifecycle-bar {
+  display: flex;
+  height: 18px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--bg-card2);
+}
+
+.lifecycle-seg {
+  flex: 1 1 0;
+  min-width: 2px;
+  transition: opacity 150ms ease;
+}
+
+.lifecycle-seg + .lifecycle-seg {
+  border-left: 1px solid var(--bg-card);
+}
+
+.lifecycle-seg:hover {
+  opacity: 0.75;
+}
+
+.lifecycle-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 20px;
+  list-style: none;
+}
+
+.lifecycle-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.lifecycle-legend-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lifecycle-legend-item strong {
+  margin-left: auto;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.lifecycle-legend-pct {
+  color: var(--text-muted);
+  font-size: 11px;
+  min-width: 30px;
+  text-align: right;
+}
+
+.lifecycle-total {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 1200px) {
+  .lifecycle-legend {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── "My Work" panel ─────────────────────────────────────────────────
    Three columns of the signed-in user's own queue, sitting between the KPI
-   cards and the org chart. Uses the same card surface tokens as .chart-box so
-   it inherits the light/dark themes without a second set of colour rules. */
+   band and the charts. Uses the same card surface tokens as .chart-box so it
+   inherits the light/dark themes without a second set of colour rules. */
 .my-work-section {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -3768,469 +4119,144 @@ textarea.form-control {
   padding: 8px 0;
 }
 
-/* Activity feed */
-.activity-feed {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  overflow-y: auto;
-  max-height: 240px;
-}
-
-.activity-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.activity-row:last-child {
-  border-bottom: none;
-}
-
-.activity-bullet {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--primary);
-  flex-shrink: 0;
-  margin-top: 5px;
-  box-shadow: 0 0 6px rgba(242, 128, 31, 0.5);
-}
-
-.activity-body {
-  flex: 1;
-}
-
-.activity-body p {
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-}
-
-.activity-body p strong {
-  color: var(--text-primary);
-}
-
-.activity-body p em {
-  color: var(--primary-light);
-  font-style: normal;
-}
-
-.activity-ts {
-  font-size: 11px;
-  color: var(--text-muted);
-}
+/* The bespoke .activity-feed / .activity-row / .activity-bullet / .activity-body
+   block lived here. The dashboard's activity feed renders through the shared
+   .timeline classes defined above instead — one feed styling for the whole app,
+   and no glow on the bullets. */
 
 /* ============================================================
-   DIRECTORATE FILTER BAR (Dashboard)
+   SCOPE COMMAND BAR (Dashboard)
+   A row of pressable scope cards — consolidated plus one per directorate.
+   Replaces the old .directorate-filter-* select, which duplicated the org
+   tree that used to sit beneath it: two controls doing one job.
    ============================================================ */
-.directorate-filter-bar {
+.command-bar {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: stretch;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 12px 16px;
-  flex-wrap: wrap;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
-.directorate-filter-label {
+.command-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 18px;
+  min-width: 178px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  transition: background 150ms ease;
+}
+
+.command-scope:last-child {
+  border-right: none;
+}
+
+.command-scope:hover {
+  background: var(--bg-card2);
+}
+
+.command-scope:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -3px;
+}
+
+/* The selected scope, marked by a bottom edge in that directorate's own
+   colour — the one place the brand orange is not the right accent. */
+.command-scope[aria-pressed="true"] {
+  background: var(--bg-card2);
+  box-shadow: inset 0 -2px 0 var(--scope-color, var(--primary));
+}
+
+.command-scope-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  min-width: 0;
+}
+
+.command-scope-icon {
+  flex-shrink: 0;
+}
+
+.command-scope[aria-pressed="true"] .command-scope-icon {
+  color: var(--scope-color, var(--primary));
+}
+
+.command-scope-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.directorate-filter-label svg {
-  color: var(--primary-light);
-}
-
-.directorate-filter-select {
-  background: var(--bg-card2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+.command-scope[aria-pressed="true"] .command-scope-name {
   color: var(--text-primary);
-  font-size: 12px;
-  padding: 8px 12px;
-  min-width: 260px;
-  cursor: pointer;
-  outline: none;
-  transition: var(--transition);
 }
 
-.directorate-filter-select:focus {
-  border-color: var(--border-active);
-  box-shadow: 0 0 0 3px var(--primary-glow);
-}
-
-.directorate-filter-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-left: auto;
-  font-size: 12px;
+.command-scope-meta {
+  font-size: 11px;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.directorate-filter-head,
-.directorate-filter-staff {
-  background: var(--bg-card2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 4px 10px;
+.command-scope-skeleton {
+  cursor: default;
+  gap: 6px;
+  justify-content: center;
 }
 
-/* Applied to the KPI grid and every directorate-scoped chart while the switcher
-   is refetching, so changing the selection visibly does something. */
+@media (max-width: 600px) {
+  .command-scope {
+    min-width: 150px;
+    padding: 10px 14px;
+  }
+}
+
+/* Applied to the KPI band and every directorate-scoped chart while the switcher
+   is refetching, so changing the selection visibly does something. Only shown
+   when there is previous data to dim — a first load uses skeletons instead. */
 .is-refreshing {
   opacity: 0.55;
   transition: opacity 120ms ease-in;
   pointer-events: none;
 }
 
-/* Stands in for a chart with nothing to plot — an empty recharts canvas reads as
-   a rendering bug rather than as "this directorate has no open findings". */
-.chart-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 280px;
-  color: var(--text-muted);
-  font-size: 13px;
-  text-align: center;
+@media (prefers-reduced-motion: reduce) {
+  .is-refreshing {
+    transition: none;
+  }
+
+  .skeleton,
+  .command-scope,
+  .lifecycle-seg,
+  .login-bg-grid,
+  .login-bg-orb,
+  .login-logo-container {
+    animation: none;
+    transition: none;
+  }
 }
 
 /* ============================================================
    EEU ORGANIZATIONAL CHART
+   The .org-chart / .org-node / .org-branches block lived here (~330 lines).
+   The dashboard replaced the full org tree with the compact scope strip
+   (components/DirectorateStrip.jsx) that now sits directly above it, so
+   nothing emits any of these class names. .directorate-filter-* went with it.
    ============================================================ */
-.org-chart-box {
-  overflow-x: auto;
-}
-
-.org-chart {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 16px 8px;
-  min-width: 720px;
-}
-
-.org-chart-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 48px;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.org-chart-loading .spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--border);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.org-chart-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 48px;
-  color: var(--text-muted);
-  font-size: 13px;
-  text-align: center;
-}
-
-/* Root node */
-.org-root {
-  margin-bottom: 8px;
-}
-
-.org-node {
-  background: var(--bg-card2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
-  min-width: 280px;
-  max-width: 340px;
-  cursor: pointer;
-  transition: var(--transition);
-  position: relative;
-}
-
-.org-node::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
-  background: var(--node-color, var(--primary));
-}
-
-.org-node:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--node-color, var(--primary));
-}
-
-.org-node-root {
-  min-width: 360px;
-  background: linear-gradient(135deg, rgba(242, 128, 31, 0.12), var(--bg-card2));
-}
-
-.org-node-pp {
-  border-color: rgba(0, 166, 81, 0.35);
-}
-
-.org-node-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.org-node-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.org-node-title {
-  flex: 1;
-  min-width: 0;
-}
-
-.org-node-title h4 {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  line-height: 1.3;
-  margin: 0;
-}
-
-.org-node-code {
-  font-size: 10px;
-  color: var(--text-muted);
-  font-family: monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.org-node-toggle {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-}
-
-.org-node-toggle:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.org-node-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.org-node-head {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.org-node-head strong {
-  font-size: 12px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.org-node-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-muted);
-}
-
-.org-node-stats {
-  display: flex;
-  gap: 6px;
-}
-
-.org-stat {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background: var(--bg-card);
-  border-radius: var(--radius-sm);
-  padding: 6px 4px;
-  gap: 2px;
-}
-
-.org-stat svg {
-  color: var(--text-muted);
-}
-
-.org-stat span {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.org-stat small {
-  font-size: 9px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.org-node-risk {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.risk-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.risk-low {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-}
-
-.risk-medium {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-}
-
-.risk-high {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-}
-
-.risk-critical {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-}
-
-.org-node-risk-score {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.org-node-pp-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #4ade80;
-  background: rgba(0, 166, 81, 0.1);
-  border: 1px solid rgba(0, 166, 81, 0.2);
-  border-radius: var(--radius-sm);
-  padding: 6px 10px;
-}
-
-/* Branching connectors */
-.org-branches {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-}
-
-.org-connector-vertical {
-  width: 2px;
-  height: 24px;
-  background: var(--border-active);
-}
-
-.org-connector-horizontal {
-  width: 100%;
-  max-width: 900px;
-  height: 2px;
-  background: var(--border-active);
-  margin-bottom: 0;
-}
-
-.org-children {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  width: 100%;
-  max-width: 1100px;
-  padding: 0 8px;
-}
-
-.org-child-column {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.org-connector-vertical-short {
-  width: 2px;
-  height: 24px;
-  background: var(--border-active);
-}
-
-.org-grandchildren {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
-/* Responsive: stack the org children */
-@media (max-width: 1000px) {
-  .org-children {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 600px) {
-  .org-children {
-    grid-template-columns: 1fr;
-  }
-}
 
 /* ============================================================
    PLANNING PAGE

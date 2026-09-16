@@ -123,7 +123,7 @@ function FollowUpPage() {
     try {
       const [findingsRes, usersRes] = await Promise.all([
         findingsApi.getFindings(),
-        usersApi.getUsers({ role: 'auditee' })
+        usersApi.getAllUsers({ role: 'auditee' })
       ]);
       setFindings(Array.isArray(findingsRes) ? findingsRes : []);
       setAuditees(Array.isArray(usersRes) ? usersRes : []);
