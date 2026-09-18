@@ -34,7 +34,9 @@ const DEFAULT_NEW_PASSWORD = 'Eeu@1234';
 const EMPTY_NEW_USER = {
   username: '', email: '', first_name: '', last_name: '',
   role: 'auditor', employee_id: '', password: DEFAULT_NEW_PASSWORD,
-  department: '', phone: ''
+  // Department, region and service center are independent; the latter two are
+  // optional and most accounts leave them blank.
+  department: '', region: '', service_center: '', phone: ''
 };
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -162,8 +164,10 @@ function UsersPage() {
     setSubmitting(true);
     try {
       const payload = { ...newUser };
-      if (payload.department === '') {
-        payload.department = null;
+      // A blank select holds '', which DRF rejects as a foreign key — send an
+      // explicit null for the three optional-to-unset scopes.
+      for (const field of ['department', 'region', 'service_center']) {
+        if (payload[field] === '') payload[field] = null;
       }
       await usersApi.createUser(payload);
       setShowAddModal(false);
@@ -212,12 +216,20 @@ function UsersPage() {
     setFormErrors({});
     setSubmitting(true);
     try {
-      // department_name is display-only (read-only on the serializer) and only
-      // carried so the picker can label a retired unit — don't send it back.
+      // The *_name fields are display-only (read-only on the serializer) and
+      // only carried so the picker can label a retired unit — don't send them
+      // back. The three ids go as null rather than '' when cleared, which DRF
+      // rejects as a foreign key.
       const { id, ...dataToUpdate } = editingUser;
-      delete dataToUpdate.department_name;
-      if (dataToUpdate.department === '') {
-        dataToUpdate.department = null;
+      for (const field of [
+        'department_name', 'department_name_am',
+        'region_name', 'region_name_am',
+        'service_center_name', 'service_center_name_am',
+      ]) {
+        delete dataToUpdate[field];
+      }
+      for (const field of ['department', 'region', 'service_center']) {
+        if (dataToUpdate[field] === '') dataToUpdate[field] = null;
       }
       await usersApi.updateUser(id, dataToUpdate);
       setShowEditModal(false);
@@ -397,9 +409,16 @@ function UsersPage() {
                                 employee_id: u.employee_id || '',
                                 phone: u.phone || '',
                                 department: u.department || '',
+                                region: u.region || '',
+                                service_center: u.service_center || '',
                                 // Carried so OrgUnitSelect can still name a
                                 // retired unit, which the org tree omits.
                                 department_name: u.department_name || '',
+                                department_name_am: u.department_name_am || '',
+                                region_name: u.region_name || '',
+                                region_name_am: u.region_name_am || '',
+                                service_center_name: u.service_center_name || '',
+                                service_center_name_am: u.service_center_name_am || '',
                                 is_active: u.is_active
                               });
                               setResetPasswordVal('');
@@ -637,8 +656,9 @@ function UsersPage() {
             <OrgUnitSelect
               idPrefix="add_dept"
               label="Department / Unit"
-              value={newUser.department}
-              onChange={(id) => setNewUserField('department', id)}
+              split
+              value={newUser}
+              onFieldChange={(changes) => setNewUser(prev => ({ ...prev, ...changes }))}
             />
           </div>
 
@@ -829,9 +849,14 @@ function UsersPage() {
                 <OrgUnitSelect
                   idPrefix="edit_dept"
                   label="Department / Unit"
-                  value={editingUser.department || ''}
-                  onChange={(id) => setEditingUserField('department', id)}
-                  valueLabel={localizedName(lang, editingUser.department_name, editingUser.department_name_am)}
+                  split
+                  value={editingUser}
+                  onFieldChange={(changes) => setEditingUser(prev => ({ ...prev, ...changes }))}
+                  valueLabels={{
+                    department: localizedName(lang, editingUser.department_name, editingUser.department_name_am),
+                    region: localizedName(lang, editingUser.region_name, editingUser.region_name_am),
+                    service_center: localizedName(lang, editingUser.service_center_name, editingUser.service_center_name_am),
+                  }}
                 />
                 <div className="form-group">
                   <label className="form-label" htmlFor="edit_role">Security Role</label>

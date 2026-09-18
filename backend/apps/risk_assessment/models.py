@@ -40,6 +40,26 @@ class RiskAssessment(models.Model):
     ]
 
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='risk_assessments')
+    # SET_NULL, unlike the CASCADE above: retiring a region or a service center
+    # must not take the whole assessment with it.
+    region = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        limit_choices_to={'unit_type': Department.REGION},
+        help_text='EEU region being assessed, independent of department.',
+    )
+    service_center = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        limit_choices_to={'unit_type': Department.SERVICE_CENTER},
+        help_text='Customer service center being assessed, if any.',
+    )
     # Phase 3.1 — link the assessment to the auditable entity it is about, so the
     # computed risk score can be propagated into AuditUniverse.risk_score.
     audit_universe = models.ForeignKey(

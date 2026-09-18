@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import RiskParameter, RiskAssessment, SelfAssessment
-from apps.accounts.serializers import UserSerializer
+from apps.accounts.serializers import OrgScopeNamesMixin, UserSerializer
 
 
 class RiskParameterSerializer(serializers.ModelSerializer):
@@ -19,9 +19,7 @@ class SelfAssessmentSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class RiskAssessmentSerializer(serializers.ModelSerializer):
-    department_name = serializers.CharField(source='department.name', read_only=True)
-    department_name_am = serializers.CharField(source='department.name_am', read_only=True)
+class RiskAssessmentSerializer(OrgScopeNamesMixin, serializers.ModelSerializer):
     assessed_by_name = serializers.CharField(source='assessed_by.full_name', read_only=True)
     risk_rating_display = serializers.CharField(source='get_risk_rating_display', read_only=True)
     audit_universe_name = serializers.SerializerMethodField()

@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useI18n } from '../../context/I18nContext';
-import { localizedName } from '../../utils/localizedName';
+import { localizedName, orgScopeLabel } from '../../utils/localizedName';
 import { validateForm, validators, hasErrors } from '../../utils/validation';
 import Modal from '../../components/ui/Modal';
 import Badge from '../../components/ui/Badge';
@@ -107,10 +107,14 @@ function RiskAssessmentPage() {
     try {
       const payload = { ...newAssessment };
       if (!payload.audit_universe) delete payload.audit_universe;
+      // A blank select holds '', which DRF rejects as a foreign key. Drop the
+      // key instead so the field is simply left unset.
+      if (!payload.region) delete payload.region;
+      if (!payload.service_center) delete payload.service_center;
       const res = await riskApi.createAssessment(payload);
       setAssessments([res, ...assessments]);
       setShowModal(false);
-      setNewAssessment({ department: '', audit_universe: '', year: new Date().getFullYear(), assessment_period: 'Annual', likelihood: 3, impact: 3, control_effectiveness: 3, notes: '' });
+      setNewAssessment({ department: '', region: '', service_center: '', audit_universe: '', year: new Date().getFullYear(), assessment_period: 'Annual', likelihood: 3, impact: 3, control_effectiveness: 3, notes: '' });
       toast.success('Risk assessment created successfully');
       fetchAll(); // Refresh heatmap
     } catch (err) {
@@ -335,7 +339,7 @@ function RiskAssessmentPage() {
                       selectedCell.items.map((item, i) => (
                         <div key={i} className="risk-item-detail">
                           <div className="flex justify-between items-center mb-1">
-                            <h4>{localizedName(lang, item.department__name || item.department_name, item.department_name_am) || `Dept #${item.department}`}</h4>
+                            <h4>{orgScopeLabel(lang, item, `Dept #${item.department}`)}</h4>
                             <span className="risk-score-value">Score: {item.risk_score || (item.likelihood * item.impact)}</span>
                           </div>
                           <p className="text-sm text-secondary">
@@ -365,7 +369,7 @@ function RiskAssessmentPage() {
                       assessments.map(item => (
                         <div key={item.id} className="risk-list-row-item">
                           <div className="risk-row-left">
-                            <h4>{localizedName(lang, item.department_name, item.department_name_am) || `Department #${item.department}`}</h4>
+                            <h4>{orgScopeLabel(lang, item, `Department #${item.department}`)}</h4>
                             <span className="text-xs text-muted">{item.assessment_period} {item.year}</span>
                           </div>
                           <div className="risk-row-right flex items-center gap-2">
@@ -584,8 +588,9 @@ function RiskAssessmentPage() {
             <OrgUnitSelect
               idPrefix="assessment_dept"
               label="Department"
-              value={newAssessment.department}
-              onChange={(id) => setNewAssessment({ ...newAssessment, department: id })}
+              split
+              value={newAssessment}
+              onFieldChange={(changes) => setNewAssessment(prev => ({ ...prev, ...changes }))}
               required
             />
             <div className="form-group">
@@ -598,7 +603,20 @@ function RiskAssessmentPage() {
               >
                 <option value="">Auto (by department)</option>
                 {universe
-                  .filter(u => !newAssessment.department || String(u.department) === String(newAssessment.department))
+                  // A universe entry is a candidate when it shares *any* of the
+                  // assessment's three scopes — matching on department alone
+                  // would hide an entity registered against the region or the
+                  // service center. With only a department chosen this behaves
+                  // exactly as it did before the scopes were split.
+                  .filter(u => {
+                    const { department, region, service_center } = newAssessment;
+                    if (!department && !region && !service_center) return true;
+                    return (
+                      (department && String(u.department) === String(department)) ||
+                      (region && u.region && String(u.region) === String(region)) ||
+                      (service_center && u.service_center && String(u.service_center) === String(service_center))
+                    );
+                  })
                   .map(u => (
                     <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
                   ))}

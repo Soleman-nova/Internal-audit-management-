@@ -46,11 +46,57 @@ class DepartmentSerializer(serializers.ModelSerializer):
         ]
 
 
-class UserSerializer(serializers.ModelSerializer):
-    department_name = serializers.CharField(source='department.name', read_only=True)
-    # The Amharic variant, so the interface can render the unit in either
-    # language — including retired units that fall outside the org tree.
-    department_name_am = serializers.CharField(source='department.name_am', read_only=True)
+class OrgScopeNamesMixin(serializers.Serializer):
+    """Read-only ``*_name`` / ``*_name_am`` pairs for the three org-scope FKs.
+
+    Every record carrying a ``department`` also carries an independent
+    ``region`` and ``service_center`` (see the Department docstring), and the
+    tables render all three in whichever language is active. Four serializers
+    across three apps need the same six fields, so they share this.
+
+    Extends ``Serializer`` rather than being a bare class: DRF's metaclass only
+    harvests declared fields from bases that have ``_declared_fields``, and a
+    plain mixin never gets that attribute, so the six fields below would be
+    treated as unknown model fields and raise ``ImproperlyConfigured``.
+
+    Guards on null rather than using ``CharField(source='region.name')``: that
+    shorthand is skipped — the key vanishes from the payload — when the
+    relation is empty, and all three of these fields are optional.
+    """
+
+    department_name = serializers.SerializerMethodField()
+    department_name_am = serializers.SerializerMethodField()
+    region_name = serializers.SerializerMethodField()
+    region_name_am = serializers.SerializerMethodField()
+    service_center_name = serializers.SerializerMethodField()
+    service_center_name_am = serializers.SerializerMethodField()
+
+    @staticmethod
+    def _unit_name(unit, amharic=False):
+        if unit is None:
+            return None
+        return unit.name_am if amharic else unit.name
+
+    def get_department_name(self, obj):
+        return self._unit_name(obj.department)
+
+    def get_department_name_am(self, obj):
+        return self._unit_name(obj.department, amharic=True)
+
+    def get_region_name(self, obj):
+        return self._unit_name(obj.region)
+
+    def get_region_name_am(self, obj):
+        return self._unit_name(obj.region, amharic=True)
+
+    def get_service_center_name(self, obj):
+        return self._unit_name(obj.service_center)
+
+    def get_service_center_name_am(self, obj):
+        return self._unit_name(obj.service_center, amharic=True)
+
+
+class UserSerializer(OrgScopeNamesMixin, serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     avatar_url = serializers.SerializerMethodField()
 
@@ -58,6 +104,10 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'email', 'username', 'first_name', 'last_name', 'full_name',
                   'role', 'department', 'department_name', 'department_name_am',
+                  # The Amharic variants let the interface render a retired unit,
+                  # which falls outside the org tree, in either language.
+                  'region', 'region_name', 'region_name_am',
+                  'service_center', 'service_center_name', 'service_center_name_am',
                   'phone', 'employee_id',
                   'is_active', 'avatar', 'avatar_url', 'created_at', 'last_login']
         read_only_fields = ['created_at', 'last_login']
@@ -78,14 +128,15 @@ class ProfileSerializer(UserSerializer):
 
     The response keeps the full user payload so the client can replace its
     stored user object wholesale (it needs ``role`` to keep rendering the right
-    nav). But role, department, employee_id, is_active and email are pinned
-    read-only: a user PATCHing their own profile must never be able to promote
-    themselves or reassign their department.
+    nav). But role, department, region, service_center, employee_id, is_active
+    and email are pinned read-only: a user PATCHing their own profile must never
+    be able to promote themselves or reassign their organisational scope.
     """
 
     class Meta(UserSerializer.Meta):
         read_only_fields = UserSerializer.Meta.read_only_fields + [
-            'email', 'username', 'role', 'department', 'employee_id', 'is_active',
+            'email', 'username', 'role', 'department', 'region', 'service_center',
+            'employee_id', 'is_active',
         ]
 
 
@@ -96,7 +147,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'email', 'username', 'first_name', 'last_name', 'password',
-                  'confirm_password', 'role', 'department', 'phone', 'employee_id']
+                  'confirm_password', 'role', 'department', 'region', 'service_center',
+                  'phone', 'employee_id']
 
     def validate(self, data):
         confirm_password = data.pop('confirm_password', '')

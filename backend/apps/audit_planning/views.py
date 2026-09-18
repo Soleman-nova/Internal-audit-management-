@@ -291,11 +291,13 @@ def _coerce_universe_row(fields, dept_by_code, dept_by_name, creating):
 
 
 class AuditUniverseViewSet(viewsets.ModelViewSet):
-    queryset = AuditUniverse.objects.select_related('department', 'directorate').all()
+    queryset = AuditUniverse.objects.select_related(
+        'department', 'region', 'service_center', 'directorate',
+    ).all()
     serializer_class = AuditUniverseSerializer
     permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['category', 'status', 'department', 'directorate']
+    filterset_fields = ['category', 'status', 'department', 'region', 'service_center', 'directorate']
     search_fields = ['name', 'code', 'owner']
     ordering_fields = ['risk_score', 'name', 'last_audited']
     # 'name' breaks the many ties at a shared risk score so offset pagination
@@ -543,11 +545,11 @@ class AuditUniverseViewSet(viewsets.ModelViewSet):
 
 class ProjectViewSet(viewsets.ModelViewSet):
     """PPM project registry feeding the Audit Universe project dropdown."""
-    queryset = Project.objects.select_related('department').all()
+    queryset = Project.objects.select_related('department', 'region', 'service_center').all()
     serializer_class = ProjectSerializer
     permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['department']
+    filterset_fields = ['department', 'region', 'service_center']
     search_fields = ['name', 'code']
     ordering = ['name']
 
@@ -646,12 +648,16 @@ class AuditPlanViewSet(viewsets.ModelViewSet):
 
 class AuditEngagementViewSet(viewsets.ModelViewSet):
     queryset = AuditEngagement.objects.select_related(
-        'plan', 'department', 'directorate', 'lead_auditor', 'supervisor', 'audit_universe'
+        'plan', 'department', 'region', 'service_center', 'directorate',
+        'lead_auditor', 'supervisor', 'audit_universe',
     ).prefetch_related('team_members', 'findings').all()
     serializer_class = AuditEngagementSerializer
     permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['status', 'engagement_type', 'plan', 'department', 'directorate', 'risk_level']
+    filterset_fields = [
+        'status', 'engagement_type', 'plan', 'department', 'region',
+        'service_center', 'directorate', 'risk_level',
+    ]
     search_fields = ['title', 'engagement_number', 'objectives']
     ordering = ['-created_at', '-id']
 

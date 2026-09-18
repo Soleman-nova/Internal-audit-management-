@@ -3,6 +3,7 @@ service-center seed), the directorate-scoped dashboard statistics, and the
 authentication hardening (login throttling, logout error handling).
 """
 import datetime
+import importlib
 import json
 import tempfile
 from io import StringIO
@@ -1332,3 +1333,90 @@ class UserDeletionGuardTest(TestCase):
         response = self.client.delete(f'/api/auth/users/{self.target.pk}/')
         self.assertEqual(response.status_code, 403)
         self.assertTrue(User.objects.filter(pk=self.target.pk).exists())
+
+
+def _backfill_migration():
+    """The split-out-geographic-units data migration, imported on demand.
+
+    Not at module scope or in ``setUpTestData``: Django deep-copies every class
+    attribute set there, and a module object cannot be deep-copied.
+    """
+    return importlib.import_module(
+        'apps.risk_assessment.migrations.0005_backfill_region_service_center'
+    )
+
+
+class OrgScopeBackfillTest(TestCase):
+    """The data migration that split geographic units out of ``department``.
+
+    Records used to store whichever node of the corporate tree the user drilled
+    down to, so a service center or a region could sit in ``department``. The
+    migration (apps/risk_assessment/migrations/0005) moves those into the
+    ``region`` / ``service_center`` columns and re-points ``department`` at the
+    chief office they sit under. Its ``_split`` helper is exercised directly —
+    running the migration itself would mean replaying the whole graph.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.ceo = Department.objects.create(
+            name='CEO Office', code='CEO', unit_type=Department.EXECUTIVE,
+        )
+        cls.coordination = Department.objects.create(
+            name='Region Coordination', code='RGN Coordination',
+            unit_type=Department.CORPORATE, parent=cls.ceo,
+        )
+        cls.finance = Department.objects.create(
+            name='Finance', code='Finance',
+            unit_type=Department.CORPORATE, parent=cls.ceo,
+        )
+        cls.region = Department.objects.create(
+            name='Adama Region', code='RGN-BA',
+            unit_type=Department.REGION, parent=cls.coordination,
+        )
+        cls.center = Department.objects.create(
+            name='Adama CSC No.1', code='CSC-BA01',
+            unit_type=Department.SERVICE_CENTER, parent=cls.region,
+        )
+
+    def setUp(self):
+        self.split = _backfill_migration()._split
+        self.by_id = {d.pk: d for d in Department.objects.all()}
+
+    def test_a_stored_service_center_splits_into_region_and_center(self):
+        region, center, chief = self.split(self.center, self.by_id)
+        self.assertEqual(region, self.region)
+        self.assertEqual(center, self.center)
+        # Region Coordination, not the service center or the region itself.
+        self.assertEqual(chief, self.coordination)
+
+    def test_a_stored_region_splits_with_no_service_center(self):
+        region, center, chief = self.split(self.region, self.by_id)
+        self.assertEqual(region, self.region)
+        self.assertIsNone(center)
+        self.assertEqual(chief, self.coordination)
+
+    def test_a_chief_office_resolves_to_itself(self):
+        """A row already pointing at Finance has nothing to split."""
+        region, center, chief = self.split(self.finance, self.by_id)
+        self.assertIsNone(region)
+        self.assertIsNone(center)
+        self.assertEqual(chief, self.finance)
+
+    def test_a_broken_chain_does_not_invent_a_scope(self):
+        """``parent`` is SET_NULL, so an orphan must not be re-pointed blindly.
+
+        With nothing above it the walk finds only the unit itself, so it comes
+        back as its own chief office. That equality is the signal ``_backfill``
+        reads to skip the row — without it the record would be rewritten to
+        point at itself, dropping whatever the service center column held.
+        """
+        orphan = Department.objects.create(
+            name='Detached CSC', code='CSC-ORPHAN',
+            unit_type=Department.SERVICE_CENTER, parent=None,
+        )
+        by_id = {d.pk: d for d in Department.objects.all()}
+        region, _center, chief = self.split(orphan, by_id)
+        self.assertIsNone(region)
+        self.assertEqual(chief.pk, orphan.pk)

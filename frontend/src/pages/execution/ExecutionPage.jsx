@@ -10,6 +10,7 @@ import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
+import EngagementPickerBar from '../../components/ui/EngagementPickerBar';
 import {
   ListTodo, Plus, Paperclip, Upload, Eye, CheckCircle2,
   ClipboardList, ShieldCheck, Edit3, Trash2, ChevronDown, Download
@@ -146,8 +147,7 @@ function ExecutionPage() {
     }
   };
 
-  const handleEngChange = (e) => {
-    const val = e.target.value;
+  const handleEngChange = (val) => {
     setSelectedEngId(val);
     fetchProgramAndProcedures(val);
   };
@@ -417,14 +417,13 @@ function ExecutionPage() {
 
       {/* Engagement Selector */}
       <div className="card mb-4">
-        <div className="form-group mb-0">
-          <label className="form-label font-bold text-lg" htmlFor="active_engagement">{t('selectActiveEngagement')}</label>
-          <select id="active_engagement" className="form-control" value={selectedEngId} onChange={handleEngChange}>
-            {engagements.map(e => (
-              <option key={e.id} value={e.id}>{e.engagement_number} — {e.title}</option>
-            ))}
-          </select>
-        </div>
+        <EngagementPickerBar
+          idPrefix="active"
+          engagements={engagements}
+          value={selectedEngId}
+          onChange={handleEngChange}
+          label={t('selectActiveEngagement')}
+        />
       </div>
 
       {loading ? (

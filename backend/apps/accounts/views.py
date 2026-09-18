@@ -97,10 +97,10 @@ class LogoutView(generics.GenericAPIView):
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.select_related('department').all()
+    queryset = User.objects.select_related('department', 'region', 'service_center').all()
     permission_classes = [CanManageUsers]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['role', 'department', 'is_active']
+    filterset_fields = ['role', 'department', 'region', 'service_center', 'is_active']
     search_fields = ['email', 'first_name', 'last_name', 'employee_id']
     ordering_fields = ['first_name', 'created_at']
     ordering = ['first_name']
