@@ -4,7 +4,7 @@ import { planningApi, usersApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useI18n } from '../../context/I18nContext';
-import { localizedName } from '../../utils/localizedName';
+import { localizedName, orgScopeLabel } from '../../utils/localizedName';
 import { validateForm, validators, hasErrors } from '../../utils/validation';
 import Modal from '../../components/ui/Modal';
 import Badge from '../../components/ui/Badge';
@@ -79,10 +79,13 @@ function PlanningPage() {
   const [dueForAudit, setDueForAudit] = useState({ items: [], count: 0, hasMore: false });
 
   // Form State
-  const emptyUniverse = { name: '', code: '', category: 'system', risk_score: 3.5, audit_frequency: 'Annually', owner: '', department: '', status: 'active', last_audited: '' };
+  // Department, region and service center are three independent fields on the
+  // record (see OrgUnitSelect), so every form that picks an audited entity
+  // carries all three. Region and service center are optional.
+  const emptyUniverse = { name: '', code: '', category: 'system', risk_score: 3.5, audit_frequency: 'Annually', owner: '', department: '', region: '', service_center: '', status: 'active', last_audited: '' };
   const emptyPlan = { title: '', year: new Date().getFullYear(), plan_scope: 'directorate', directorate: '', total_budget_days: 0, start_date: '', end_date: '', description: '', objectives: '', scope: '', methodology: '' };
   const emptyEngagement = {
-    title: '', plan: '', audit_universe: '', department: '',
+    title: '', plan: '', audit_universe: '', department: '', region: '', service_center: '',
     engagement_type: 'operational', risk_level: 'medium',
     planned_start: '', planned_end: '', planned_days: 0,
     lead_auditor: '', supervisor: ''
@@ -91,6 +94,8 @@ function PlanningPage() {
   const [showUniverseModal, setShowUniverseModal] = useState(false);
   const [editingUniverseId, setEditingUniverseId] = useState(null);
   const [editingUniverseDeptName, setEditingUniverseDeptName] = useState('');
+  const [editingUniverseRegionName, setEditingUniverseRegionName] = useState('');
+  const [editingUniverseCenterName, setEditingUniverseCenterName] = useState('');
   const [newUniverse, setNewUniverse] = useState(emptyUniverse);
 
   // PPM project registry feeding the universe form's "PPM Project" dropdown,
@@ -121,6 +126,8 @@ function PlanningPage() {
   const [showEngagementModal, setShowEngagementModal] = useState(false);
   const [editingEngagementId, setEditingEngagementId] = useState(null);
   const [editingEngagementDeptName, setEditingEngagementDeptName] = useState('');
+  const [editingEngagementRegionName, setEditingEngagementRegionName] = useState('');
+  const [editingEngagementCenterName, setEditingEngagementCenterName] = useState('');
   const [newEngagement, setNewEngagement] = useState(emptyEngagement);
 
   // Team Member Assignment State
@@ -292,6 +299,9 @@ function PlanningPage() {
   const openAddUniverse = () => {
     setEditingUniverseId(null);
     setNewUniverse(emptyUniverse);
+    setEditingUniverseDeptName('');
+    setEditingUniverseRegionName('');
+    setEditingUniverseCenterName('');
     setSelectedProject(null);
     setShowAddProject(false);
     setNewProject({ code: '', name: '' });
@@ -301,13 +311,16 @@ function PlanningPage() {
 
   const openEditUniverse = (item) => {
     setEditingUniverseId(item.id);
-    // department_name is tracked separately from the form payload so the picker
-    // can still name a retired unit, which the org tree omits.
+    // The three *_name fields are tracked separately from the form payload so
+    // the picker can still name a retired unit, which the org tree omits.
     setEditingUniverseDeptName(localizedName(lang, item.department_name, item.department_name_am) || '');
+    setEditingUniverseRegionName(localizedName(lang, item.region_name, item.region_name_am) || '');
+    setEditingUniverseCenterName(localizedName(lang, item.service_center_name, item.service_center_name_am) || '');
     setNewUniverse({
       name: item.name || '', code: item.code || '', category: item.category || 'system',
       risk_score: item.risk_score ?? 3.5, audit_frequency: item.audit_frequency || 'Annually',
       owner: item.owner || '', department: item.department || '', status: item.status || 'active',
+      region: item.region || '', service_center: item.service_center || '',
       last_audited: item.last_audited || '',
     });
     // For a project-category row, preselect the registry entry whose code/name
@@ -329,6 +342,8 @@ function PlanningPage() {
     setShowUniverseModal(false);
     setEditingUniverseId(null);
     setEditingUniverseDeptName('');
+    setEditingUniverseRegionName('');
+    setEditingUniverseCenterName('');
     setNewUniverse(emptyUniverse);
     setSelectedProject(null);
     setShowAddProject(false);
@@ -416,6 +431,10 @@ function PlanningPage() {
     try {
       const payload = { ...newUniverse };
       if (!payload.department) delete payload.department;
+      // A blank select holds '', which DRF rejects as a foreign key. Drop the
+      // key instead so the field is simply left unset.
+      if (!payload.region) delete payload.region;
+      if (!payload.service_center) delete payload.service_center;
       if (!payload.last_audited) delete payload.last_audited;
       if (editingUniverseId) {
         await planningApi.updateUniverse(editingUniverseId, payload);
@@ -575,9 +594,12 @@ function PlanningPage() {
   const openEditEngagement = (eng) => {
     setEditingEngagementId(eng.id);
     setEditingEngagementDeptName(localizedName(lang, eng.department_name, eng.department_name_am) || '');
+    setEditingEngagementRegionName(localizedName(lang, eng.region_name, eng.region_name_am) || '');
+    setEditingEngagementCenterName(localizedName(lang, eng.service_center_name, eng.service_center_name_am) || '');
     setNewEngagement({
       title: eng.title || '', plan: eng.plan || '', audit_universe: eng.audit_universe || '',
-      department: eng.department || '', engagement_type: eng.engagement_type || 'operational',
+      department: eng.department || '', region: eng.region || '', service_center: eng.service_center || '',
+      engagement_type: eng.engagement_type || 'operational',
       risk_level: eng.risk_level || 'medium', planned_start: eng.planned_start || '',
       planned_end: eng.planned_end || '', planned_days: eng.planned_days ?? 0,
       lead_auditor: eng.lead_auditor || '', supervisor: eng.supervisor || '',
@@ -589,6 +611,8 @@ function PlanningPage() {
     setShowEngagementModal(false);
     setEditingEngagementId(null);
     setEditingEngagementDeptName('');
+    setEditingEngagementRegionName('');
+    setEditingEngagementCenterName('');
     setNewEngagement(emptyEngagement);
   };
 
@@ -619,6 +643,8 @@ function PlanningPage() {
     try {
       const payload = { ...newEngagement };
       if (!payload.department) delete payload.department;
+      if (!payload.region) delete payload.region;
+      if (!payload.service_center) delete payload.service_center;
       if (!payload.audit_universe) delete payload.audit_universe;
       if (!payload.lead_auditor) delete payload.lead_auditor;
       if (!payload.supervisor) delete payload.supervisor;
@@ -788,7 +814,7 @@ function PlanningPage() {
                         <td><strong>{item.code}</strong></td>
                         <td>{item.name}</td>
                         <td><span className="badge badge-outline">{item.category?.toUpperCase()}</span></td>
-                        <td>{localizedName(lang, item.department_name, item.department_name_am) || 'N/A'}</td>
+                        <td>{orgScopeLabel(lang, item, 'N/A')}</td>
                         <td>
                           <span className={`risk-tag ${item.risk_score >= 4 ? 'critical' : item.risk_score >= 3 ? 'high' : 'medium'}`}>
                             {item.risk_score}
@@ -927,6 +953,7 @@ function PlanningPage() {
                       <th>Ref Number</th>
                       <th>Audit Title</th>
                       <th>Type</th>
+                      <th>Org Unit</th>
                       <th>Lead Auditor</th>
                       <th>Supervisor</th>
                       <th>Days</th>
@@ -946,6 +973,7 @@ function PlanningPage() {
                         <td><strong>{eng.engagement_number}</strong></td>
                         <td>{eng.title}</td>
                         <td><span className="badge badge-outline">{eng.engagement_type?.toUpperCase()}</span></td>
+                        <td>{orgScopeLabel(lang, eng, '—')}</td>
                         <td>
                           {eng.lead_auditor_name ? (
                             <span className="flex items-center gap-1">
@@ -1136,18 +1164,21 @@ function PlanningPage() {
             <OrgUnitSelect
               idPrefix="universe_dept"
               label="Department / Directorate"
-              value={newUniverse.department}
-              onChange={(id) => setNewUniverse(prev => {
+              split
+              value={newUniverse}
+              onFieldChange={(changes) => setNewUniverse(prev => {
+                const next = { ...prev, ...changes };
                 // Picking the PPM chief office implies a project-managed entity,
                 // so default the category to Project (only when it is unset).
-                const isPpm = !!(id && ppmDepartmentId && String(id) === ppmDepartmentId);
-                return {
-                  ...prev,
-                  department: id,
-                  category: isPpm && prev.category !== 'project' ? 'project' : prev.category,
-                };
+                const isPpm = !!(next.department && ppmDepartmentId && String(next.department) === ppmDepartmentId);
+                if (isPpm && next.category !== 'project') next.category = 'project';
+                return next;
               })}
-              valueLabel={editingUniverseDeptName}
+              valueLabels={{
+                department: editingUniverseDeptName,
+                region: editingUniverseRegionName,
+                service_center: editingUniverseCenterName,
+              }}
             />
             <div className="form-group">
               <label className="form-label" htmlFor="universe_risk_score">Initial Risk Score (1-5)</label>
@@ -1460,9 +1491,14 @@ function PlanningPage() {
             <OrgUnitSelect
               idPrefix="engagement_dept"
               label="Department"
-              value={newEngagement.department}
-              onChange={(id) => setNewEngagement({ ...newEngagement, department: id })}
-              valueLabel={editingEngagementDeptName}
+              split
+              value={newEngagement}
+              onFieldChange={(changes) => setNewEngagement(prev => ({ ...prev, ...changes }))}
+              valueLabels={{
+                department: editingEngagementDeptName,
+                region: editingEngagementRegionName,
+                service_center: editingEngagementCenterName,
+              }}
             />
           </div>
           <div className="form-group-row">

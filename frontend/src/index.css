@@ -2987,6 +2987,29 @@ textarea.form-control {
   margin: 0;
 }
 
+/* Engagement scope bar (EngagementPickerBar) — department, entity and
+   engagement side by side. auto-fit rather than a fixed 3-column grid because
+   the department step is itself three stacked selects and needs the room. */
+.engagement-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+/* The plan is read-back rather than entered — a muted aside under the
+   engagement that never competes with the field itself. */
+.engagement-picker-plan {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.engagement-picker-plan strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .input-group {
   position: relative;
   display: flex;

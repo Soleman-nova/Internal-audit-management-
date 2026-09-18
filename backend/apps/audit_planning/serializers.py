@@ -1,11 +1,9 @@
 from rest_framework import serializers
 from .models import (AuditUniverse, AuditPlan, AuditEngagement, AuditTeamMember, Project)
-from apps.accounts.serializers import UserSerializer
+from apps.accounts.serializers import OrgScopeNamesMixin, UserSerializer
 
 
-class AuditUniverseSerializer(serializers.ModelSerializer):
-    department_name = serializers.SerializerMethodField()
-    department_name_am = serializers.SerializerMethodField()
+class AuditUniverseSerializer(OrgScopeNamesMixin, serializers.ModelSerializer):
     directorate_name = serializers.SerializerMethodField()
     directorate_name_am = serializers.SerializerMethodField()
     category_display = serializers.CharField(source='get_category_display', read_only=True)
@@ -15,16 +13,6 @@ class AuditUniverseSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuditUniverse
         fields = '__all__'
-
-    def get_department_name(self, obj):
-        if obj.department:
-            return obj.department.name
-        return None
-
-    def get_department_name_am(self, obj):
-        if obj.department:
-            return obj.department.name_am
-        return None
 
     def get_directorate_name(self, obj):
         if obj.directorate:
@@ -58,34 +46,25 @@ class AuditTeamMemberSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class ProjectSerializer(serializers.ModelSerializer):
-    department_name = serializers.SerializerMethodField()
-    department_name_am = serializers.SerializerMethodField()
-
+class ProjectSerializer(OrgScopeNamesMixin, serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = '__all__'
 
-    def get_department_name(self, obj):
-        if obj.department:
-            return obj.department.name
-        return None
 
-    def get_department_name_am(self, obj):
-        if obj.department:
-            return obj.department.name_am
-        return None
-
-
-class AuditEngagementSerializer(serializers.ModelSerializer):
+class AuditEngagementSerializer(OrgScopeNamesMixin, serializers.ModelSerializer):
     lead_auditor_name = serializers.SerializerMethodField()
     supervisor_name = serializers.SerializerMethodField()
-    department_name = serializers.SerializerMethodField()
-    department_name_am = serializers.SerializerMethodField()
     directorate_name = serializers.SerializerMethodField()
     directorate_name_am = serializers.SerializerMethodField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     engagement_type_display = serializers.CharField(source='get_engagement_type_display', read_only=True)
+    # The plan an engagement belongs to is fixed by that engagement, so the
+    # engagement pickers on Execution/Findings/Reports show it read-back rather
+    # than asking for it. Sent as a flat pair so those pages don't have to fetch
+    # the whole plan catalogue just to name one.
+    plan_title = serializers.SerializerMethodField()
+    plan_year = serializers.SerializerMethodField()
     team_members = AuditTeamMemberSerializer(many=True, read_only=True)
     findings_count = serializers.SerializerMethodField()
     progress_percent = serializers.SerializerMethodField()
@@ -94,6 +73,23 @@ class AuditEngagementSerializer(serializers.ModelSerializer):
         model = AuditEngagement
         fields = '__all__'
         read_only_fields = ['engagement_number']
+
+    @staticmethod
+    def _plan_of(obj):
+        # `plan` is a non-null FK but a stale id can still blow up the detail
+        # route, so read it defensively like the nullable relations above.
+        try:
+            return obj.plan
+        except AuditPlan.DoesNotExist:
+            return None
+
+    def get_plan_title(self, obj):
+        plan = self._plan_of(obj)
+        return plan.title if plan else None
+
+    def get_plan_year(self, obj):
+        plan = self._plan_of(obj)
+        return plan.year if plan else None
 
     def get_lead_auditor_name(self, obj):
         if obj.lead_auditor:
@@ -104,16 +100,6 @@ class AuditEngagementSerializer(serializers.ModelSerializer):
         if obj.supervisor:
             return obj.supervisor.full_name
         return 'Unassigned'
-
-    def get_department_name(self, obj):
-        if obj.department:
-            return obj.department.name
-        return None
-
-    def get_department_name_am(self, obj):
-        if obj.department:
-            return obj.department.name_am
-        return None
 
     def get_directorate_name(self, obj):
         if obj.directorate:

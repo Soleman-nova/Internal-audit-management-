@@ -10,6 +10,7 @@ import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
+import EngagementPickerBar from '../../components/ui/EngagementPickerBar';
 import { ShieldAlert, Plus, Layers, List, MessageCircle, FileText, ChevronRight } from 'lucide-react';
 
 function FindingsPage() {
@@ -70,8 +71,7 @@ function FindingsPage() {
     }
   };
 
-  const handleEngChange = (e) => {
-    const val = e.target.value;
+  const handleEngChange = (val) => {
     setSelectedEngId(val);
     fetchFindings(val);
   };
@@ -125,17 +125,16 @@ function FindingsPage() {
   return (
     <div className="findings-view">
       {/* Top selector bar */}
-      <div className="card mb-4 flex justify-between items-center flex-wrap gap-4">
-        <div className="form-group mb-0 flex-grow max-w-md">
-          <label className="form-label font-bold" htmlFor="findings_engagement">{t('selectAuditEngagement')}</label>
-          <select id="findings_engagement" className="form-control" value={selectedEngId} onChange={handleEngChange}>
-            {engagements.map(e => (
-              <option key={e.id} value={e.id}>{e.engagement_number} - {e.title}</option>
-            ))}
-          </select>
-        </div>
+      <div className="card mb-4">
+        <EngagementPickerBar
+          idPrefix="findings"
+          engagements={engagements}
+          value={selectedEngId}
+          onChange={handleEngChange}
+          label={t('selectAuditEngagement')}
+        />
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 justify-end">
           <button
             className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => setViewMode('list')}

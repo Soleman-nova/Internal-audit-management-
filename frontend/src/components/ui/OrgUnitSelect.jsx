@@ -3,37 +3,50 @@ import { useI18n } from '../../context/I18nContext';
 import { useOrgUnits } from '../../hooks/useOrgUnits';
 
 /**
- * Cascading organisational-unit picker: department → region → service center.
+ * Organisational-unit picker: department, region, service center.
  *
  * EEU's corporate structure is three levels deep (chief office → region →
  * customer service center) and 600+ units in total, so a single flat <select>
- * is unusable. This narrows the choice in three steps and reports the id of the
- * deepest unit picked, which is what the `department` foreign keys store.
- * Stopping at step one or two is legitimate — a risk assessment can belong to a
- * whole chief office, a whole region, or one service center.
+ * is unusable. This narrows the choice in three steps.
  *
- * All three steps stay usable at all times. Every region hangs off a single
- * chief office (Region Coordination) in the tree, so gating step two on step
- * one's choice left regions and service centers unreachable for the other
- * eighteen departments. Listing the regions unconditionally is the trade-off
- * that keeps one foreign key: picking a region or a service center supersedes
- * the step-one department rather than being recorded alongside it, and step one
- * then re-displays the branch the stored unit actually sits under.
+ * Two modes:
  *
- * Every step is derived from `value` rather than held in local state, so the
- * component is fully controlled and cannot drift out of sync with the form.
+ *   Single value (the default) — ``value`` is one department id and the three
+ *   steps are a cascade over that single foreign key. Region and service center
+ *   are reachable at any time, and picking one *supersedes* the step-one
+ *   department rather than being recorded alongside it, because one key can
+ *   only point at one unit. Used where the answer genuinely is one unit — an
+ *   audit plan's owning directorate, say.
+ *
+ *   Split (``split``) — ``value`` is ``{ department, region, service_center }``
+ *   and the three steps are independent fields. Nothing is superseded: Finance
+ *   can sit alongside Adama Region and Adama CSC No. 1, which is the whole
+ *   point, and picking a region leaves the department alone.
+ *
+ * In both modes every step is derived from ``value`` rather than held in local
+ * state, so the component is fully controlled and cannot drift out of sync
+ * with the form.
  *
  * Props:
- *   value       department id currently stored on the record ('' when unset)
- *   onChange    called with the new id (string) or '' when cleared
- *   label       field label; defaults to the translated "Department"
- *   required    marks step one required
- *   disabled    disables all three steps
- *   valueLabel  name to show when `value` points at a unit missing from the
- *               tree — a retired one, say — so editing cannot silently drop it
- *   idPrefix    optional stable prefix for the three selects' ids; a `useId()`
- *               value is generated when omitted. Callers pass one so the ids
- *               match the rest of their form's `<field>_<name>` convention.
+ *   value          one department id (default), or ``{ department, region,
+ *                  service_center }`` when ``split`` is set
+ *   onChange       single mode: called with the new id (string) or '' when cleared
+ *   split          switches to three independent fields
+ *   onFieldChange  split mode: called with an object of the fields that changed,
+ *                  e.g. ``{ region: '5', service_center: '' }``. Always spread
+ *                  it into the previous state — a region change can carry the
+ *                  service center with it.
+ *   label          field label; defaults to the translated "Department"
+ *   required       marks step one required
+ *   disabled       disables all three steps
+ *   valueLabel     single mode: name to show when ``value`` points at a unit
+ *                  missing from the tree — a retired one, say — so editing
+ *                  cannot silently drop it
+ *   valueLabels    split mode: the same, keyed by field name
+ *   idPrefix       optional stable prefix for the three selects' ids; a
+ *                  ``useId()`` value is generated when omitted. Callers pass one
+ *                  so the ids match the rest of their form's ``<field>_<name>``
+ *                  convention.
  */
 
 // Step one flattens the non-geographic side of the tree. A literal
@@ -52,13 +65,18 @@ const GROUP_LABELS = {
   CORPORATE: { en: 'Chief Offices', am: 'ዋና ጽሕፈት ቤቶች' },
 };
 
+const toId = (v) => (v == null ? '' : String(v));
+
 export const OrgUnitSelect = ({
   value,
   onChange,
+  split = false,
+  onFieldChange,
   label,
   required = false,
   disabled = false,
   valueLabel = '',
+  valueLabels = {},
   className = '',
   idPrefix,
 }) => {
@@ -73,23 +91,37 @@ export const OrgUnitSelect = ({
   const prefix = idPrefix || generatedId;
   const departmentSelectId = `${prefix}_department`;
 
-  const selectedId = value == null ? '' : String(value);
-  const known = selectedId !== '' && byId.has(selectedId);
+  // ── Current values, per mode ─────────────────────────────────────────────
+  // Single mode resolves all three from the one stored id; split mode reads
+  // them straight off the object it was handed.
+  const scope = split && value && typeof value === 'object' ? value : null;
+  const selectedId = split ? toId(scope?.department) : toId(value);
+
+  const singleKnown = !split && selectedId !== '' && byId.has(selectedId);
 
   // `value` resolves to nothing we can show — a retired unit, which the tree
   // endpoint excludes on purpose. Keep it selected instead of blanking the
-  // field, so opening and saving an old record doesn't wipe its department.
-  const isOrphanValue = selectedId !== '' && !known && !loading;
+  // field, so opening and saving an old record doesn't wipe it.
+  const isOrphan = (id) => id !== '' && !byId.has(id) && !loading;
 
-  // ── Derive the three steps from the stored id ────────────────────────────
-  const chain = known ? ancestorsOf(selectedId) : [];
-  const departmentUnit = [...chain].reverse().find(u => TOP_LEVEL_TYPES.includes(u.unit_type));
-  const regionUnit = chain.find(u => u.unit_type === 'REGION');
-  const centerUnit = chain.find(u => u.unit_type === 'SERVICE_CENTER');
+  let departmentId = split ? toId(scope?.department) : '';
+  let regionId = split ? toId(scope?.region) : '';
+  let centerId = split ? toId(scope?.service_center) : '';
 
-  const departmentId = departmentUnit ? String(departmentUnit.id) : '';
-  const regionId = regionUnit ? String(regionUnit.id) : '';
-  const centerId = centerUnit ? String(centerUnit.id) : '';
+  if (!split) {
+    const chain = singleKnown ? ancestorsOf(selectedId) : [];
+    const departmentUnit = [...chain].reverse().find(u => TOP_LEVEL_TYPES.includes(u.unit_type));
+    const regionUnit = chain.find(u => u.unit_type === 'REGION');
+    const centerUnit = chain.find(u => u.unit_type === 'SERVICE_CENTER');
+    departmentId = departmentUnit ? String(departmentUnit.id) : '';
+    regionId = regionUnit ? String(regionUnit.id) : '';
+    centerId = centerUnit ? String(centerUnit.id) : '';
+  }
+
+  const singleOrphan = !split && selectedId !== '' && !singleKnown && !loading;
+
+  const labelFor = (field) =>
+    (split ? valueLabels[field] : '') || (field === 'department' ? valueLabel : '') || `#${toId(scope?.[field])}`;
 
   const nameOf = (unit) => (lang === 'am' && unit.name_am ? unit.name_am : unit.name);
 
@@ -151,8 +183,9 @@ export const OrgUnitSelect = ({
 
   const groups = [...flatGroups, ...corporateGroups];
 
-  // Every region, not just those under the step-one choice: regions all hang
-  // off Region Coordination, so filtering by step one hid them everywhere else.
+  // Every region, independent of the step-one choice. Regions are never filtered
+  // by department: they all hang off Region Coordination, so gating them on step
+  // one hid every region from the other eighteen chief offices.
   const regions = units
     .filter(u => u.unit_type === 'REGION')
     .sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
@@ -163,12 +196,27 @@ export const OrgUnitSelect = ({
     .slice()
     .sort((a, b) => a.code.localeCompare(b.code));
 
-  // ── Change handlers — always emit the deepest unit still selected ────────
-  // Picking a region or a center replaces whatever step one held: one foreign
-  // key can only point at one unit, and the deeper one is the more specific.
+  // ── Change handlers ─────────────────────────────────────────────────────
+  // Single mode: picking a region or a center replaces whatever step one held:
+  // one foreign key can only point at one unit, and the deeper one is the more
+  // specific.
   const handleDepartment = (e) => onChange(e.target.value);
   const handleRegion = (e) => onChange(e.target.value || departmentId);
   const handleCenter = (e) => onChange(e.target.value || regionId);
+
+  // Split mode: each step writes its own field and nothing else, except that a
+  // service center belongs to exactly one region — changing the region clears a
+  // center that no longer sits under it, rather than storing a contradictory pair.
+  const handleDepartmentSplit = (e) => onFieldChange({ department: e.target.value });
+
+  const handleRegionSplit = (e) => {
+    const nextRegion = e.target.value;
+    const stillUnder = nextRegion !== '' && centerId !== '' &&
+      childrenOf(nextRegion, 'SERVICE_CENTER').some(c => String(c.id) === centerId);
+    onFieldChange({ region: nextRegion, service_center: stillUnder ? centerId : '' });
+  };
+
+  const handleCenterSplit = (e) => onFieldChange({ service_center: e.target.value });
 
   if (error) {
     return (
@@ -179,24 +227,31 @@ export const OrgUnitSelect = ({
     );
   }
 
+  const departmentValue = split ? departmentId : (singleOrphan ? selectedId : departmentId);
+  const departmentOrphan = split ? isOrphan(departmentId) : singleOrphan;
+  const regionOrphan = split && isOrphan(regionId);
+  const centerOrphan = split && isOrphan(centerId);
+
   return (
     <div className={`form-group ${className}`}>
       <label className="form-label" htmlFor={departmentSelectId}>{label || t('department')}</label>
 
       <div className="org-unit-select" role="group" aria-label={label || t('department')}>
-        {/* Step 1 — chief office, executive office, or audit directorate */}
+        {/* Step 1 — chief office, executive office, or audit directorate. In
+            split mode this is the record's own department and is never touched
+            by steps two and three. */}
         <select
           id={departmentSelectId}
           className="form-control"
-          value={isOrphanValue ? selectedId : departmentId}
-          onChange={handleDepartment}
+          value={departmentValue}
+          onChange={split ? handleDepartmentSplit : handleDepartment}
           required={required}
           disabled={disabled || loading}
         >
           <option value="">{loading ? t('loadingStructure') : t('selectDepartment')}</option>
-          {isOrphanValue && (
-            <option value={selectedId}>
-              {valueLabel || `#${selectedId}`} ({t('retiredUnit')})
+          {departmentOrphan && (
+            <option value={departmentId}>
+              {labelFor('department')} ({t('retiredUnit')})
             </option>
           )}
           {groups.map(group => (
@@ -215,13 +270,16 @@ export const OrgUnitSelect = ({
           id={`${prefix}_region`}
           className="form-control"
           value={regionId}
-          onChange={handleRegion}
+          onChange={split ? handleRegionSplit : handleRegion}
           disabled={disabled || loading || regions.length === 0}
           aria-label={t('region')}
         >
           <option value="">
             {regions.length === 0 ? t('notApplicable') : `${t('selectRegion')} (${t('optional')})`}
           </option>
+          {regionOrphan && (
+            <option value={regionId}>{labelFor('region')} ({t('retiredUnit')})</option>
+          )}
           {regions.map(unit => (
             <option key={unit.id} value={unit.id}>{nameOf(unit)}</option>
           ))}
@@ -232,7 +290,7 @@ export const OrgUnitSelect = ({
           id={`${prefix}_service_center`}
           className="form-control"
           value={centerId}
-          onChange={handleCenter}
+          onChange={split ? handleCenterSplit : handleCenter}
           disabled={disabled || loading || !regionId || centers.length === 0}
           aria-label={t('serviceCenter')}
         >
@@ -243,6 +301,9 @@ export const OrgUnitSelect = ({
                 ? t('notApplicable')
                 : `${t('selectServiceCenter')} (${t('allOfRegion')})`}
           </option>
+          {centerOrphan && (
+            <option value={centerId}>{labelFor('service_center')} ({t('retiredUnit')})</option>
+          )}
           {centers.map(unit => (
             <option key={unit.id} value={unit.id}>
               {nameOf(unit)} ({unit.code})

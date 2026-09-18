@@ -91,8 +91,13 @@ export const planningApi = {
   },
   // Returns { items, count, hasMore } rather than a bare array: PlanningPage
   // shows the engagement total, which was capped at PAGE_SIZE before.
+  // Defaults to one large page like getPlans, because the engagement *pickers*
+  // on Execution, Findings and Reports want the whole list — a bare call there
+  // stopped at DRF's PAGE_SIZE = 20, so engagements past the twentieth were
+  // simply missing from the dropdown. Paged callers (PlanningPage's table)
+  // override with an explicit page/page_size.
   getEngagements: async (params = {}) => {
-    const res = await apiClient.get('/planning/engagements/', { params });
+    const res = await apiClient.get('/planning/engagements/', { params: { page_size: 1000, ...params } });
     return unwrapPage(res.data);
   },
   getEngagement: async (id) => {

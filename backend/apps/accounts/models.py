@@ -49,10 +49,12 @@ class Department(models.Model):
 
     Regions and service centers are modelled as departments rather than
     separate tables so that users, audit universe entries, engagements, and
-    risk assessments can point at any level of the organisation through the
-    department foreign keys they already have. The forms present the three
-    corporate levels as a cascading picker (department → region → service
-    center) and store whichever node the user drilled down to.
+    risk assessments can point at any level of the organisation. Records hold
+    the three corporate levels as three independent foreign keys — ``department``
+    (a chief office or an audit directorate), ``region``, and ``service_center``
+    — because a single geographic *and* functional scope is legitimate: Finance,
+    sitting in Adama Region, at Adama CSC No. 1. The picker therefore lets the
+    department be chosen alongside a region rather than being overwritten by it.
     """
 
     DIRECTORATE_CHOICES = [
@@ -128,6 +130,24 @@ class User(AbstractUser):
         default=Role.AUDITOR
     )
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+    region = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        limit_choices_to={'unit_type': Department.REGION},
+        help_text='EEU region this user is based in, independent of their department.',
+    )
+    service_center = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        limit_choices_to={'unit_type': Department.SERVICE_CENTER},
+        help_text='Customer service center this user is posted to.',
+    )
     phone = models.CharField(max_length=20, blank=True)
     employee_id = models.CharField(max_length=50, unique=True)
     avatar = models.ImageField(

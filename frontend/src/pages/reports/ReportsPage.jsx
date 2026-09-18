@@ -9,6 +9,7 @@ import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import FormField from '../../components/ui/FormField';
+import EngagementPickerBar from '../../components/ui/EngagementPickerBar';
 import Pagination from '../../components/ui/Pagination';
 import { FileText, Download, Plus, RefreshCw, BarChart2 } from 'lucide-react';
 
@@ -357,23 +358,17 @@ function ReportsPage() {
             />
           </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="report_engagement">{t('selectAuditEngagement')}</label>
-            <select
-              id="report_engagement"
-              className="form-control"
-              value={selectedEngId}
-              onChange={(e) => {
-                setSelectedEngId(e.target.value);
-                const engObj = engagements.find(eng => eng.id.toString() === e.target.value.toString());
-                if (engObj) setReportTitle(`Audit Report for ${engObj.title}`);
-              }}
-            >
-              {engagements.map(e => (
-                <option key={e.id} value={e.id}>{e.engagement_number} - {e.title}</option>
-              ))}
-            </select>
-          </div>
+          <EngagementPickerBar
+            idPrefix="report"
+            engagements={engagements}
+            value={selectedEngId}
+            onChange={(id) => {
+              setSelectedEngId(id);
+              const engObj = engagements.find(eng => eng.id.toString() === id.toString());
+              if (engObj) setReportTitle(`Audit Report for ${engObj.title}`);
+            }}
+            label={t('selectAuditEngagement')}
+          />
 
           <div className="form-group-row">
             <div className="form-group">

@@ -24,6 +24,24 @@ class AuditUniverse(models.Model):
     code = models.CharField(max_length=50, unique=True)
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+    region = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        limit_choices_to={'unit_type': Department.REGION},
+        help_text='EEU region this entity sits in, independent of department.',
+    )
+    service_center = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        limit_choices_to={'unit_type': Department.SERVICE_CENTER},
+        help_text='Customer service center this entity sits in, if any.',
+    )
     directorate = models.ForeignKey(
         Department,
         on_delete=models.SET_NULL,
@@ -168,6 +186,24 @@ class AuditEngagement(models.Model):
     engagement_number = models.CharField(max_length=50, unique=True)
     engagement_type = models.CharField(max_length=50, choices=ENGAGEMENT_TYPE_CHOICES, default='financial')
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+    region = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        limit_choices_to={'unit_type': Department.REGION},
+        help_text='EEU region being audited, independent of department.',
+    )
+    service_center = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        limit_choices_to={'unit_type': Department.SERVICE_CENTER},
+        help_text='Customer service center being audited, if any.',
+    )
     directorate = models.ForeignKey(
         Department,
         on_delete=models.SET_NULL,
@@ -238,6 +274,24 @@ class Project(models.Model):
         null=True,
         blank=True,
         help_text='EEU Projects Portfolio Management node (or owning unit) for this project.',
+    )
+    region = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        limit_choices_to={'unit_type': Department.REGION},
+        help_text='EEU region this project is delivered in, independent of department.',
+    )
+    service_center = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        limit_choices_to={'unit_type': Department.SERVICE_CENTER},
+        help_text='Customer service center this project is delivered at, if any.',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

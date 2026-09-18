@@ -12,7 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.accounts.models import AuditTrail, Role
+from apps.accounts.models import AuditTrail, Department, Role
 from apps.audit_planning.models import (
     AuditEngagement, AuditPlan, AuditTeamMember, AuditUniverse, Project,
 )
@@ -837,3 +837,88 @@ class AuditEngagementScopingTest(RoleFixtureMixin, TestCase):
             f'{ENGAGEMENTS_URL}{self.other_dept.id}/'
         )
         self.assertEqual(response.status_code, 404)
+
+
+class OrgScopeSplitTest(RoleFixtureMixin, TestCase):
+    """Department, region and service center are three independent scopes.
+
+    The picker used to store a single node of the corporate tree, so choosing a
+    region or a service center *overwrote* the department — and because every
+    region hangs off Region Coordination, picking Finance and then Adama Region
+    left the department reading "Region Coordination". These pin the behaviour
+    that replaced it: all three survive together.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.plan = make_plan(created_by=self.manager)
+        self.coordination = Department.objects.create(
+            name='Region Coordination', code='RGN Coordination',
+            unit_type=Department.CORPORATE,
+        )
+        # Fixture department is "Finance <seq>" — the case from the report.
+        self.region = Department.objects.create(
+            name='Adama Region', code='RGN-BA',
+            unit_type=Department.REGION, parent=self.coordination,
+        )
+        self.center = Department.objects.create(
+            name='Adama CSC No.1', code='CSC-BA01',
+            unit_type=Department.SERVICE_CENTER, parent=self.region,
+        )
+
+    def create_engagement(self, **overrides):
+        payload = {
+            'plan': self.plan.id,
+            'title': 'Revenue Assurance Audit',
+            'department': self.department.id,
+            'region': self.region.id,
+            'service_center': self.center.id,
+        }
+        payload.update(overrides)
+        return self.as_user(self.manager).post(ENGAGEMENTS_URL, payload, format='json')
+
+    def test_a_region_does_not_replace_the_department(self):
+        response = self.create_engagement()
+        self.assertEqual(response.status_code, 201, response.data)
+        # The point of the whole change: Finance is still the department.
+        self.assertEqual(response.data['department'], self.department.id)
+        self.assertEqual(response.data['region'], self.region.id)
+        self.assertEqual(response.data['service_center'], self.center.id)
+
+    def test_the_three_names_come_back_for_display(self):
+        response = self.create_engagement()
+        engagement = AuditEngagement.objects.get(pk=response.data['id'])
+        self.assertEqual(engagement.department.name, self.department.name)
+        self.assertEqual(response.data['department_name'], self.department.name)
+        self.assertEqual(response.data['region_name'], 'Adama Region')
+        self.assertEqual(response.data['service_center_name'], 'Adama CSC No.1')
+
+    def test_department_alone_is_still_valid(self):
+        """Region and service center are optional — most records set neither."""
+        response = self.create_engagement(region=None, service_center=None)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertIsNone(response.data['region'])
+        # A null relation must yield a null name, not a dropped key: the
+        # tables read `*_name` directly.
+        self.assertIsNone(response.data['region_name'])
+
+    def test_clearing_the_region_leaves_the_department_alone(self):
+        created = self.create_engagement()
+        engagement_id = created.data['id']
+        response = self.as_user(self.manager).patch(
+            f'{ENGAGEMENTS_URL}{engagement_id}/',
+            {'region': None, 'service_center': None}, format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        engagement = AuditEngagement.objects.get(pk=engagement_id)
+        self.assertIsNone(engagement.region)
+        self.assertEqual(engagement.department_id, self.department.id)
+
+    def test_the_scopes_are_independently_filterable(self):
+        created = self.create_engagement()
+        response = self.as_user(self.manager).get(
+            ENGAGEMENTS_URL, {'region': self.region.id},
+        )
+        self.assertEqual(response.status_code, 200)
+        ids = [row['id'] for row in response.data['results']]
+        self.assertIn(created.data['id'], ids)
