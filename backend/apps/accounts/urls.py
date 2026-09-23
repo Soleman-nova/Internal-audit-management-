@@ -10,6 +10,10 @@ router.register('audit-trail', views.AuditTrailViewSet, basename='audittrail')
 
 urlpatterns = [
     path('login/', views.LoginView.as_view(), name='auth-login'),
+    # Additive to login/ above, not a replacement — the employee-ID/password flow
+    # stays available so a Logto outage (or an account Logto does not know about)
+    # is not a lockout.
+    path('logto/exchange/', views.LogtoExchangeView.as_view(), name='auth-logto-exchange'),
     path('logout/', views.LogoutView.as_view(), name='auth-logout'),
     path('change-password/', views.ChangePasswordView.as_view(), name='auth-change-password'),
     path('profile/', views.ProfileView.as_view(), name='auth-profile'),

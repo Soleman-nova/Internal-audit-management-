@@ -12,6 +12,7 @@
     "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@logto/react": "^4.0.15",
     "@tailwindcss/vite": "^4.3.2",
     "axios": "^1.16.1",
     "lucide-react": "^1.16.0",

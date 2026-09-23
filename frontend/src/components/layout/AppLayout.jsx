@@ -205,6 +205,8 @@ function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  
+
   // On a narrow viewport the drawer sits on top of the page, so tapping a nav
   // link would otherwise leave it covering the page it just opened. Checked at
   // navigation time rather than through a resize listener.
@@ -266,6 +268,15 @@ function AppLayout() {
     loadNotifications();
   }, [loadNotifications, navigate]);
 
+  // One call, because `auth.logout()` already ends the Logto session when there is
+  // one: it clears the local session and then hands off to
+  // `signOut(postSignOutRedirectUri)` — see AuthContext.jsx. Calling `signOut` here
+  // as well would run it twice, and for a *local* login it would drag someone
+  // through Logto's redirect on the way out of a service they never signed into.
+  //
+  // It lives in AuthContext rather than here because `useLogto()` throws when no
+  // <LogtoProvider> is mounted, and this layout renders in both configurations.
+  // The provider is conditional; this component is not.
   const handleLogout = () => {
     auth.logout();
   };

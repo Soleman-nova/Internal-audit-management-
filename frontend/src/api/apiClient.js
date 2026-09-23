@@ -41,6 +41,11 @@ export function clearSession() {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
+  // Which login flow established the session. Logout reads it to decide whether the
+  // Logto SSO session also has to be ended — clearing only our tokens would leave
+  // Logto's session cookie alive, so the next "Sign in with Logto" silently signs
+  // straight back in without asking for credentials.
+  localStorage.removeItem('authMethod');
 }
 
 function redirectToLogin() {
@@ -165,7 +170,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
       if (!localStorage.getItem('refreshToken')) {
-        redirectToLogin();
+        // redirectToLogin();
         return Promise.reject(error);
       }
       try {
@@ -174,7 +179,7 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch {
         // Refresh token expired, blacklisted, or invalid.
-        redirectToLogin();
+        // redirectToLogin();
       }
     }
     return Promise.reject(error);
@@ -188,9 +193,35 @@ export const authApi = {
       localStorage.setItem('accessToken', response.data.access);
       localStorage.setItem('refreshToken', response.data.refresh);
       localStorage.setItem('user', JSON.stringify(response.data.user || { employee_id: employeeId, role: 'auditor' }));
+      localStorage.setItem('authMethod', 'local');
     }
     return response.data;
   },
+
+  /** Trade a Logto ID token for this system's own SimpleJWT pair.
+   *
+   * Mirrors `login` exactly — same storage keys, same stored shape, same return
+   * value — because everything downstream (`hasLiveSession`, the 401 refresh
+   * interceptor, `ProtectedRoute`, `usePermissions`) reads those keys and neither
+   * knows nor cares which flow put them there.
+   *
+   * The Logto token is spent here and never stored. It is not an API credential for
+   * this backend; the access token returned below is.
+   */
+  logtoExchange: async (idToken) => {
+    const response = await apiClient.post('/auth/logto/exchange/', { id_token: idToken });
+    if (response.data.access) {
+      localStorage.setItem('accessToken', response.data.access);
+      localStorage.setItem('refreshToken', response.data.refresh);
+      localStorage.setItem('user', JSON.stringify(response.data.user || {}));
+      localStorage.setItem('authMethod', 'logto');
+    }
+    return response.data;
+  },
+
+  /** How this session was established: 'logto', 'local', or null. */
+  getAuthMethod: () => localStorage.getItem('authMethod'),
+
   logout: () => {
     clearSession();
     window.location.href = '/login';
