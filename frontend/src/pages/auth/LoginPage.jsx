@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLogto } from '@logto/react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { isLogtoConfigured, redirectUri } from '../../auth/logtoConfig';
 import {
   User, Lock, Eye, EyeOff, LogIn, Zap, ChevronRight,
   ShieldCheck, Shield, BarChart2, Users,
@@ -19,7 +21,7 @@ const DEMO_ROLES = [
 /* ======================================================================
    DEMO BUTTON Component
 ====================================================================== */
-function DemoButton({ role, loading, active, onClick }) {
+function DemoButton({ role, loading, active, onClick}) {
   const [hov, setHov] = useState(false);
   return (
     <button
@@ -51,6 +53,86 @@ function DemoButton({ role, loading, active, onClick }) {
         <span className="text-[11px] text-slate-400 leading-tight">{role.desc}</span>
       </span>
       <ChevronRight size={13} className="text-slate-400" />
+    </button>
+  );
+}
+
+/* ======================================================================
+   LOGTO SSO BUTTON
+
+   Its own component rather than a useLogto() call inside LoginPage: that hook
+   throws when there is no <LogtoProvider> above it, and LoginPage renders
+   whether or not Logto is configured. Rendering this only under
+   `isLogtoConfigured` means the hook is never called without a provider.
+====================================================================== */
+
+/**
+ * How long to wait for Logto to start the redirect before giving up on it.
+ *
+ * `signIn()` fetches Logto's OIDC discovery document before it can send the browser
+ * anywhere, and that fetch carries no timeout of its own. Against an unreachable
+ * Logto it never settles — the button stays disabled on "Redirecting…" with nothing
+ * said, and the only way out is a page reload. A working instance redirects in well
+ * under a second, so this is generous.
+ */
+const SIGN_IN_TIMEOUT_MS = 15000;
+
+function LogtoSignInButton({ onError }) {
+  const { signIn } = useLogto();
+  const [hov, setHov] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const handleClick = async () => {
+    setBusy(true);
+
+    // Set by the timer below, and read in `catch` so a promise that rejects only
+    // once we have already given up does not overwrite the message with a worse one.
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      setBusy(false);
+      onError?.(
+        'The sign-in service did not respond. Check that Logto is reachable, '
+        + 'or sign in with your Employee ID and password below.'
+      );
+    }, SIGN_IN_TIMEOUT_MS);
+
+    try {
+      // The derived redirect URI, never a literal — the SDK keeps the PKCE
+      // verifier in the initiating origin's storage, so a hardcoded origin
+      // breaks the exchange whenever the app is opened from anywhere else.
+      await signIn(redirectUri);
+      // Reached only when signIn returned without navigating away, which the
+      // successful path does not do — it leaves the page.
+    } catch (err) {
+      if (!timedOut) {
+        onError?.(err.response?.data?.detail || err.message || 'Could not reach the sign-in service.');
+      }
+    } finally {
+      clearTimeout(timer);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      id="logto-signin-btn"
+      type="button"
+      onClick={handleClick}
+      disabled={busy}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      className="w-full h-[50px] rounded-[10px] text-[14px] flex items-center justify-center gap-2.5 transition-all duration-150 font-[inherit] cursor-pointer disabled:cursor-not-allowed"
+      style={{
+        background: hov ? '#eef4ff' : '#ffffff',
+        border: `1.5px solid ${hov ? '#24406e' : '#cbd5e1'}`,
+        color: '#1b2f52',
+        fontWeight: 600,
+        boxShadow: hov ? '0 2px 10px rgba(30,64,175,0.12)' : 'none',
+      }}
+    >
+      <ShieldCheck size={18} strokeWidth={2} />
+      <span>{busy ? 'Redirecting…' : 'Sign in with Logto'}</span>
     </button>
   );
 }
@@ -153,6 +235,22 @@ function LoginPage() {
             </svg>
             <span>{error}</span>
           </div>
+        )}
+
+        {/* SSO — additive to the form below, not a replacement. Keeping the local
+            login working means a Logto outage is not a lockout, and the seeded
+            demo accounts (and the Playwright suite that drives them) still work. */}
+        {isLogtoConfigured && (
+          <>
+            <LogtoSignInButton onError={setError} />
+            <div className="flex items-center gap-3 my-4">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-[11.5px] font-semibold text-gray-400 tracking-[0.06em]">
+                OR SIGN IN WITH USER ID
+              </span>
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+          </>
         )}
 
         <form onSubmit={handleLogin} className="mt-1">

@@ -39,6 +39,14 @@ python-docx==1.2.0    # Word
 # 'import_export' is in INSTALLED_APPS.
 django-import-export==4.4.1
 
+# --- SSO (Logto) ---
+# Backs PyJWT's ES384 verification. Logto signs its ID tokens with ECDSA P-384 and
+# PyJWT needs this to check the signature at all — without it `PyJWKClient` raises
+# rather than verifying, so a Logto login would fail closed with a 500 instead of
+# being rejected cleanly. PyJWT itself arrives transitively via simplejwt; it is
+# pinned implicitly there and deliberately not repeated here.
+cryptography==46.0.3
+
 # --- Background jobs ---
 # Not wired up yet: report generation still runs on a daemon thread in
 # apps/reports/jobs.py, with no broker configured and no task defined. Pinned

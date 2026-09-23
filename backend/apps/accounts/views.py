@@ -1,6 +1,8 @@
 import datetime
 import logging
 
+import jwt
+from jwt import PyJWKClientConnectionError
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -10,6 +12,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
+from django.conf import settings
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -29,6 +32,10 @@ from apps.common.permissions import (
 )
 from apps.common.audit_utils import log_audit
 from apps.common.date_utils import month_starts, month_end
+from .logto import (
+    LogtoNotConfigured, identity_candidates, jwt_header,
+    resolve_or_provision_user, verify_logto_id_token,
+)
 from .serializers import (
     UserSerializer, UserCreateSerializer, LoginSerializer,
     DepartmentSerializer, AuditTrailSerializer, ProfileSerializer
@@ -54,6 +61,137 @@ class LoginView(generics.GenericAPIView):
         refresh = RefreshToken.for_user(user)
         # Log the login
         log_audit(request, 'LOGIN', user, user=user)
+        return Response({
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': UserSerializer(user, context={'request': request}).data,
+        })
+
+
+class LogtoExchangeView(generics.GenericAPIView):
+    """Exchange a verified Logto ID token for this system's SimpleJWT pair.
+
+    Deliberately not a second DRF authentication backend. The Logto token is
+    consumed here and never used as an API credential — what comes back is exactly
+    what ``LoginView`` returns, so every existing view, permission class, and the
+    frontend's whole refresh flow keep working with nothing changed on their side.
+
+    An identity with no matching account is provisioned on the spot, keyed on the
+    ``custom_data.EEUID`` claim and always with the lowest-privilege role — see
+    ``logto.resolve_or_provision_user``. Promoting anyone to a real role stays a
+    Django-side, admin-side action.
+
+    The token arrives from the browser, which by design does not verify it; the
+    signature check that used to happen client-side happens here instead, against
+    Logto's JWKS.
+    """
+    permission_classes = [AllowAny]
+    # Unauthenticated, and the request body carries a credential — the same shape as
+    # LoginView, so it gets the same 30/min scope rather than the looser anon rate.
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'login'
+
+    def post(self, request):
+        # ── Step-wise tracing ──────────────────────────────────────────────────
+        # Every branch below is reachable from the browser and several of them look
+        # identical from the client — a 401 for a forged token and a 401 for a venv
+        # missing `cryptography` are the same response. These lines say which step
+        # was reached and what it saw, so the answer is in the console/audit log
+        # rather than inferred. Grep for `[logto-exchange]`.
+        #
+        # INFO, not print: `apps` is configured at INFO with console and rotating-file
+        # handlers in settings.LOGGING, so these land in both. The token's *contents*
+        # are never logged — it is a credential; only its shape is.
+        logger.info('[logto-exchange] step 1/6 received: content_type=%s keys=%s',
+                    request.content_type, sorted(request.data.keys()))
+
+        raw_token = request.data.get('id_token')
+        if not raw_token:
+            logger.warning('[logto-exchange] step 1/6 FAILED: no id_token in body')
+            return Response(
+                {'detail': 'An id_token is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # The header is not secret (it is `alg` and `kid`) and is the fastest way to
+        # spot the two classic mismatches: a token signed with an algorithm we do not
+        # allow, and a `kid` the JWKS does not contain.
+        logger.info('[logto-exchange] step 2/6 id_token present: %d chars, header=%s',
+                    len(raw_token), jwt_header(raw_token))
+
+        logger.info('[logto-exchange] step 3/6 config: endpoint=%r app_id=%r issuer=%r',
+                    settings.LOGTO_ENDPOINT, settings.LOGTO_APP_ID, settings.LOGTO_ISSUER)
+
+        try:
+            claims = verify_logto_id_token(raw_token)
+        except LogtoNotConfigured:
+            logger.warning('[logto-exchange] step 4/6 FAILED: LOGTO_ENDPOINT/LOGTO_APP_ID unset')
+            return Response(
+                {'detail': 'Logto sign-in is not configured on this server.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except PyJWKClientConnectionError as exc:
+            # Must be caught *before* PyJWTError, which it subclasses. Verifying a
+            # real token needs a JWKS fetch from Logto, so an unreachable Logto
+            # would otherwise fall into the branch below and tell the user their
+            # token is bad — blaming them for our outage, and sending whoever
+            # debugs it off to inspect tokens instead of the network.
+            logger.error('[logto-exchange] step 4/6 FAILED: JWKS unreachable at %s/jwks (%s)',
+                         settings.LOGTO_ISSUER, exc)
+            return Response(
+                {'detail': 'The sign-in service is unreachable. Try the employee ID '
+                           'and password form, or try again shortly.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except jwt.PyJWTError as exc:
+            # The exception text is safe to log and useless to a client — telling a
+            # caller *why* their forgery was rejected is free help, so they get one
+            # flat message and the detail stays in our logs.
+            logger.warning('[logto-exchange] step 4/6 FAILED: %s', exc)
+            return Response(
+                {'detail': 'Logto token could not be verified.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # `iss`/`aud` are echoed because they are the two that jwt.decode above has
+        # already proved equal to our config — so a rejection is never about these,
+        # and printing them stops the next debugging session re-checking them.
+        logger.info('[logto-exchange] step 4/6 VERIFIED: sub=%s iss=%s aud=%s exp=%s',
+                    claims.get('sub'), claims.get('iss'), claims.get('aud'), claims.get('exp'))
+
+        logger.info('[logto-exchange] step 5/6 identity candidates=%s',
+                    identity_candidates(claims))
+
+        user, provisioned = resolve_or_provision_user(claims)
+        if user is None:
+            logger.warning('[logto-exchange] step 5/6 FAILED: no active user for sub=%s',
+                           claims.get('sub'))
+            return Response(
+                {
+                    'detail': 'Your Logto account is not linked to an active user in '
+                              'this system. Contact an administrator.'
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        logger.info('[logto-exchange] step 5/6 user=%s employee_id=%s role=%s provisioned=%s',
+                    user.pk, user.employee_id, user.role, provisioned)
+
+        if provisioned:
+            # An account appearing in the audit system is precisely the kind of event
+            # the audit trail exists to record — and this one was not created by an
+            # administrator, so without this entry the row would have no provenance
+            # at all. Attributed to the new account itself so the entry is reachable
+            # by filtering the trail on that user. Logged before the LOGIN below.
+            log_audit(
+                request, 'CREATE', user, user=user,
+                object_repr=f'Auto-provisioned from Logto as {user.role}: {user.employee_id}',
+            )
+
+        refresh = RefreshToken.for_user(user)
+        log_audit(request, 'LOGIN', user, user=user)
+        logger.info('[logto-exchange] step 6/6 ISSUED SimpleJWT for user=%s (%s) role=%s',
+                    user.pk, user.employee_id, user.role)
         return Response({
             'access': str(refresh.access_token),
             'refresh': str(refresh),

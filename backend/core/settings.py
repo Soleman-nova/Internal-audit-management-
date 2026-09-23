@@ -192,6 +192,28 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
+# ── Logto SSO ──
+# Single sign-on is additive: Logto proves *who* someone is, and the SimpleJWT pair
+# issued in exchange (apps/accounts/views.py, LogtoExchangeView) is still what every
+# API request carries. Roles stay Django's call, so SIMPLE_JWT above is unchanged.
+#
+# Leaving LOGTO_ENDPOINT empty is a supported state, not a broken one — it is how an
+# environment without Logto (CI, a fresh clone, a demo box) runs. The exchange
+# endpoint answers 503 in that case, which keeps "not configured here" distinct from
+# "your token is bad".
+LOGTO_ENDPOINT = config('LOGTO_ENDPOINT', default='')
+LOGTO_APP_ID = config('LOGTO_APP_ID', default='')
+
+# Logto's OIDC issuer is always <endpoint>/oidc, and the ID token's `iss` must match
+# it exactly. Derived rather than configured separately so the two cannot drift into
+# a mismatch that only shows up as every sign-in failing.
+LOGTO_ISSUER = f"{LOGTO_ENDPOINT.rstrip('/')}/oidc" if LOGTO_ENDPOINT else ''
+
+# Which claim carries the EEU employee ID. Empty means "try the known candidates in
+# order" (username, then custom_data.employee_id, then email) — see
+# apps/accounts/logto.py. Set it only when a deployment needs to pin one.
+LOGTO_IDENTITY_CLAIM = config('LOGTO_IDENTITY_CLAIM', default='')
+
 # ── CORS ──
 # Env-driven so a deployment does not require editing this file. The default is
 # the Vite dev server plus the ports the frontend has historically used.

@@ -13,6 +13,7 @@ import { hasCapability, getCurrentUser, CAPABILITIES } from './hooks/usePermissi
 // AppLayout is *not* lazy: it is the shell around every authenticated route, so
 // splitting it would only add a round trip before anything can render.
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
+const LogtoCallbackPage = lazy(() => import('./pages/auth/LogtoCallbackPage'));
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'));
 const PlanningPage = lazy(() => import('./pages/planning/PlanningPage'));
 const ExecutionPage = lazy(() => import('./pages/execution/ExecutionPage'));
@@ -65,46 +66,50 @@ function App() {
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          {/* Outside ProtectedRoute on purpose — this route exists to *create* a
+              session, so requiring a live one would bounce the user away before
+              the exchange could run. */}
+          <Route path="/callback" element={<LogtoCallbackPage />} />
 
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="planning" element={<PlanningPage />} />
-            <Route path="execution" element={<ExecutionPage />} />
-            <Route path="findings" element={<FindingsPage />} />
-            <Route path="findings/:id" element={<FindingDetailPage />} />
-            <Route path="risk" element={<RiskAssessmentPage />} />
-            <Route path="capa" element={<FollowUpPage />} />
-            <Route path="capa/:id" element={<CapaDetailPage />} />
-            <Route path="reports" element={<ReportsPage />} />
             <Route
-              path="users"
+              path="/"
               element={
-                <CapabilityRoute capability={CAPABILITIES.MANAGE_USERS}>
-                  <UsersPage />
-                </CapabilityRoute>
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
               }
-            />
-            <Route
-              path="audit-trail"
-              element={
-                <CapabilityRoute capability={CAPABILITIES.VIEW_AUDIT_TRAIL}>
-                  <AuditTrailPage />
-                </CapabilityRoute>
-              }
-            />
-          </Route>
+            >
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="planning" element={<PlanningPage />} />
+              <Route path="execution" element={<ExecutionPage />} />
+              <Route path="findings" element={<FindingsPage />} />
+              <Route path="findings/:id" element={<FindingDetailPage />} />
+              <Route path="risk" element={<RiskAssessmentPage />} />
+              <Route path="capa" element={<FollowUpPage />} />
+              <Route path="capa/:id" element={<CapaDetailPage />} />
+              <Route path="reports" element={<ReportsPage />} />
+              <Route
+                path="users"
+                element={
+                  <CapabilityRoute capability={CAPABILITIES.MANAGE_USERS}>
+                    <UsersPage />
+                  </CapabilityRoute>
+                }
+              />
+              <Route
+                path="audit-trail"
+                element={
+                  <CapabilityRoute capability={CAPABILITIES.VIEW_AUDIT_TRAIL}>
+                    <AuditTrailPage />
+                  </CapabilityRoute>
+                }
+              />
+            </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
     </BrowserRouter>
   );
 }
