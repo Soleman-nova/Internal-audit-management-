@@ -48,8 +48,64 @@ export function clearSession() {
   localStorage.removeItem('authMethod');
 }
 
+/** Whether the app is deliberately ending the session right now.
+ *
+ * Read by `redirectToLogin`, set by `beginSignOut` and cleared by
+ * `markSessionEstablished`. See `beginSignOut` for why it exists. */
+let signingOut = false;
+
+/** Announces that the session is being ended on purpose, so the 401 interceptor
+ *  stops treating the fallout as an expired session.
+ *
+ *  `logout()` clears the session *before* handing off to Logto — deliberately, so
+ *  that a Logto host which cannot be reached still leaves the user signed out
+ *  here. The cost is that the app is still mounted while it happens, and its
+ *  in-flight requests now carry no access token, so they come back 401 in a
+ *  burst. A 401 means "your session is over" to the interceptor below, which
+ *  answers it by clearing the session and navigating to /login — and that
+ *  navigation races the SDK's navigation to Logto's end-session endpoint. Both
+ *  land on /login, so the sign-out *looks* correct either way; what differs is
+ *  whether Logto's own session was ended, and losing that race leaves its session
+ *  cookie alive, so the next "Sign in with Logto" completes with no credential
+ *  prompt. This flag is what stops the interceptor competing for that navigation.
+ */
+export function beginSignOut() {
+  signingOut = true;
+}
+
+/** A new session makes the interceptor's redirect safe again.
+ *
+ * Module state outlives an SPA navigation, and a sign-out that never reaches
+ * Logto finishes on /login *without* a page load — so without this reset the
+ * guard above would outlive the sign-out it was set for and leave a later
+ * expired session with no redirect at all. That is precisely the stranded-user
+ * bug restoring `redirectToLogin` fixed, so the reset is load-bearing rather
+ * than tidiness.
+ */
+function markSessionEstablished() {
+  signingOut = false;
+}
+
+/** Drop the dead session and send the user to /login — except when they are
+ *  already there.
+ *
+ *  The guard is not politeness, it is what makes restoring this call safe. A 401
+ *  has two very different causes: a session that expired, and a *sign-in
+ *  attempt* that was refused. The second reaches here too — `/auth/login/`
+ *  answers 401 for a wrong password and stores nothing — and the browser is
+ *  already on /login. Navigating (a full page load) would wipe the inline
+ *  "Invalid Employee ID or password" message before it could be read, and on
+ *  /login it would be a reload loop. /callback is excluded for the same reason:
+ *  it renders its own exchange error rather than a redirect.
+ */
 function redirectToLogin() {
   clearSession();
+  // A sign-out already in progress owns the navigation. Clearing still happens —
+  // that is the whole point of clearing early — but navigating here would fight
+  // the SDK for it. See `beginSignOut`.
+  if (signingOut) return;
+  const { pathname } = window.location;
+  if (pathname === '/login' || pathname === '/callback') return;
   window.location.href = '/login';
 }
 
@@ -170,7 +226,11 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
       if (!localStorage.getItem('refreshToken')) {
-        // redirectToLogin();
+        // No refresh token: either a session that has fully expired, or a
+        // sign-in attempt that was refused. `redirectToLogin` tells them apart
+        // by where the browser already is, so a failed login keeps its inline
+        // error instead of reloading it away.
+        redirectToLogin();
         return Promise.reject(error);
       }
       try {
@@ -178,8 +238,8 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return apiClient(originalRequest);
       } catch {
-        // Refresh token expired, blacklisted, or invalid.
-        // redirectToLogin();
+        // Refresh token expired, blacklisted, or invalid — the session is over.
+        redirectToLogin();
       }
     }
     return Promise.reject(error);
@@ -194,6 +254,7 @@ export const authApi = {
       localStorage.setItem('refreshToken', response.data.refresh);
       localStorage.setItem('user', JSON.stringify(response.data.user || { employee_id: employeeId, role: 'auditor' }));
       localStorage.setItem('authMethod', 'local');
+      markSessionEstablished();
     }
     return response.data;
   },
@@ -215,6 +276,7 @@ export const authApi = {
       localStorage.setItem('refreshToken', response.data.refresh);
       localStorage.setItem('user', JSON.stringify(response.data.user || {}));
       localStorage.setItem('authMethod', 'logto');
+      markSessionEstablished();
     }
     return response.data;
   },

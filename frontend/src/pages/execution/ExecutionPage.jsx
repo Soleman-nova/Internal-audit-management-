@@ -1,20 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { executionApi, planningApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import useAsyncData from '../../hooks/useAsyncData';
 import { useI18n } from '../../context/I18nContext';
 import { validateForm, validators, hasErrors } from '../../utils/validation';
 import Modal from '../../components/ui/Modal';
-import Badge from '../../components/ui/Badge';
-import Spinner from '../../components/ui/Spinner';
-import EmptyState from '../../components/ui/EmptyState';
-import FormField from '../../components/ui/FormField';
+import FormErrorSummary from '../../components/ui/FormErrorSummary';
 import EngagementPickerBar from '../../components/ui/EngagementPickerBar';
 import {
   ListTodo, Plus, Paperclip, Upload, Eye, CheckCircle2,
-  ClipboardList, ShieldCheck, Edit3, Trash2, ChevronDown, Download
+  ClipboardList, ShieldCheck, Edit3, Trash2, Download
 } from 'lucide-react';
+
+/**
+ * Which engagement a `/execution?...` deep link should open.
+ *
+ * Notifications link here as `?program=<id>` or `?engagement=<id>`, so a program
+ * id is resolved back to the engagement that owns it rather than defaulting to
+ * whatever engagement happens to be first. A stale or out-of-scope link is not
+ * worth an error toast — it just falls through to the default.
+ *
+ * Module-level rather than a component closure: the loader below reads it, and
+ * the compiler flags a `const` used at a call site textually before its own
+ * declaration (the same error the old `useEffect` calling a later-declared
+ * `fetchEngagements` produced).
+ */
+async function resolveDeepLinkEngagement(engList, focusEngagementId, focusProgramId) {
+  const has = (id) => engList.some(e => String(e.id) === id);
+  if (focusEngagementId && has(focusEngagementId)) return focusEngagementId;
+  if (focusProgramId) {
+    try {
+      const prog = await executionApi.getProgram(focusProgramId);
+      if (prog?.engagement && has(String(prog.engagement))) {
+        return String(prog.engagement);
+      }
+    } catch {
+      // Fall through to the default engagement.
+    }
+  }
+  return String(engList[0].id);
+}
 
 function ExecutionPage() {
   const toast = useToast();
@@ -23,30 +50,21 @@ function ExecutionPage() {
   const [searchParams] = useSearchParams();
   const focusProgramId = searchParams.get('program');
   const focusEngagementId = searchParams.get('engagement');
-  const [engagements, setEngagements] = useState([]);
+  // The engagement the user has picked, held as an id and left empty until they
+  // touch the picker. Anything that has to act on "the engagement on screen"
+  // reads the resolved `activeEngId` below instead: before that first touch the
+  // raw state is '' while the page is displaying the deep-linked one.
   const [selectedEngId, setSelectedEngId] = useState('');
-  const [program, setProgram] = useState(null);
-  const [procedures, setProcedures] = useState([]);
-  // Server totals rather than this page's slice — the section headings show
-  // them, and `procedures.length` stops at DRF's PAGE_SIZE.
-  const [procedureCount, setProcedureCount] = useState(0);
-  const [proceduresTruncated, setProceduresTruncated] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
 
   // Current user for role-based UI
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const isAuditor = ['auditor', 'audit_manager'].includes(currentUser.role);
-  const isSupervisor = ['supervisor', 'audit_manager', 'admin'].includes(currentUser.role);
 
   // Working Papers
   const [uploadFile, setUploadFile] = useState(null);
   const [wpTitle, setWpTitle] = useState('');
   const [wpRef, setWpRef] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [workingPapers, setWorkingPapers] = useState([]);
-  const [workingPaperCount, setWorkingPaperCount] = useState(0);
-  const [workingPapersTruncated, setWorkingPapersTruncated] = useState(false);
 
   // ── Audit Program Modal ──
   const [showProgramModal, setShowProgramModal] = useState(false);
@@ -73,90 +91,118 @@ function ExecutionPage() {
   const [wpReviewNotes, setWpReviewNotes] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  useEffect(() => {
-    fetchEngagements();
-  }, []);
-
-  const fetchEngagements = async () => {
-    try {
+  // ─────────────────────────────────────────────────────────────
+  // Data loading
+  // ─────────────────────────────────────────────────────────────
+  // Two independent hooks rather than one fetch chained onto the end of another.
+  // Previously `fetchEngagements` ended by calling `fetchProgramAndProcedures`,
+  // which set six pieces of state between its own awaits, none of them
+  // cancellable or versioned — switching engagement twice in quick succession
+  // could let the slower, earlier response land last and repaint the screen with
+  // the program the user had already left, with nothing to hint at it.
+  const { data: engagementsData, loading: engagementsLoading } = useAsyncData(
+    async () => {
       const page = await planningApi.getEngagements();
-      const engList = page.items;
-      setEngagements(engList);
-      if (engList.length === 0) return;
-      // Notifications deep-link here as /execution?program=<id> or
-      // ?engagement=<id>. Resolve that to an engagement before defaulting to
-      // the first one, so the link lands on the record it named.
-      const targetEngId = await resolveDeepLinkEngagement(engList);
-      setSelectedEngId(targetEngId);
-      fetchProgramAndProcedures(targetEngId);
-    } catch (err) {
-      toast.error('Failed to load engagements');
-    }
-  };
+      const items = page.items ?? [];
+      // Which engagement to open on — the deep link's target, else the first —
+      // rides back as part of the same value. Returning it from the loader is
+      // what keeps it out of an effect that would write it back into a
+      // dependency.
+      const defaultId = items.length > 0
+        ? await resolveDeepLinkEngagement(items, focusEngagementId, focusProgramId)
+        : '';
+      return { items, defaultId };
+    },
+    [focusEngagementId, focusProgramId],
+    { onError: () => toast.error(t('engagementsLoadFailed')) },
+  );
 
-  const resolveDeepLinkEngagement = async (engList) => {
-    const has = (id) => engList.some(e => e.id.toString() === id);
-    if (focusEngagementId && has(focusEngagementId)) return focusEngagementId;
-    if (focusProgramId) {
-      try {
-        const prog = await executionApi.getProgram(focusProgramId);
-        if (prog?.engagement && has(prog.engagement.toString())) {
-          return prog.engagement.toString();
-        }
-      } catch {
-        // A stale or out-of-scope link is not worth an error toast — just fall
-        // through to the default engagement.
-      }
-    }
-    return engList[0].id;
-  };
+  const engagements = engagementsData?.items ?? [];
+  // The resolved id, never the raw selection. The picker has to show the
+  // engagement whose program is on screen, and every write payload below has to
+  // file against that same engagement — posting `selectedEngId` while it is
+  // still '' would file a program or working paper against no engagement at
+  // all, a 400 that looks like the button is broken.
+  const activeEngId = selectedEngId || engagementsData?.defaultId || '';
 
-  const fetchProgramAndProcedures = async (engId) => {
-    setLoading(true);
-    try {
-      const progs = await executionApi.getPrograms({ engagement: engId });
+  const {
+    data: executionData,
+    loading: programLoading,
+    error: programError,
+    setData: setExecutionData,
+  } = useAsyncData(
+    async () => {
+      const progs = await executionApi.getPrograms({ engagement: activeEngId });
       const progList = Array.isArray(progs) ? progs : [];
-      if (progList.length > 0) {
-        const prog = progList[0];
-        setProgram(prog);
-        const [procs, wps] = await Promise.all([
-          executionApi.getProcedures({ program: prog.id }),
-          executionApi.getWorkingPapers({ engagement: engId }),
-        ]);
-        // Both return { items, count, hasMore } — the headings below render the
-        // server's total, which a bare array capped at PAGE_SIZE.
-        setProcedures(procs.items);
-        setProcedureCount(procs.count);
-        setProceduresTruncated(procs.hasMore);
-        setWorkingPapers(wps.items);
-        setWorkingPaperCount(wps.count);
-        setWorkingPapersTruncated(wps.hasMore);
-      } else {
-        setProgram(null);
-        setProcedures([]);
-        setProcedureCount(0);
-        setProceduresTruncated(false);
-        setWorkingPapers([]);
-        setWorkingPaperCount(0);
-        setWorkingPapersTruncated(false);
+      const prog = progList[0] ?? null;
+      // No program is a real answer, not a failure — it is what the page renders
+      // the "create audit program" prompt from. Returning the same shape either
+      // way means the render never has to tell "not loaded" from "none yet".
+      if (!prog) {
+        return {
+          program: null,
+          procedures: [], procedureCount: 0, proceduresTruncated: false,
+          workingPapers: [], workingPaperCount: 0, workingPapersTruncated: false,
+        };
       }
-    } catch (err) {
-      toast.error('Failed to load execution program');
-    } finally {
-      setLoading(false);
-    }
-  };
+      const [procs, wps] = await Promise.all([
+        executionApi.getProcedures({ program: prog.id }),
+        executionApi.getWorkingPapers({ engagement: activeEngId }),
+      ]);
+      // Both answer with `{ items, count, hasMore }`: the section headings render
+      // the server's total, which a bare array stops short of at DRF's PAGE_SIZE.
+      return {
+        program: prog,
+        procedures: procs.items,
+        procedureCount: procs.count,
+        proceduresTruncated: procs.hasMore,
+        workingPapers: wps.items,
+        workingPaperCount: wps.count,
+        workingPapersTruncated: wps.hasMore,
+      };
+    },
+    [activeEngId],
+    // `enabled` is load-bearing, not a nicety: `activeEngId` is '' until the
+    // engagements arrive, and an unfiltered request would return every program
+    // in the system.
+    { enabled: Boolean(activeEngId), onError: () => toast.error(t('executionLoadFailed')) },
+  );
+
+  // All seven values are read off the one composite the request returned, rather
+  // than each being its own `useState` that some handler had to keep in step by
+  // hand.
+  const program = executionData?.program ?? null;
+  const procedures = executionData?.procedures ?? [];
+  const procedureCount = executionData?.procedureCount ?? 0;
+  const proceduresTruncated = executionData?.proceduresTruncated ?? false;
+  const workingPapers = executionData?.workingPapers ?? [];
+  const workingPaperCount = executionData?.workingPaperCount ?? 0;
+  const workingPapersTruncated = executionData?.workingPapersTruncated ?? false;
+
+  // The last clause covers the gap between `activeEngId` becoming non-empty and
+  // the hook above flipping its own `loading` on: without it the "no audit
+  // program" prompt paints for a frame over an engagement that has one.
+  // `programError` keeps a failed load from spinning forever.
+  const loading = engagementsLoading || programLoading
+    || (Boolean(activeEngId) && executionData === null && !programError);
+
+  // Optimistic edits go through the hook's `setData`: each touches one slice of
+  // that composite, so merging into it is enough — no refetch to receive data
+  // the handler already has in hand.
+  const patchExecution = (patch) => setExecutionData(prev => ({ ...prev, ...patch }));
 
   const handleEngChange = (val) => {
+    // Setting the selection *is* the request now: `activeEngId` is the
+    // dependency of the load above, so re-picking the same engagement is a
+    // no-op rather than a redundant refetch.
     setSelectedEngId(val);
-    fetchProgramAndProcedures(val);
   };
 
   // ─────────────────────────────────────────────────────────────
   // Auditor: Create Audit Program
   // ─────────────────────────────────────────────────────────────
   const openCreateProgram = () => {
-    const selectedEng = engagements.find(e => e.id.toString() === selectedEngId.toString());
+    const selectedEng = engagements.find(e => String(e.id) === activeEngId);
     setProgramForm({
       title: selectedEng ? `Audit Program — ${selectedEng.title}` : '',
       objectives: selectedEng?.objectives || '',
@@ -178,14 +224,17 @@ function ExecutionPage() {
     setFormErrors({});
     setSavingProgram(true);
     try {
-      const payload = { ...programForm, engagement: selectedEngId };
+      // The resolved engagement, not `selectedEngId`: the picker only leaves ''
+      // once the user has touched it, so posting the raw state would file the
+      // program against no engagement on the path every user takes when the
+      // default is already the one they want.
+      const payload = { ...programForm, engagement: activeEngId };
       const res = await executionApi.createProgram(payload);
-      setProgram(res);
-      setProcedures([]);
+      patchExecution({ program: res, procedures: [], procedureCount: 0, proceduresTruncated: false });
       setShowProgramModal(false);
-      toast.success('Audit program created successfully!');
+      toast.success(t('executionProgramCreated'));
     } catch (err) {
-      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to create audit program';
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : t('executionProgramCreateFailed');
       toast.error(msg);
     } finally {
       setSavingProgram(false);
@@ -240,19 +289,23 @@ function ExecutionPage() {
       if (editingProc) {
         // PATCH — posting the form back with an `id` would create a duplicate.
         const res = await executionApi.updateProcedure(editingProc.id, procForm);
-        setProcedures(procedures.map(p => p.id === editingProc.id ? res : p));
-        toast.success('Procedure updated successfully');
+        patchExecution({
+          procedures: procedures.map(p => p.id === editingProc.id ? res : p),
+        });
+        toast.success(t('executionProcedureUpdated'));
       } else {
         // Create new
         const payload = { ...procForm, program: program.id };
         const res = await executionApi.createProcedure(payload);
-        setProcedures([...procedures, res]);
-        setProcedureCount(c => c + 1);
-        toast.success('Procedure created successfully');
+        patchExecution({
+          procedures: [...procedures, res],
+          procedureCount: procedureCount + 1,
+        });
+        toast.success(t('executionProcedureCreated'));
       }
       setShowProcModal(false);
     } catch (err) {
-      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to save procedure';
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : t('executionProcedureSaveFailed');
       toast.error(msg);
     } finally {
       setSavingProc(false);
@@ -263,11 +316,13 @@ function ExecutionPage() {
     if (!window.confirm(t('deleteProcedure'))) return;
     try {
       await executionApi.deleteProcedure(procId);
-      setProcedures(procedures.filter(p => p.id !== procId));
-      setProcedureCount(c => Math.max(0, c - 1));
-      toast.success('Procedure removed');
+      patchExecution({
+        procedures: procedures.filter(p => p.id !== procId),
+        procedureCount: Math.max(0, procedureCount - 1),
+      });
+      toast.success(t('executionProcedureRemoved'));
     } catch (err) {
-      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to delete procedure';
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : t('executionProcedureDeleteFailed');
       toast.error(msg);
     }
   };
@@ -282,12 +337,14 @@ function ExecutionPage() {
         : await executionApi.updateProcedure(procId, { status: newStatus });
       // The complete action returns a detail message, not the record, so fall
       // back to patching status locally when there is no object to merge.
-      setProcedures(procedures.map(p => (
-        p.id === procId ? { ...p, ...(res?.id ? res : { status: newStatus }) } : p
-      )));
-      toast.success(`Procedure status set to ${newStatus}`);
+      patchExecution({
+        procedures: procedures.map(p => (
+          p.id === procId ? { ...p, ...(res?.id ? res : { status: newStatus }) } : p
+        )),
+      });
+      toast.success(t('executionProcedureStatusSet', newStatus));
     } catch (err) {
-      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to update procedure status';
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : t('executionProcedureStatusFailed');
       toast.error(msg);
     }
   };
@@ -298,10 +355,10 @@ function ExecutionPage() {
   const handleSubmitProgram = async () => {
     try {
       await executionApi.submitForReview(program.id);
-      setProgram({ ...program, status: 'submitted' });
-      toast.success('Audit program submitted for supervisor review!');
+      patchExecution({ program: { ...program, status: 'submitted' } });
+      toast.success(t('executionProgramSubmitted'));
     } catch (err) {
-      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to submit program';
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : t('executionProgramSubmitFailed');
       toast.error(msg);
     }
   };
@@ -312,11 +369,11 @@ function ExecutionPage() {
   const handleApproveProgram = async () => {
     try {
       await executionApi.approveFieldwork(program.id);
-      setProgram({ ...program, status: 'approved' });
+      patchExecution({ program: { ...program, status: 'approved' } });
       setShowReviewModal(false);
-      toast.success('Audit program approved successfully!');
+      toast.success(t('executionProgramApproved'));
     } catch (err) {
-      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to approve program';
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : t('executionProgramApproveFailed');
       toast.error(msg);
     }
   };
@@ -332,16 +389,19 @@ function ExecutionPage() {
     formData.append('file', uploadFile);
     formData.append('title', wpTitle);
     formData.append('reference', wpRef);
-    formData.append('engagement', selectedEngId);
+    // Resolved, as above: `selectedEngId` is '' until the picker is touched.
+    formData.append('engagement', activeEngId);
     try {
       const response = await executionApi.uploadWorkingPaper(formData);
-      setWorkingPapers([response, ...workingPapers]);
-      setWorkingPaperCount(c => c + 1);
+      patchExecution({
+        workingPapers: [response, ...workingPapers],
+        workingPaperCount: workingPaperCount + 1,
+      });
       setWpTitle(''); setWpRef(''); setUploadFile(null);
-      toast.success('Working paper uploaded successfully!');
+      toast.success(t('executionWpUploaded'));
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
-      toast.error('Upload failed: ' + msg);
+      toast.error(t('executionWpUploadFailed', msg));
     } finally {
       setUploading(false);
     }
@@ -351,11 +411,13 @@ function ExecutionPage() {
     if (!window.confirm(t('removeWorkpaper', wp.title))) return;
     try {
       await executionApi.deleteWorkingPaper(wp.id);
-      setWorkingPapers(workingPapers.filter(x => x.id !== wp.id));
-      setWorkingPaperCount(c => Math.max(0, c - 1));
-      toast.success('Working paper removed from registry');
+      patchExecution({
+        workingPapers: workingPapers.filter(x => x.id !== wp.id),
+        workingPaperCount: Math.max(0, workingPaperCount - 1),
+      });
+      toast.success(t('executionWpRemoved'));
     } catch (err) {
-      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to remove working paper';
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : t('executionWpRemoveFailed');
       toast.error(msg);
     }
   };
@@ -363,8 +425,8 @@ function ExecutionPage() {
   const handleDownloadWp = async (wp) => {
     try {
       await executionApi.downloadWorkingPaper(wp.id, wp.title);
-    } catch (err) {
-      toast.error('Failed to download working paper');
+    } catch {
+      toast.error(t('executionWpDownloadFailed'));
     }
   };
 
@@ -382,29 +444,29 @@ function ExecutionPage() {
     setSubmittingReview(true);
     try {
       await executionApi.reviewWorkingPaper(reviewingWp.id, { review_notes: wpReviewNotes });
-      setWorkingPapers(workingPapers.map(wp =>
-        wp.id === reviewingWp.id
-          ? {
-              ...wp,
-              is_reviewed: true,
-              reviewed_by_name: currentUser.full_name || currentUser.username,
-              review_notes: wpReviewNotes,
-            }
-          : wp
-      ));
+      patchExecution({
+        workingPapers: workingPapers.map(wp =>
+          wp.id === reviewingWp.id
+            ? {
+                ...wp,
+                is_reviewed: true,
+                reviewed_by_name: currentUser.full_name || currentUser.username,
+                review_notes: wpReviewNotes,
+              }
+            : wp
+        ),
+      });
       setShowReviewWpModal(false);
       setReviewingWp(null);
       setWpReviewNotes('');
       toast.success(t('paperReviewed'));
     } catch (err) {
-      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : 'Failed to review working paper';
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : t('executionWpReviewFailed');
       toast.error(msg);
     } finally {
       setSubmittingReview(false);
     }
   };
-
-  const selectedEng = engagements.find(e => e.id.toString() === selectedEngId.toString());
 
   // Status badge color
   const programStatusBadge = (status) => {
@@ -420,7 +482,10 @@ function ExecutionPage() {
         <EngagementPickerBar
           idPrefix="active"
           engagements={engagements}
-          value={selectedEngId}
+          // The resolved id, not the raw selection: the picker has to show the
+          // engagement whose program is on screen, and that is the deep-linked
+          // (or first) one until the user picks otherwise.
+          value={activeEngId}
           onChange={handleEngChange}
           label={t('selectActiveEngagement')}
         />
@@ -565,15 +630,20 @@ function ExecutionPage() {
               <div className="card">
                 <h3>{t('uploadWorkingPaper')}</h3>
                 <p className="card-subtitle mb-4">{t('uploadEvidence')}</p>
+                {/* Deliberately no `noValidate`: `handleUploadWp` runs no
+                    `validateForm` and this form has no error banner, so the
+                    browser's `required` is the only thing enforcing
+                    `wp_reference` / `wp_title` / `wp_file`. Turning it off would
+                    convert a browser block into a silent no-op. */}
                 <form onSubmit={handleUploadWp}>
                   <div className="form-group">
                     <label className="form-label" htmlFor="wp_reference">{t('docReference')}</label>
-                    <input id="wp_reference" type="text" className="form-control" placeholder="e.g. WP-A.1.1"
+                    <input id="wp_reference" type="text" className="form-control" placeholder={t('executionWpRefPlaceholder')}
                       value={wpRef} onChange={(e) => setWpRef(e.target.value)} required />
                   </div>
                   <div className="form-group">
                     <label className="form-label" htmlFor="wp_title">{t('documentTitle')}</label>
-                    <input id="wp_title" type="text" className="form-control" placeholder="e.g. Access Rights Mapping Sheet"
+                    <input id="wp_title" type="text" className="form-control" placeholder={t('executionWpTitlePlaceholder')}
                       value={wpTitle} onChange={(e) => setWpTitle(e.target.value)} required />
                   </div>
                   <div className="form-group">
@@ -581,7 +651,7 @@ function ExecutionPage() {
                     <input id="wp_file" type="file" className="form-control" onChange={(e) => setUploadFile(e.target.files[0])} required />
                   </div>
                   <button type="submit" className="btn btn-primary btn-block flex items-center justify-center gap-2" disabled={uploading}>
-                    <Upload size={16} /> {uploading ? 'Uploading...' : t('uploadWorkpaper')}
+                    <Upload size={16} /> {uploading ? t('executionUploading') : t('uploadWorkpaper')}
                   </button>
                 </form>
               </div>
@@ -664,16 +734,23 @@ function ExecutionPage() {
             {/* `form=` because Modal renders the footer as a sibling of its
                 children, so the submit button sits outside the <form>. */}
             <button type="submit" form="program-form" className="btn btn-primary" disabled={savingProgram}>
-              {savingProgram ? 'Creating...' : t('createProgram')}
+              {savingProgram ? t('executionCreating') : t('createProgram')}
             </button>
           </>
         )}
       >
-        <form id="program-form" onSubmit={handleCreateProgram}>
+        {/* `noValidate` hands validation to the app, as UsersPage's forms do.
+            Without it the browser intercepts an empty submit and React's
+            onSubmit never fires — so `validateForm` never runs, the banner
+            below never renders, and the user gets a tooltip instead of the
+            named field. The one `required` input here (`program_title`) is also
+            covered by the schema below, so nothing stops being enforced. */}
+        <form id="program-form" onSubmit={handleCreateProgram} noValidate>
+          <FormErrorSummary errors={formErrors} />
           <div className="form-group">
             <label className="form-label" htmlFor="program_title">{t('programTitle')}</label>
             <input id="program_title" type="text" className="form-control"
-              placeholder="e.g. Payroll Compliance Audit Program"
+              placeholder={t('executionProgramTitlePlaceholder')}
               value={programForm.title}
               onChange={(e) => setProgramForm({ ...programForm, title: e.target.value })}
               required />
@@ -681,7 +758,7 @@ function ExecutionPage() {
           <div className="form-group">
             <label className="form-label" htmlFor="program_objectives">{t('auditObjectives')}</label>
             <textarea id="program_objectives" rows="3" className="form-control"
-              placeholder="Describe the objectives of this audit engagement..."
+              placeholder={t('executionObjectivesPlaceholder')}
               value={programForm.objectives}
               onChange={(e) => setProgramForm({ ...programForm, objectives: e.target.value })}
             />
@@ -689,7 +766,7 @@ function ExecutionPage() {
           <div className="form-group">
             <label className="form-label" htmlFor="program_scope">{t('auditScope')}</label>
             <textarea id="program_scope" rows="3" className="form-control"
-              placeholder="Define the boundaries and scope of this audit..."
+              placeholder={t('executionScopePlaceholder')}
               value={programForm.scope}
               onChange={(e) => setProgramForm({ ...programForm, scope: e.target.value })}
             />
@@ -707,22 +784,27 @@ function ExecutionPage() {
           <>
             <button type="button" className="btn btn-outline" onClick={() => setShowProcModal(false)}>{t('cancel')}</button>
             <button type="submit" form="procedure-form" className="btn btn-primary" disabled={savingProc}>
-              {savingProc ? 'Saving...' : editingProc ? t('updateProcedure') : t('addProcedureBtn')}
+              {savingProc ? t('layoutSaving') : editingProc ? t('updateProcedure') : t('addProcedureBtn')}
             </button>
           </>
         )}
       >
-        <form id="procedure-form" onSubmit={handleSaveProc}>
+        {/* `noValidate` for the same reason as the program form above: all three
+            `required` inputs (`proc_step_number`, `proc_title`,
+            `proc_description`) are also covered by `validateForm`, so the app's
+            banner replaces a browser tooltip rather than weakening anything. */}
+        <form id="procedure-form" onSubmit={handleSaveProc} noValidate>
+          <FormErrorSummary errors={formErrors} />
           <div className="form-group-row">
             <div className="form-group" style={{ flex: '0 0 120px' }}>
               <label className="form-label" htmlFor="proc_step_number">{t('stepNumber')}</label>
-              <input id="proc_step_number" type="text" className="form-control" placeholder="e.g. 1.1"
+              <input id="proc_step_number" type="text" className="form-control" placeholder={t('executionStepPlaceholder')}
                 value={procForm.step_number}
                 onChange={(e) => setProcForm({ ...procForm, step_number: e.target.value })} required />
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="proc_title">{t('procedureTitle')}</label>
-              <input id="proc_title" type="text" className="form-control" placeholder="e.g. Verify payroll authorizations"
+              <input id="proc_title" type="text" className="form-control" placeholder={t('executionProcedureTitlePlaceholder')}
                 value={procForm.title}
                 onChange={(e) => setProcForm({ ...procForm, title: e.target.value })} required />
             </div>
@@ -730,7 +812,7 @@ function ExecutionPage() {
           <div className="form-group">
             <label className="form-label" htmlFor="proc_description">{t('descriptionInstructions')}</label>
             <textarea id="proc_description" rows="3" className="form-control"
-              placeholder="Describe the fieldwork steps to be performed..."
+              placeholder={t('executionDescriptionPlaceholder')}
               value={procForm.description}
               onChange={(e) => setProcForm({ ...procForm, description: e.target.value })} required />
           </div>
@@ -739,18 +821,18 @@ function ExecutionPage() {
               <label className="form-label" htmlFor="proc_type">{t('procedureType')}</label>
               <select id="proc_type" className="form-control" value={procForm.procedure_type}
                 onChange={(e) => setProcForm({ ...procForm, procedure_type: e.target.value })}>
-                <option value="test_of_controls">Test of Controls</option>
-                <option value="substantive">Substantive Testing</option>
-                <option value="analytical">Analytical Procedures</option>
-                <option value="inquiry">Inquiry</option>
-                <option value="observation">Observation</option>
-                <option value="inspection">Inspection &amp; Re-performance</option>
+                <option value="test_of_controls">{t('procedureTestOfControls')}</option>
+                <option value="substantive">{t('procedureSubstantive')}</option>
+                <option value="analytical">{t('procedureAnalytical')}</option>
+                <option value="inquiry">{t('procedureInquiry')}</option>
+                <option value="observation">{t('procedureObservation')}</option>
+                <option value="inspection">{t('procedureInspection')}</option>
               </select>
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="proc_assertion">{t('assertion')}</label>
               <input id="proc_assertion" type="text" className="form-control"
-                placeholder="e.g. Completeness, Accuracy, Existence"
+                placeholder={t('executionAssertionPlaceholder')}
                 value={procForm.assertion}
                 onChange={(e) => setProcForm({ ...procForm, assertion: e.target.value })} />
             </div>
@@ -759,7 +841,7 @@ function ExecutionPage() {
             <div className="form-group">
               <label className="form-label" htmlFor="proc_risk_area">{t('riskArea')}</label>
               <input id="proc_risk_area" type="text" className="form-control"
-                placeholder="e.g. Payroll Fraud Risk"
+                placeholder={t('executionRiskAreaPlaceholder')}
                 value={procForm.risk_area}
                 onChange={(e) => setProcForm({ ...procForm, risk_area: e.target.value })} />
             </div>
@@ -773,7 +855,7 @@ function ExecutionPage() {
           <div className="form-group">
             <label className="form-label" htmlFor="proc_expected_evidence">{t('expectedEvidence')}</label>
             <textarea id="proc_expected_evidence" rows="2" className="form-control"
-              placeholder="Describe the evidence that should support this procedure..."
+              placeholder={t('executionEvidencePlaceholder')}
               value={procForm.expected_evidence}
               onChange={(e) => setProcForm({ ...procForm, expected_evidence: e.target.value })} />
           </div>
@@ -843,7 +925,7 @@ function ExecutionPage() {
             <div className="form-group">
               <label className="form-label" htmlFor="program_review_notes">{t('reviewNotes')}</label>
               <textarea id="program_review_notes" rows="3" className="form-control"
-                placeholder="Add any review comments or observations..."
+                placeholder={t('executionReviewNotesPlaceholder')}
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)} />
             </div>
@@ -873,7 +955,7 @@ function ExecutionPage() {
               disabled={submittingReview}
             >
               <CheckCircle2 size={16} />
-              {submittingReview ? 'Submitting...' : t('markAsReviewed')}
+              {submittingReview ? t('executionSubmitting') : t('markAsReviewed')}
             </button>
           </>
         )}

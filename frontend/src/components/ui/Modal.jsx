@@ -1,5 +1,6 @@
-import React, { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useI18n } from '../../context/I18nContext';
 
 const sizeClasses = {
   sm: 'max-w-md',
@@ -31,6 +32,7 @@ export const Modal = ({
   size = 'md',
   closeOnBackdrop = true,
 }) => {
+  const { t } = useI18n();
   const dialogRef = useRef(null);
   // Where focus was before the dialog opened, so it can be handed back on
   // close. Without this, dismissing a modal drops the caret at the top of the
@@ -132,7 +134,7 @@ export const Modal = ({
         aria-modal="true"
         // Point the accessible name at the visible heading when there is one;
         // fall back to the literal string so the dialog is never anonymous.
-        {...(title ? { 'aria-labelledby': headingId } : { 'aria-label': 'Dialog' })}
+        {...(title ? { 'aria-labelledby': headingId } : { 'aria-label': t('modalDialogFallback') })}
         {...(subtitle ? { 'aria-describedby': descriptionId } : {})}
         tabIndex={-1}
         className={`relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full ${sizeClasses[size] || sizeClasses.md} z-10 overflow-hidden border border-gray-200 dark:border-slate-800 flex flex-col max-h-[90vh] focus:outline-none`}
@@ -157,7 +159,7 @@ export const Modal = ({
                 type="button"
                 onClick={onClose}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-                aria-label="Close modal"
+                aria-label={t('modalCloseLabel')}
               >
                 <X className="w-5 h-5" />
               </button>

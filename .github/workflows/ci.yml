@@ -1,0 +1,79 @@
+name: CI
+
+# The suites this runs already existed and are substantial (~415 backend tests,
+# 7 Playwright specs); nothing ran them automatically. All three steps below are
+# now blocking — the lint backlog that made that impossible has been cleared
+# (127 errors -> 0), so see the lint step for how it is kept that way.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend — Django tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # Settings deliberately refuse to boot without a SECRET_KEY when DEBUG is
+      # off (core/settings.py), and DEBUG now defaults to off — so CI has to
+      # supply one. It signs nothing but throwaway test data.
+      SECRET_KEY: ci-only-not-a-real-key
+      DEBUG: "False"
+      # Keeps the job free of a database service; settings default to SQLite.
+      USE_SQLITE: "True"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: python manage.py test
+
+  frontend:
+    name: Frontend — build (and lint, advisory)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Blocking: this is green today and a broken bundle is unambiguous.
+      - name: Build
+        run: npm run build
+
+      # Blocking. This step used to be advisory (`continue-on-error`), because
+      # the repo carried 127 pre-existing errors — mostly unused vars and
+      # `react-hooks/exhaustive-deps` — and an always-red pipeline is one people
+      # learn to ignore, which would also have hidden the backend failures that
+      # ARE meaningful. That backlog is now cleared to zero, so the gate is real:
+      # a new lint error fails the build.
+      #
+      # If this goes red, do not reach for `continue-on-error` again. The two
+      # error classes that dominated the old backlog had real causes worth
+      # knowing: `set-state-in-effect` / `immutability` were the
+      # fetch-into-state pattern (use `src/hooks/useAsyncData.js` — 10 pages
+      # already do), and the `no-unused-vars` included six `formErrors` that a
+      # mechanical deletion would have erased evidence of (see FormErrorSummary).
+      - name: Lint
+        run: npm run lint

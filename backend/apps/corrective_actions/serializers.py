@@ -8,7 +8,8 @@ class ActionResponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ActionResponse
-        fields = '__all__'
+        fields = ['id', 'responder_name', 'response_text', 'evidence_file',
+                  'status_update', 'responded_at', 'corrective_action', 'responder']
 
     def get_responder_name(self, obj):
         if obj.responder:
@@ -21,7 +22,9 @@ class FollowUpSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = FollowUp
-        fields = '__all__'
+        fields = ['id', 'conducted_by_name', 'scheduled_date', 'status', 'notes',
+                  'outcome', 'email_sent', 'email_sent_at', 'created_at',
+                  'corrective_action', 'conducted_by']
 
     def get_conducted_by_name(self, obj):
         if obj.conducted_by:
@@ -41,7 +44,13 @@ class CorrectiveActionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CorrectiveAction
-        fields = '__all__'
+        fields = ['id', 'owner_name', 'finding_title', 'finding_severity',
+                  'status_display', 'priority_display', 'responses', 'follow_ups',
+                  'is_overdue', 'action_number', 'title', 'description',
+                  'recommendation', 'status', 'priority', 'due_date',
+                  'extended_due_date', 'completed_date', 'due_reminder_sent',
+                  'management_response', 'follow_up_notes', 'created_at', 'updated_at',
+                  'finding', 'owner', 'assigned_by']
         read_only_fields = ['action_number', 'assigned_by']
 
     def get_owner_name(self, obj):

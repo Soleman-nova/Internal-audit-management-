@@ -1,6 +1,6 @@
 // TESTING.md §1 — System Admin.
 import { test, expect } from '@playwright/test';
-import { api, NAV, expectNavVisible, expectNavHidden } from './helpers.js';
+import { api, NAV, expectNavVisible } from './helpers.js';
 
 test('sidebar shows User Management and Audit Trail', async ({ page }) => {
   await page.goto('/dashboard');
@@ -24,8 +24,43 @@ test('creates a user through the UI and the registry lists them', async ({ page 
   // the form by its id attribute.
   await page.locator('button[type="submit"][form="add-user-form"]').click();
 
-  // The newly created account shows up in the registry.
-  await expect(page.locator('.users-list-card')).toContainText(employeeId, { timeout: 20_000 });
+  // Persistence first — and polled, not asserted once. The click returns as soon
+  // as the form is submitted, so a single immediate read races the POST. This is
+  // the check a handler that toasts without saving cannot pass.
+  await expect.poll(
+    async () => (await api(page, 'GET', `/auth/users/?search=${employeeId}`)).body.count,
+    { timeout: 20_000 },
+  ).toBe(1);
+
+  const found = await api(page, 'GET', `/auth/users/?search=${employeeId}`);
+  expect(found.body.results[0].employee_id).toBe(employeeId);
+
+  // Then the registry itself — but NOT by assuming the row lands on page 1. The
+  // list is ordered by first_name and every run adds one more `first_name='E2E'`
+  // row, so the new row sinks one position per run (within that name block the
+  // tiebreaker is employee_id ascending, so the newest sorts last). The original
+  // assertion passed only while that block still fit on the page being shown, and
+  // it was consequently not repeatable: 36 such rows already exist here, which is
+  // why it failed once and then passed again untouched. Widening to the largest
+  // page size and walking forward finds the row whatever has accumulated.
+  const card = page.locator('.users-list-card');
+  await card.locator('.data-table-page-size-select').selectOption('100');
+
+  const next = card.locator('button[aria-label="Next page"]');
+  let listed = false;
+  for (let attempt = 0; attempt < 15 && !listed; attempt += 1) {
+    try {
+      // Auto-retrying, so this waits for the page's own fetch to land rather than
+      // sleeping a guessed interval.
+      await expect(card).toContainText(employeeId, { timeout: 2_000 });
+      listed = true;
+    } catch {
+      // The control is only rendered when there is more than one page.
+      if ((await next.count()) === 0 || (await next.isDisabled())) break;
+      await next.click();
+    }
+  }
+  expect(listed, `created user ${employeeId} never appeared in the registry`).toBe(true);
 });
 
 test('a deactivated user cannot log in', async ({ page, browser }) => {

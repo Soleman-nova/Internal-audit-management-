@@ -13,7 +13,10 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Department
-        fields = '__all__'
+        fields = ['id', 'directorate_type_display', 'unit_type_display', 'children',
+                  'name', 'name_am', 'code', 'head', 'head_title', 'head_title_am',
+                  'unit_type', 'directorate_type', 'staff_count', 'description',
+                  'is_active', 'parent']
 
     def get_children(self, obj):
         """Expose child departments for the org chart.
@@ -201,4 +204,6 @@ class AuditTrailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AuditTrail
-        fields = '__all__'
+        fields = ['id', 'user_name', 'user_email', 'user_role', 'action', 'model_name',
+                  'object_id', 'object_repr', 'changes', 'ip_address', 'user_agent',
+                  'timestamp', 'user']

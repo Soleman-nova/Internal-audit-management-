@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useHandleSignInCallback, useLogto } from '@logto/react';
 import { useAuth } from '../../context/AuthContext';
+import { useI18n } from '../../context/I18nContext';
 import Spinner from '../../components/ui/Spinner';
 
 /**
@@ -20,7 +21,8 @@ import Spinner from '../../components/ui/Spinner';
 const LogtoCallbackPage = () => {
   const navigate = useNavigate();
   const { loginWithLogto } = useAuth();
-  const { getIdToken, getIdTokenClaims } = useLogto();
+  const { t } = useI18n();
+  const { getIdToken } = useLogto();
   const [exchangeError, setExchangeError] = useState(null);
 
   // What this page load was handed by Logto, read synchronously from the URL.
@@ -61,40 +63,10 @@ const LogtoCallbackPage = () => {
       try {
         const idToken = await getIdToken();
         if (!idToken) {
-          throw new Error('Logto completed the sign-in but returned no ID token.');
+          throw new Error(t('logtoNoIdToken'));
         }
 
-        // ── TEMPORARY debug logging — remove once you have seen what you need ──
-        //
-        // The claims are what the backend matches an identity on, in this order:
-        // `custom_data.EEUID`, then `username`, then `email`. If the exchange below
-        // answers 403, the reason is on one of these lines — an account created
-        // automatically is keyed on `custom_data.EEUID` alone, so a token that is
-        // missing it can still sign in as an existing user but can never create
-        // one. `sub` is the stable Logto identifier to search the Console with.
-        //
-        // Logged before the exchange rather than after, so it is still on screen
-        // when the exchange is the thing that fails.
-        //
-        // React StrictMode double-invokes effects in development, so expect these
-        // twice.
-        const claims = await getIdTokenClaims();
-        console.log('[logto] id_token_claims', claims);
-        console.log('[logto] custom_data.EEUID', claims?.custom_data?.EEUID);
-        console.log('[logto] username        ', claims?.username);
-        console.log('[logto] email           ', claims?.email);
-        console.log('[logto] custom_data     ', claims?.custom_data);
-        console.log('[logto] sub             ', claims?.sub);
-        // ────────────────────────────────────────────────────────────────────────
-
-        const data = await loginWithLogto(idToken);
-
-        // Same temporary block: the exchange result, which is this system's own
-        // SimpleJWT pair plus the user row the identity resolved to. `data.user.role`
-        // and `data.user.employee_id` are the ones worth checking — they come from
-        // Django and are what the capability checks read.
-        console.log('[logto] exchange response', data);
-        // ────────────────────────────────────────────────────────────────────────
+        await loginWithLogto(idToken);
 
         // `replace` so Back does not land on /callback, which would try to redeem an
         // authorization code that has already been spent.
@@ -133,7 +105,7 @@ const LogtoCallbackPage = () => {
     const detail =
       failure.response?.data?.detail ||
       failure.message ||
-      'Sign-in could not be completed.';
+      t('logtoSignInFailed');
 
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50 px-4">
@@ -148,7 +120,7 @@ const LogtoCallbackPage = () => {
             to="/login"
             className="mt-4 flex h-[46px] w-full items-center justify-center rounded-[10px] bg-[#1b2f52] text-[14px] font-semibold text-white no-underline transition-colors hover:bg-[#24406e]"
           >
-            Back to sign in
+            {t('logtoBackToSignIn')}
           </Link>
         </div>
       </div>
@@ -167,16 +139,15 @@ const LogtoCallbackPage = () => {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50 px-4">
         <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
-          <h2 className="text-[18px] font-bold text-[#14213d]">Nothing to complete</h2>
+          <h2 className="text-[18px] font-bold text-[#14213d]">{t('logtoNothingToComplete')}</h2>
           <p className="mt-2 text-[13px] text-slate-600">
-            This page finishes a Logto sign-in, and there is no sign-in in progress.
-            That usually means it was reloaded after the sign-in already completed.
+            {t('logtoNothingToCompleteBody')}
           </p>
           <Link
             to="/login"
             className="mt-4 flex h-[46px] w-full items-center justify-center rounded-[10px] bg-[#1b2f52] text-[14px] font-semibold text-white no-underline transition-colors hover:bg-[#24406e]"
           >
-            Back to sign in
+            {t('logtoBackToSignIn')}
           </Link>
         </div>
       </div>
@@ -189,7 +160,7 @@ const LogtoCallbackPage = () => {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50">
       <Spinner size="lg" />
-      <p className="text-[13px] text-slate-500">Completing sign-in…</p>
+      <p className="text-[13px] text-slate-500">{t('logtoCompletingSignIn')}</p>
     </div>
   );
 };

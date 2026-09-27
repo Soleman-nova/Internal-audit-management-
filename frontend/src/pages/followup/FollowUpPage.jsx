@@ -1,19 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { capaApi, findingsApi, usersApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import useAsyncData from '../../hooks/useAsyncData';
 import { useI18n } from '../../context/I18nContext';
 import { localizedName } from '../../utils/localizedName';
 import { validateForm, validators, hasErrors } from '../../utils/validation';
 import Modal from '../../components/ui/Modal';
-import Badge from '../../components/ui/Badge';
-import Spinner from '../../components/ui/Spinner';
-import EmptyState from '../../components/ui/EmptyState';
+import FormErrorSummary from '../../components/ui/FormErrorSummary';
 import Pagination from '../../components/ui/Pagination';
-import FormField from '../../components/ui/FormField';
-import { CheckCircle2, Clock, ShieldAlert, MessageCircle, RefreshCw, Plus, FileUp } from 'lucide-react';
+import { CheckCircle2, MessageCircle, RefreshCw, Plus, FileUp } from 'lucide-react';
 
 function FollowUpPage() {
   const toast = useToast();
@@ -21,24 +19,18 @@ function FollowUpPage() {
   const { t, lang } = useI18n();
   const navigate = useNavigate();
   const { canWriteAudit, canApprovePlans } = usePermissions();
-  const [capas, setCapas] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
-  // Server-side pagination: capas holds only the current page slice. reloadKey
-  // lets mutations force a refetch even when page/pageSize are unchanged.
+  // Server-side pagination: the capas hook below holds only the current page
+  // slice. `page` is both what the user asked for and what gets requested — a
+  // page past the end is a 404 from DRF, so there is no separate clamped copy to
+  // keep in sync.
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
-  // Role-scoped counts (total/overdue/...) driving the tab badges.
-  const [summary, setSummary] = useState(null);
   const [formErrors, setFormErrors] = useState({});
   const currentUser = auth.user;
 
   // Spawning CAPA Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [findings, setFindings] = useState([]);
-  const [auditees, setAuditees] = useState([]);
   const [newCapa, setNewCapa] = useState({
     finding: '',
     title: '',
@@ -52,34 +44,21 @@ function FollowUpPage() {
 
   // Auditee Response Modal State
   const [showResponseModal, setShowResponseModal] = useState(false);
-  const [selectedCapa, setSelectedCapa] = useState(null);
+  // Which CAPA the response modal acts on, held as an **id** rather than as the
+  // row object. Every mutation re-requests the list, so a stored row would go
+  // stale; the id is resolved against whatever page is on screen instead.
+  const [selectedCapaId, setSelectedCapaId] = useState(null);
   const [responseText, setResponseText] = useState('');
   const [statusUpdate, setStatusUpdate] = useState('in_progress');
   const [evidenceFile, setEvidenceFile] = useState(null);
   const [submittingResponse, setSubmittingResponse] = useState(false);
 
-  useEffect(() => {
-    // Reset to page 1 whenever the active tab changes so a user on page 3 of
-    // "all" isn't dropped on a nonexistent page 3 of "overdue".
-    setPage(1);
-  }, [activeTab]);
-
-  useEffect(() => {
-    fetchCapas();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, page, pageSize, reloadKey]);
-
-  useEffect(() => {
-    fetchSummary();
-    if (currentUser && currentUser.role !== 'auditee') {
-      fetchFindingsAndAuditees();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser]);
-
-  const fetchCapas = async () => {
-    setLoading(true);
-    try {
+  // One request per (tab, page, page size), and a response that arrives after a
+  // newer run started is discarded — paging or switching tabs faster than the
+  // server answers used to let a slow earlier response land last and leave the
+  // table showing one tab's rows under another tab's heading.
+  const { data: capasData, loading, reload: reloadCapas } = useAsyncData(
+    async () => {
       // Each tab is its own paginated server query so the visible rows and the
       // totals both reflect the real set — filtering one loaded page in memory
       // used to stop silently at DRF's PAGE_SIZE. The overdue set comes from a
@@ -96,40 +75,67 @@ function FollowUpPage() {
       } else {
         res = await capaApi.getActions(params);
       }
-      setCapas(res.items || []);
-      setTotalCount(res.count || 0);
-      // Clamp: after a mutation shrank the list, the current page may not exist.
-      const last = Math.max(1, Math.ceil((res.count || 0) / pageSize));
-      if (page > last) setPage(last);
-    } catch (err) {
-      toast.error('Failed to load CAPA actions');
-    } finally {
-      setLoading(false);
-    }
-  };
+      // Rows and total come out of the one response, so they are returned
+      // together rather than kept as two pieces of state that a superseded
+      // request could leave disagreeing.
+      return { items: res.items || [], count: res.count || 0 };
+    },
+    [activeTab, page, pageSize],
+    { onError: () => toast.error(t('capaLoadFailed')) },
+  );
 
-  // Role-scoped counts driving the tab badges. Refetched after mutations; a
-  // failure just falls back to the loaded page's total.
-  const fetchSummary = async () => {
-    try {
-      const s = await capaApi.getSummary();
-      setSummary(s);
-    } catch (err) {
-      /* non-fatal */
-    }
-  };
+  const capas = capasData?.items ?? [];
+  const totalCount = capasData?.count ?? 0;
 
-  const fetchFindingsAndAuditees = async () => {
-    try {
+  // Role-scoped counts (total/overdue/...) driving the tab badges. Refetched
+  // after mutations; a failure just falls back to the loaded page's total, so
+  // there is no toast to lose here.
+  const { data: summary, reload: reloadSummary } = useAsyncData(
+    async () => capaApi.getSummary(),
+    [currentUser?.id],
+  );
+
+  // Options for the spawn-CAPA pickers. An auditee cannot spawn a CAPA, so the
+  // request is skipped for them rather than being allowed to fail.
+  const { data: pickers } = useAsyncData(
+    async () => {
       const [findingsRes, usersRes] = await Promise.all([
-        findingsApi.getFindings(),
+        // `page_size` because this is a picker, not a paged list: it must offer
+        // every finding that could be linked to a CAPA. Without it the endpoint
+        // paginates at 20 and the 21st finding is silently unlinkable — the same
+        // reason `planningApi`'s picker endpoints default to 1000.
+        findingsApi.getFindings({ page_size: 1000 }),
         usersApi.getAllUsers({ role: 'auditee' })
       ]);
-      setFindings(Array.isArray(findingsRes) ? findingsRes : []);
-      setAuditees(Array.isArray(usersRes) ? usersRes : []);
-    } catch (err) {
-      toast.error('Failed to fetch findings and auditees list');
-    }
+      return {
+        findings: Array.isArray(findingsRes) ? findingsRes : [],
+        auditees: Array.isArray(usersRes) ? usersRes : [],
+      };
+    },
+    [currentUser?.id],
+    {
+      enabled: Boolean(currentUser && currentUser.role !== 'auditee'),
+      onError: () => toast.error(t('capaPickersLoadFailed')),
+    },
+  );
+
+  const findings = pickers?.findings ?? [];
+  const auditees = pickers?.auditees ?? [];
+
+  // Resolved from the rows currently on screen rather than stored: a refetch
+  // replaces them, and a row that has since left the page resolves to null.
+  const selectedCapa = selectedCapaId === null
+    ? null
+    : capas.find(c => c.id === selectedCapaId) ?? null;
+
+  // Switching the tab re-runs the hook above through `activeTab`; resetting the
+  // page in the same handler is what keeps a user on page 3 of "all" from being
+  // dropped on a nonexistent page 3 of "overdue". Setting both together *is* the
+  // request, so no effect is needed to sync them.
+  const handleTabChange = (tab) => {
+    if (tab === activeTab) return;
+    setActiveTab(tab);
+    setPage(1);
   };
 
   const handleFindingChange = (e) => {
@@ -169,7 +175,7 @@ function FollowUpPage() {
           if (!values.due_date) return {};
           const today = new Date().toISOString().split('T')[0];
           if (values.due_date < today) {
-            return { due_date: 'Due date must be in the future.' };
+            return { due_date: t('capaDueDateFuture') };
           }
           return {};
         },
@@ -196,20 +202,21 @@ function FollowUpPage() {
       // Reload so counts/ordering stay truthful — the new row's due date
       // decides which page it lands on under due_date ordering, so neither a
       // local prepend nor a page jump would be reliable.
-      setReloadKey(k => k + 1);
-      fetchSummary();
-      toast.success('CAPA task successfully created and assigned!');
+      reloadCapas();
+      reloadSummary();
+      toast.success(t('capaCreatedToast'));
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
-      toast.error('Failed to create CAPA: ' + msg);
+      toast.error(t('capaCreateFailed', msg));
     } finally {
       setCreating(false);
     }
   };
 
   const handleOpenResponse = (capa) => {
-    setSelectedCapa(capa);
+    setSelectedCapaId(capa.id);
     setShowResponseModal(true);
+    setFormErrors({});
     setResponseText('');
     setStatusUpdate(capa.status || 'in_progress');
     setEvidenceFile(null);
@@ -218,6 +225,18 @@ function FollowUpPage() {
   const handleSubmitResponse = async (e) => {
     e.preventDefault();
     if (!selectedCapa) return;
+    // The notes are the payload of this form — the view's `response_text` is a
+    // non-blank TextField — so an empty submit is refused here rather than sent
+    // to be rejected by the server. `noValidate` on the form is what lets this
+    // run at all.
+    const errors = validateForm({ response_notes: responseText }, {
+      response_notes: { validators: [validators.required] },
+    });
+    if (hasErrors(errors)) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     setSubmittingResponse(true);
 
     try {
@@ -233,12 +252,12 @@ function FollowUpPage() {
       // A status change can move the row off the current tab/filter, so trust
       // the server: refetch the current page and the badge counts.
       setShowResponseModal(false);
-      toast.success('Response recorded and CAPA status updated!');
-      setReloadKey(k => k + 1);
-      fetchSummary();
+      toast.success(t('capaResponseRecorded'));
+      reloadCapas();
+      reloadSummary();
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
-      toast.error('Failed to submit response: ' + msg);
+      toast.error(t('capaResponseFailed', msg));
     } finally {
       setSubmittingResponse(false);
     }
@@ -274,21 +293,19 @@ function FollowUpPage() {
   // applies to schedule-followup.
   const canVerify = (capa) => canApprovePlans || capa.assigned_by === currentUser?.id;
 
-  const isAuditorOrManager = currentUser && currentUser.role !== 'auditee';
-
   return (
     <div className="followup-view">
       <div className="tab-container">
-        <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>
+        <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => handleTabChange('all')}>
           {t('allCapas', summary?.total ?? totalCount)}
         </button>
-        <button className={`tab-btn ${activeTab === 'open' ? 'active' : ''}`} onClick={() => setActiveTab('open')}>
+        <button className={`tab-btn ${activeTab === 'open' ? 'active' : ''}`} onClick={() => handleTabChange('open')}>
           {t('openInProgress')}
         </button>
-        <button className={`tab-btn ${activeTab === 'resolved' ? 'active' : ''}`} onClick={() => setActiveTab('resolved')}>
+        <button className={`tab-btn ${activeTab === 'resolved' ? 'active' : ''}`} onClick={() => handleTabChange('resolved')}>
           {t('resolvedCapas')}
         </button>
-        <button className={`tab-btn ${activeTab === 'overdue' ? 'active' : ''}`} onClick={() => setActiveTab('overdue')}>
+        <button className={`tab-btn ${activeTab === 'overdue' ? 'active' : ''}`} onClick={() => handleTabChange('overdue')}>
           {t('overdue')}{summary?.overdue > 0 ? ` (${summary.overdue})` : ''}
         </button>
       </div>
@@ -303,11 +320,11 @@ function FollowUpPage() {
               <p className="card-subtitle">{t('followUpTracking')}</p>
             </div>
             <div className="flex gap-2">
-              <button className="btn btn-outline flex items-center gap-2" onClick={fetchCapas}>
+              <button className="btn btn-outline flex items-center gap-2" onClick={() => reloadCapas()}>
                 <RefreshCw size={14} /> {t('refresh')}
               </button>
               {canWriteAudit && (
-                <button className="btn btn-accent flex items-center gap-2" onClick={() => setShowCreateModal(true)}>
+                <button className="btn btn-accent flex items-center gap-2" onClick={() => { setFormErrors({}); setShowCreateModal(true); }}>
                   <Plus size={16} /> {t('spawnCapaTask')}
                 </button>
               )}
@@ -318,23 +335,23 @@ function FollowUpPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Action Ref</th>
-                  <th>Action Title</th>
-                  <th>Owner</th>
-                  <th>Priority</th>
-                  <th>Due Date</th>
-                  <th>Status</th>
-                  <th>Action</th>
+                  <th>{t('actionRef')}</th>
+                  <th>{t('actionTitle')}</th>
+                  <th>{t('owner')}</th>
+                  <th>{t('priority')}</th>
+                  <th>{t('dueDate')}</th>
+                  <th>{t('status')}</th>
+                  <th>{t('action')}</th>
                 </tr>
               </thead>
               <tbody>
                 {capas.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="text-center py-8">No corrective action records found for this filter.</td>
+                    <td colSpan="7" className="text-center py-8">{t('noCapaRecords')}</td>
                   </tr>
                 ) : (
                   capas.map(c => (
-                    <tr key={c.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/50" onClick={() => navigate(`/capa/${c.id}`)} title="Click to view details">
+                    <tr key={c.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/50" onClick={() => navigate(`/capa/${c.id}`)} title={t('clickForDetails')}>
                       <td><strong>{c.action_number}</strong></td>
                       <td>
                         <div className="capa-title-container">
@@ -362,7 +379,7 @@ function FollowUpPage() {
                         <div className="flex gap-1">
                           {canRespondTo(c) && (
                             <button className="btn btn-outline btn-sm flex items-center gap-1" onClick={(e) => { e.stopPropagation(); handleOpenResponse(c); }}>
-                              <MessageCircle size={14} /> Respond
+                              <MessageCircle size={14} /> {t('respond')}
                             </button>
                           )}
                           {canVerify(c) && (
@@ -402,18 +419,26 @@ function FollowUpPage() {
         size="xl"
         footer={(
           <>
-            <button type="button" className="btn btn-outline" onClick={() => setShowCreateModal(false)}>Cancel</button>
+            <button type="button" className="btn btn-outline" onClick={() => setShowCreateModal(false)}>{t('cancel')}</button>
             {/* `form=` because Modal renders the footer as a sibling of its
                 children, so the submit button sits outside the <form>. */}
             <button type="submit" form="capa-form" className="btn btn-accent" disabled={creating}>
-              {creating ? 'Spawning...' : 'Spawn & Assign CAPA'}
+              {creating ? t('capaSpawning') : t('spawnAssignCapa')}
             </button>
           </>
         )}
       >
-        <form id="capa-form" onSubmit={handleCreateCapa}>
+        {/* `noValidate` hands validation to the app, as UsersPage's forms already
+            do. Without it the browser intercepts an empty submit and React's
+            onSubmit never fires — so `validateForm` never runs, the banner below
+            never renders, and the user gets a browser tooltip instead of the
+            named fields. Every one of the six `required` controls here is also
+            covered by the schema in handleCreateCapa, so nothing stops being
+            enforced. */}
+        <form id="capa-form" onSubmit={handleCreateCapa} noValidate>
+          <FormErrorSummary errors={formErrors} />
           <div className="form-group">
-            <label className="form-label" htmlFor="capa_finding">Link to Audit Finding</label>
+            <label className="form-label" htmlFor="capa_finding">{t('linkToFinding')}</label>
             <select
               id="capa_finding"
               className="form-control"
@@ -421,7 +446,7 @@ function FollowUpPage() {
               onChange={handleFindingChange}
               required
             >
-              <option value="">Select Audit Finding...</option>
+              <option value="">{t('selectAuditFinding')}</option>
               {findings.map(f => (
                 <option key={f.id} value={f.id}>{f.finding_number} - {f.title}</option>
               ))}
@@ -429,12 +454,12 @@ function FollowUpPage() {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="capa_title">Action / CAPA Title</label>
+            <label className="form-label" htmlFor="capa_title">{t('actionCapaTitle')}</label>
             <input
               id="capa_title"
               type="text"
               className="form-control"
-              placeholder="e.g. Implement dual-authorization controls"
+              placeholder={t('implementDualAuth')}
               value={newCapa.title}
               onChange={e => setNewCapa({ ...newCapa, title: e.target.value })}
               required
@@ -442,12 +467,12 @@ function FollowUpPage() {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="capa_description">Action Description</label>
+            <label className="form-label" htmlFor="capa_description">{t('actionDescription')}</label>
             <textarea
               id="capa_description"
               rows="3"
               className="form-control"
-              placeholder="Provide detailed description of corrective action..."
+              placeholder={t('provideDetailedDescription')}
               value={newCapa.description}
               onChange={e => setNewCapa({ ...newCapa, description: e.target.value })}
               required
@@ -455,21 +480,21 @@ function FollowUpPage() {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="capa_recommendation">Auditor Recommendation Reference</label>
+            <label className="form-label" htmlFor="capa_recommendation">{t('auditorRecommendationRef')}</label>
             <textarea
               id="capa_recommendation"
               rows="2"
               className="form-control"
               value={newCapa.recommendation}
               onChange={e => setNewCapa({ ...newCapa, recommendation: e.target.value })}
-              placeholder="Auditor recommendation details..."
+              placeholder={t('auditorRecommendationDetails')}
               required
             />
           </div>
 
           <div className="form-group-row">
             <div className="form-group">
-              <label className="form-label" htmlFor="capa_owner">Assign Owner (Auditee)</label>
+              <label className="form-label" htmlFor="capa_owner">{t('assignOwner')}</label>
               <select
                 id="capa_owner"
                 className="form-control"
@@ -477,30 +502,30 @@ function FollowUpPage() {
                 onChange={e => setNewCapa({ ...newCapa, owner: e.target.value })}
                 required
               >
-                <option value="">Select Auditee Owner...</option>
+                <option value="">{t('selectAuditeeOwner')}</option>
                 {auditees.map(a => (
-                  <option key={a.id} value={a.id}>{a.first_name} {a.last_name} ({localizedName(lang, a.department_name, a.department_name_am) || 'Auditee'})</option>
+                  <option key={a.id} value={a.id}>{a.first_name} {a.last_name} ({localizedName(lang, a.department_name, a.department_name_am) || t('capaAuditeeFallback')})</option>
                 ))}
               </select>
             </div>
 
             <div className="form-group">
-              <label className="form-label" htmlFor="capa_priority">Priority</label>
+              <label className="form-label" htmlFor="capa_priority">{t('priority')}</label>
               <select
                 id="capa_priority"
                 className="form-control"
                 value={newCapa.priority}
                 onChange={e => setNewCapa({ ...newCapa, priority: e.target.value })}
               >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="immediate">Immediate</option>
+                <option value="low">{t('low')}</option>
+                <option value="medium">{t('medium')}</option>
+                <option value="high">{t('high')}</option>
+                <option value="immediate">{t('immediate')}</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label className="form-label" htmlFor="capa_due_date">Due Date</label>
+              <label className="form-label" htmlFor="capa_due_date">{t('dueDate')}</label>
               <input
                 id="capa_due_date"
                 type="date"
@@ -518,45 +543,50 @@ function FollowUpPage() {
       <Modal
         isOpen={Boolean(showResponseModal && selectedCapa)}
         onClose={() => setShowResponseModal(false)}
-        title={selectedCapa ? `Submit Management Update for ${selectedCapa.action_number}` : 'Submit Management Update'}
+        title={selectedCapa ? t('submitManagementUpdate', selectedCapa.action_number) : t('capaSubmitUpdatePlain')}
         size="lg"
         footer={(
           <>
-            <button type="button" className="btn btn-outline" onClick={() => setShowResponseModal(false)}>Cancel</button>
+            <button type="button" className="btn btn-outline" onClick={() => setShowResponseModal(false)}>{t('cancel')}</button>
             <button type="submit" form="capa-response-form" className="btn btn-primary" disabled={submittingResponse}>
-              {submittingResponse ? 'Submitting...' : 'Submit Response'}
+              {submittingResponse ? t('capaSubmittingResponse') : t('submitResponse')}
             </button>
           </>
         )}
       >
         {selectedCapa && (
-          <form id="capa-response-form" onSubmit={handleSubmitResponse}>
+          // The single `required` control here (the notes) had no app validator
+          // to fall back on, so `noValidate` goes on together with one in
+          // handleSubmitResponse: the browser's own block would otherwise be
+          // traded for a 400 from the view, whose response_text is non-blank.
+          <form id="capa-response-form" onSubmit={handleSubmitResponse} noValidate>
+          <FormErrorSummary errors={formErrors} />
             <div className="mb-4">
-              <span className="text-xs text-muted font-bold block">Recommendation:</span>
+              <span className="text-xs text-muted font-bold block">{t('recommendation')}</span>
               <p className="text-sm font-semibold">{selectedCapa.recommendation}</p>
             </div>
 
             <div className="form-group">
-              <label className="form-label" htmlFor="response_status">Progress Status</label>
+              <label className="form-label" htmlFor="response_status">{t('progressStatus')}</label>
               <select
                 id="response_status"
                 className="form-control"
                 value={statusUpdate}
                 onChange={(e) => setStatusUpdate(e.target.value)}
               >
-                <option value="in_progress">In Progress</option>
-                <option value="partially_resolved">Partially Resolved</option>
-                <option value="resolved">Resolved / Actioned</option>
+                <option value="in_progress">{t('inProgress')}</option>
+                <option value="partially_resolved">{t('partiallyResolved')}</option>
+                <option value="resolved">{t('resolvedActioned')}</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label className="form-label" htmlFor="response_notes">Action / Update Notes</label>
+              <label className="form-label" htmlFor="response_notes">{t('actionUpdateNotes')}</label>
               <textarea
                 id="response_notes"
                 rows="4"
                 className="form-control"
-                placeholder="Provide details on action taken, systems modified, or policies published..."
+                placeholder={t('provideActionDetails')}
                 value={responseText}
                 onChange={(e) => setResponseText(e.target.value)}
                 required
@@ -564,7 +594,7 @@ function FollowUpPage() {
             </div>
 
             <div className="form-group">
-              <label className="form-label flex items-center gap-1" htmlFor="response_evidence"><FileUp size={16} /> Upload Implementation Document</label>
+              <label className="form-label flex items-center gap-1" htmlFor="response_evidence"><FileUp size={16} /> {t('uploadImplementationDoc')}</label>
               <input
                 id="response_evidence"
                 type="file"
@@ -572,7 +602,7 @@ function FollowUpPage() {
                 onChange={(e) => setEvidenceFile(e.target.files[0])}
               />
               {evidenceFile && (
-                <span className="text-xs text-success block mt-1">Selected file: {evidenceFile.name}</span>
+                <span className="text-xs text-success block mt-1">{t('selectedFile', evidenceFile.name)}</span>
               )}
             </div>
           </form>

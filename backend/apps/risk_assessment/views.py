@@ -15,6 +15,7 @@ from apps.common.permissions import (
     CanManageSettings, CanWriteAudit, RequiresCapability, APPROVE_PLANS, has_capability,
 )
 from apps.common.audit_utils import log_audit
+from apps.common.scoping import AuditeeScopeMixin
 from apps.notifications.services import notify, notify_roles
 
 
@@ -42,12 +43,22 @@ class RiskParameterViewSet(viewsets.ModelViewSet):
             instance.delete()
 
 
-class RiskAssessmentViewSet(viewsets.ModelViewSet):
+class RiskAssessmentViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
     queryset = RiskAssessment.objects.select_related(
         'department', 'region', 'service_center', 'audit_universe', 'assessed_by', 'reviewed_by'
     ).prefetch_related('self_assessment').all()
     serializer_class = RiskAssessmentSerializer
     permission_classes = [CanWriteAudit]
+
+    # An auditee sees their own department's risk posture, plus anything they
+    # assessed personally. Without this the 5x5 heat map was an EEU-wide risk
+    # register, readable by the party being assessed.
+    #
+    # `/heatmap/` and `/summary/` below both read through `get_queryset`, so they
+    # narrow with the list rather than sidestepping it — which is the trap with
+    # derived actions, and the reason this is a queryset-level fix.
+    auditee_scope_fields = ('department_id',)
+    auditee_scope_personal_fields = ('assessed_by',)
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = [
         'department', 'region', 'service_center', 'audit_universe', 'year',

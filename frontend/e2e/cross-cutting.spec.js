@@ -3,8 +3,11 @@
 import { test, expect } from '@playwright/test';
 import { login } from './helpers.js';
 
-const SETTINGS_BTN = 'button[title="System Settings"]';
-const HELP_BTN = 'button[title="Help & Support"]';
+// `data-testid`, not `title=`: the language test below opens these dialogs while
+// the interface is in Amharic, and both attributes are translated now — a locator
+// built from user-facing text stops matching the moment the language changes.
+const SETTINGS_BTN = '[data-testid="header-settings-btn"]';
+const HELP_BTN = '[data-testid="header-help-btn"]';
 const SAVE_BTN = '[role="dialog"] form button[type="submit"]';
 
 // Toasts float over the header with pointer-events and cover the action

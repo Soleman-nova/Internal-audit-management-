@@ -1,4 +1,3 @@
-import React from 'react';
 import { FolderOpen } from 'lucide-react';
 
 export const EmptyState = ({

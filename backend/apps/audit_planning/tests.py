@@ -478,7 +478,12 @@ class AuditPlanWorkflowTest(RoleFixtureMixin, TestCase):
         self.assertEqual(self.submit(self.supervisor).status_code, 200)
 
     def test_auditee_cannot_submit(self):
-        self.assertEqual(self.submit(self.auditee).status_code, 403)
+        # 404 rather than 403 — see the note on the matching program test: the
+        # plan is outside the auditee's scoped queryset, so it is refused before
+        # the capability check rather than by it.
+        self.assertEqual(self.submit(self.auditee).status_code, 404)
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.status, 'draft')
 
     def test_submit_is_audit_logged_with_the_status_change(self):
         self.submit(self.auditor)

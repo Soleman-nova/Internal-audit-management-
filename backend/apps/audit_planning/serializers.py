@@ -12,7 +12,13 @@ class AuditUniverseSerializer(OrgScopeNamesMixin, serializers.ModelSerializer):
 
     class Meta:
         model = AuditUniverse
-        fields = '__all__'
+        fields = ['id', 'department_name', 'department_name_am', 'region_name',
+                  'region_name_am', 'service_center_name', 'service_center_name_am',
+                  'directorate_name', 'directorate_name_am', 'category_display',
+                  'due_for_re_audit', 'latest_risk_assessment', 'name', 'code',
+                  'category', 'description', 'owner', 'risk_score', 'audit_frequency',
+                  'last_audited', 'status', 'technical_metadata', 'created_at',
+                  'updated_at', 'department', 'region', 'service_center', 'directorate']
 
     def get_directorate_name(self, obj):
         if obj.directorate:
@@ -43,13 +49,17 @@ class AuditTeamMemberSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AuditTeamMember
-        fields = '__all__'
+        fields = ['id', 'user_details', 'role', 'allocated_days', 'actual_days',
+                  'joined_at', 'engagement', 'user']
 
 
 class ProjectSerializer(OrgScopeNamesMixin, serializers.ModelSerializer):
     class Meta:
         model = Project
-        fields = '__all__'
+        fields = ['id', 'department_name', 'department_name_am', 'region_name',
+                  'region_name_am', 'service_center_name', 'service_center_name_am',
+                  'code', 'name', 'created_at', 'updated_at', 'department', 'region',
+                  'service_center']
 
 
 class AuditEngagementSerializer(OrgScopeNamesMixin, serializers.ModelSerializer):
@@ -71,7 +81,17 @@ class AuditEngagementSerializer(OrgScopeNamesMixin, serializers.ModelSerializer)
 
     class Meta:
         model = AuditEngagement
-        fields = '__all__'
+        fields = ['id', 'department_name', 'department_name_am', 'region_name',
+                  'region_name_am', 'service_center_name', 'service_center_name_am',
+                  'lead_auditor_name', 'supervisor_name', 'directorate_name',
+                  'directorate_name_am', 'status_display', 'engagement_type_display',
+                  'plan_title', 'plan_year', 'team_members', 'findings_count',
+                  'progress_percent', 'title', 'engagement_number', 'engagement_type',
+                  'objectives', 'scope', 'status', 'planned_start', 'planned_end',
+                  'actual_start', 'actual_end', 'planned_days', 'actual_days',
+                  'risk_level', 'technical_metadata', 'created_at', 'updated_at',
+                  'plan', 'audit_universe', 'department', 'region', 'service_center',
+                  'directorate', 'lead_auditor', 'supervisor']
         read_only_fields = ['engagement_number']
 
     @staticmethod
@@ -136,7 +156,13 @@ class AuditPlanSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AuditPlan
-        fields = '__all__'
+        fields = ['id', 'created_by_name', 'approved_by_name', 'directorate_name',
+                  'directorate_name_am', 'plan_scope_display', 'engagements',
+                  'engagements_count', 'status_display', 'title', 'year',
+                  'description', 'objectives', 'scope', 'methodology', 'status',
+                  'plan_scope', 'approved_at', 'start_date', 'end_date',
+                  'total_budget_days', 'created_at', 'updated_at', 'directorate',
+                  'parent_plan', 'created_by', 'approved_by']
 
     def get_created_by_name(self, obj):
         if obj.created_by:

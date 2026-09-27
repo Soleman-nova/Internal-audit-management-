@@ -112,7 +112,13 @@ class AuditProgramSubmitTest(RoleFixtureMixin, TestCase):
         self.assertEqual(self.as_user(self.supervisor).post(self.url).status_code, 200)
 
     def test_auditee_cannot_submit(self):
-        self.assertEqual(self.as_user(self.auditee).post(self.url).status_code, 403)
+        # 404 rather than 403: a program on an engagement outside their own
+        # department is no longer in the auditee's queryset, so `get_object()`
+        # refuses before the capability check is ever reached. The denial is the
+        # same, and 404 discloses less — it does not confirm the record exists.
+        self.assertEqual(self.as_user(self.auditee).post(self.url).status_code, 404)
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.status, 'draft')
 
     def test_submit_is_audit_logged_with_the_status_change(self):
         self.as_user(self.auditor).post(self.url)
@@ -376,12 +382,24 @@ class WorkingPaperTest(RoleFixtureMixin, TestCase):
 
     def test_download_sends_the_real_content_type_and_filename(self):
         paper_id = self.upload(self.auditor, name='recon.txt').data['id']
-        response = self.as_user(self.auditee).get(f'{PAPERS_URL}{paper_id}/download/')
+        response = self.as_user(self.auditor).get(f'{PAPERS_URL}{paper_id}/download/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'text/plain')
         self.assertIn('attachment; filename="', response['Content-Disposition'])
         self.assertIn('recon', response['Content-Disposition'])
         self.assertEqual(response.content, b'reconciliation evidence')
+
+    def test_auditee_cannot_download_a_working_paper(self):
+        """Working papers are the audit team's own evidence, so the auditee
+        scoping has to reach the download action, not just the list.
+
+        The file is streamed through the API specifically so /media/ is not an
+        open side door; a scoped list with an unscoped download would be the same
+        leak by another route.
+        """
+        paper_id = self.upload(self.auditor, name='recon.txt').data['id']
+        response = self.as_user(self.auditee).get(f'{PAPERS_URL}{paper_id}/download/')
+        self.assertEqual(response.status_code, 404)
 
     def test_download_without_a_file_is_a_400(self):
         paper = WorkingPaper.objects.create(

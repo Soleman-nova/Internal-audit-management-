@@ -89,8 +89,6 @@ On a demonstration or training system, the login page also shows five one-click 
 
 These accounts exist only where demo data has been seeded. They are not present on a properly configured production system.
 
-> **Known issue:** the one-click **Audit Manager** button submits the wrong password and fails with "Invalid Employee ID or password". Type `EEU-10002` / `user123` into the form by hand. The other four buttons work.
-
 ### Passwords
 
 Passwords must be at least 8 characters and are additionally checked against Django's standard validators: not too similar to your own name or Employee ID, not a commonly used password, and not entirely numeric. Change yours from **Settings → Change Password**.
@@ -762,10 +760,16 @@ python manage.py retire_legacy_departments          # then deactivate the old un
 
 Two commands are meant to run on a schedule. Nothing schedules them for you.
 
+**The application will tell you when you have not.** `manage.py check` — and so `runserver` and CI —
+reports the warning `accounts.W001` while any corrective action is both past due and still sitting in
+*Open* / *In Progress*. That combination is only reachable if the job has not been running, so the warning
+clears itself once the job is scheduled and has caught up. It is derived from the data rather than from a
+"last run" marker, so there is no timestamp to go stale or to forget to write.
+
 | Command | Frequency | What it does |
 |---|---|---|
 | `flag_overdue_actions` | Daily | Sets past-due corrective actions to *Overdue* and sends due-soon reminders for actions due within 3 days (`--days N` to change the window). Uses the extended due date when one is set. Safe to run repeatedly — it will not send the same reminder twice. |
-| `fail_stuck_reports` | Every few hours | Moves reports stranded on *Generating* to *Failed*. Needed because report generation runs in-process: if the server restarts mid-compile, the row would otherwise sit at *Generating* forever. |
+| `fail_stuck_reports` | Every few hours | Moves reports stranded on *Generating* to *Failed*. Needed because report generation runs in-process: if the server restarts mid-compile, the row would otherwise sit at *Generating* forever. This command is the recovery half of that design, not an optional extra — see the note below. |
 
 **Windows Task Scheduler**
 
@@ -785,6 +789,17 @@ Repeat for `fail_stuck_reports` on a several-hour repeat.
 ```
 
 Check the outcome in `backend/logs/audit_system.log`.
+
+**Why `fail_stuck_reports` is not optional.** Report generation runs on a background thread *inside the
+web process* (`apps/reports/jobs.py`), not in a durable queue: the request returns immediately with the
+report on *Generating*, and the thread finishes the compile afterwards. That is a deliberate trade — it
+needs no broker to deploy — but it means a restart, crash or deploy mid-compile loses the work, and the
+row would sit on *Generating* forever with nothing to notice it. `fail_stuck_reports` is what closes that
+window. The two are therefore one mechanism, not two unrelated chores: the thread is why the API returns
+promptly, and the scheduled sweep is why a lost thread is survivable rather than a permanently stuck
+report. If restarts become frequent enough that reports are visibly failing, that is the signal to move
+generation onto a real queue — `celery` is already pinned in `requirements.txt` but deliberately unused
+today, so adopting it is a wiring job rather than a new dependency.
 
 ### Email
 

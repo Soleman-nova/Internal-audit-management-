@@ -15,15 +15,22 @@ from apps.common.permissions import (
     CanWriteAudit, RequiresCapability, InvolvedPartyOrCapability, APPROVE_PLANS,
 )
 from apps.common.audit_utils import log_audit
+from apps.common.scoping import AuditeeScopeMixin
 from apps.notifications.services import notify, notify_roles
 
 
-class AuditProgramViewSet(viewsets.ModelViewSet):
+class AuditProgramViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
     queryset = AuditProgram.objects.select_related(
         'engagement', 'engagement__lead_auditor', 'prepared_by', 'approved_by'
     ).prefetch_related('procedures').all()
     serializer_class = AuditProgramSerializer
     permission_classes = [CanWriteAudit]
+
+    # The program is the audit team's plan of attack for an engagement, so an
+    # auditee sees it only where the engagement is in their department, or where
+    # they prepared it.
+    auditee_scope_fields = ('engagement__department_id',)
+    auditee_scope_personal_fields = ('prepared_by',)
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'engagement']
     search_fields = ['title']
@@ -104,13 +111,19 @@ class AuditProgramViewSet(viewsets.ModelViewSet):
         return Response({'detail': 'Program submitted for review.'})
 
 
-class AuditProcedureViewSet(viewsets.ModelViewSet):
+class AuditProcedureViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
     queryset = AuditProcedure.objects.select_related(
         'program', 'program__engagement', 'program__engagement__lead_auditor',
         'assigned_to', 'completed_by'
     ).all()
     serializer_class = AuditProcedureSerializer
     permission_classes = [CanWriteAudit]
+
+    # Two hops to the department: a procedure belongs to a program, which belongs
+    # to an engagement. An auditee also keeps sight of any step assigned to them,
+    # so a checklist item they own stays workable even if it is filed elsewhere.
+    auditee_scope_fields = ('program__engagement__department_id',)
+    auditee_scope_personal_fields = ('assigned_to',)
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'program', 'procedure_type', 'assigned_to']
     search_fields = ['title', 'description', 'risk_area']
@@ -167,12 +180,18 @@ class AuditProcedureViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(procedure).data)
 
 
-class WorkingPaperViewSet(viewsets.ModelViewSet):
+class WorkingPaperViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
     queryset = WorkingPaper.objects.select_related(
         'engagement', 'procedure', 'prepared_by', 'reviewed_by'
     ).all()
     serializer_class = WorkingPaperSerializer
     permission_classes = [CanWriteAudit]
+
+    # Working papers are the audit team's own evidence — the most sensitive thing
+    # an auditee could be handed, since it is the documented basis for the
+    # findings against them and may cover engagements they are not part of.
+    auditee_scope_fields = ('engagement__department_id',)
+    auditee_scope_personal_fields = ('prepared_by',)
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['engagement', 'paper_type', 'is_reviewed', 'procedure']
     search_fields = ['title', 'reference', 'description']

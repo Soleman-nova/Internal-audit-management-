@@ -16,6 +16,7 @@ from .serializers import ReportTemplateSerializer, GeneratedReportSerializer
 from apps.notifications.services import notify
 from apps.common.permissions import CanManageSettings, CanWriteAudit
 from apps.common.audit_utils import log_audit
+from apps.common.scoping import AuditeeScopeMixin
 
 
 class ReportTemplateViewSet(viewsets.ModelViewSet):
@@ -43,7 +44,7 @@ class ReportTemplateViewSet(viewsets.ModelViewSet):
             instance.delete()
 
 
-class GeneratedReportViewSet(viewsets.ModelViewSet):
+class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
     queryset = GeneratedReport.objects.select_related(
         'template', 'engagement', 'generated_by'
     ).all()
@@ -51,6 +52,12 @@ class GeneratedReportViewSet(viewsets.ModelViewSet):
     permission_classes = [CanWriteAudit]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['format', 'status', 'engagement']
+
+    # An auditee sees a report only when it is about their own engagement, or when
+    # they generated it. `engagement` is nullable, so an org-wide report matches
+    # neither and stays out of reach — which is the intent.
+    auditee_scope_fields = ('engagement__department_id',)
+    auditee_scope_personal_fields = ('generated_by',)
 
     def perform_create(self, serializer):
         from apps.reports.jobs import enqueue_report_generation

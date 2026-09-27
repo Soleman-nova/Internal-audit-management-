@@ -1,8 +1,9 @@
-import React, { lazy, Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import Spinner from './components/ui/Spinner';
 import { hasLiveSession } from './api/apiClient';
+import { useAuth } from './context/AuthContext';
 import { hasCapability, getCurrentUser, CAPABILITIES } from './hooks/usePermissions';
 
 // Every page is loaded on demand. Eagerly importing all thirteen produced one
@@ -41,7 +42,19 @@ const ProtectedRoute = ({ children }) => {
   // visible flash of a dashboard the user was never signed in to. It still
   // admits an expired *access* token when the refresh token is live, since the
   // API client exchanges that silently.
-  if (!hasLiveSession()) {
+  //
+  // `user` is part of the condition so that this component *subscribes* to the
+  // auth context, which is what makes it re-render when the session is cleared.
+  // Without it the guard only ever re-ran on a route change, and `logout()` —
+  // which clears localStorage and calls `setUser(null)` in the same tick — moved
+  // nobody: the only thing that got a signed-out user off a protected page was
+  // the 401 interceptor's redirect firing on some in-flight request. That made
+  // signing out depend on a request happening to fail, and it is why a sign-out
+  // that could not reach Logto left the user sitting on the page they had just
+  // signed out of. Reading both keeps the storage check authoritative for
+  // expiry while letting the context drive the deliberate case.
+  const { user } = useAuth();
+  if (!user || !hasLiveSession()) {
     return <Navigate to="/login" replace />;
   }
   return children;

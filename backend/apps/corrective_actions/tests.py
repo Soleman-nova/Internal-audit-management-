@@ -9,17 +9,20 @@ import datetime
 import shutil
 import tempfile
 
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from apps.accounts.checks import overdue_capas_are_still_open
 from apps.accounts.models import AuditTrail, Role
 from apps.common.role_fixtures import (
     RoleFixtureMixin, make_action, make_engagement, make_finding,
     notification_titles,
 )
 from apps.corrective_actions.models import ActionResponse, CorrectiveAction, FollowUp
-from apps.notifications.models import Notification
+from apps.notifications.models import Notification, SystemSetting
 
 ACTIONS_URL = '/api/corrective/actions/'
 
@@ -376,3 +379,117 @@ class CorrectiveActionScopingTest(RoleFixtureMixin, TestCase):
     def test_retrieving_an_out_of_scope_action_is_a_404(self):
         response = self.as_user(self.auditee).get(f'{ACTIONS_URL}{self.theirs.id}/')
         self.assertEqual(response.status_code, 404)
+
+
+class ScheduledJobCheckTest(RoleFixtureMixin, TestCase):
+    """`accounts.checks.overdue_capas_are_still_open` — the standing warning that
+    `flag_overdue_actions` is not being scheduled.
+
+    The failure it guards against leaves no trace of its own: a job that never runs
+    writes no log line, so the only evidence is the state it failed to change. Each
+    case below pins one of the ways that evidence can be misread.
+    """
+
+    def warnings(self):
+        return overdue_capas_are_still_open(None)
+
+    def past_due(self, **kwargs):
+        return make_action(
+            owner=self.auditee, assigned_by=self.auditor,
+            due_date=timezone.now().date() - datetime.timedelta(days=5),
+            **kwargs,
+        )
+
+    def test_warns_when_a_past_due_action_is_still_open(self):
+        self.past_due()
+        found = self.warnings()
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].id, 'accounts.W001')
+
+    def test_is_quiet_when_nothing_is_past_due(self):
+        make_action(
+            owner=self.auditee, assigned_by=self.auditor,
+            due_date=timezone.now().date() + datetime.timedelta(days=1),
+        )
+        self.assertEqual(self.warnings(), [])
+
+    def test_is_quiet_when_an_extension_moves_the_due_date_out(self):
+        """The subtle branch, and the one most likely to produce a false alarm.
+
+        The command decides with `extended_due_date or due_date`, so an action with
+        a past *original* due date and a future *extension* is correctly left open.
+        The check has to mirror that or it cries wolf on every extended action.
+        """
+        self.past_due(extended_due_date=timezone.now().date() + datetime.timedelta(days=10))
+        self.assertEqual(self.warnings(), [])
+
+    def test_is_quiet_once_the_job_has_flipped_it(self):
+        """A past-due action the job has already processed is `overdue`, so it is
+        evidence the job *did* run, not that it did not."""
+        self.past_due(status='overdue')
+        self.assertEqual(self.warnings(), [])
+
+    def test_is_a_warning_not_an_error(self):
+        """Registered as a Warning on purpose: `manage.py test` runs the checks
+        against an empty database, and an Error would make deployment state fail
+        the suite."""
+        from django.core.checks import Warning as CheckWarning
+
+        self.past_due()
+        self.assertIsInstance(self.warnings()[0], CheckWarning)
+
+
+class FollowUpReminderIsOnceOnlyTest(RoleFixtureMixin, TestCase):
+    """`flag_overdue_actions` must not repeat itself, including on follow-ups.
+
+    The command's docstring promises it is safe to run repeatedly. The two CAPA
+    loops earn that by changing the row they select on — status flips, or
+    `due_reminder_sent`. The follow-up loop could not: a follow-up stays
+    `scheduled` until a person completes it, so it re-notified the owner on every
+    daily run. `FollowUp.email_sent` is the field that records it has spoken.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.action = make_action(owner=self.auditee, assigned_by=self.auditor)
+        # Due yesterday, `scheduled` — the state the loop selects on.
+        self.follow_up = FollowUp.objects.create(
+            corrective_action=self.action,
+            scheduled_date=timezone.now().date() - datetime.timedelta(days=1),
+        )
+
+    def run_job(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            call_command('flag_overdue_actions')
+
+    def reminders(self):
+        return Notification.objects.filter(
+            user=self.auditee, notification_type='follow_up',
+        ).count()
+
+    def test_the_reminder_is_sent_once_and_then_not_again(self):
+        self.run_job()
+        self.assertEqual(self.reminders(), 1)
+
+        # The regression: the follow-up is still `scheduled`, so this second run is
+        # exactly the one that used to notify the owner all over again.
+        self.run_job()
+        self.assertEqual(self.reminders(), 1)
+
+        self.follow_up.refresh_from_db()
+        self.assertTrue(self.follow_up.email_sent)
+        self.assertIsNotNone(self.follow_up.email_sent_at)
+
+    def test_the_reminder_email_goes_out_when_the_setting_is_on(self):
+        SystemSetting.objects.update_or_create(
+            key='enable_email_alerts', defaults={'value': 'True'},
+        )
+        self.run_job()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.auditee.email])
+
+    def test_no_email_when_the_setting_is_off(self):
+        """The in-app reminder still lands; only the email is withheld."""
+        self.run_job()
+        self.assertEqual(self.reminders(), 1)
+        self.assertEqual(mail.outbox, [])

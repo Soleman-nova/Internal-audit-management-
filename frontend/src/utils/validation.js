@@ -93,7 +93,7 @@ export const validators = {
 
     employeeId: (value) => {
         if (!value) return null;
-        const idRegex = /^[A-Za-z0-9\-]+$/;
+        const idRegex = /^[A-Za-z0-9-]+$/;
         if (!idRegex.test(value)) return 'Employee ID can only contain letters, numbers, and hyphens.';
         return null;
     },
@@ -180,7 +180,7 @@ export function validateForm(values, schema) {
     }
 
     // Run cross-field validators
-    for (const [field, rules] of Object.entries(schema)) {
+    for (const [, rules] of Object.entries(schema)) {
         if (rules.crossField) {
             const crossErrors = rules.crossField(values);
             Object.assign(errors, crossErrors);
