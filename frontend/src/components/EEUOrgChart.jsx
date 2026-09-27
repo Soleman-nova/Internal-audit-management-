@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { usersApi, planningApi } from '../api';
 import { Building2, Users, FolderKanban, Activity, ShieldAlert, ChevronDown, ChevronRight } from 'lucide-react';
 
@@ -139,7 +139,7 @@ function EEUOrgChart({ onSelectDirectorate }) {
                     <div className="org-connector-vertical" />
                     <div className="org-connector-horizontal" />
                     <div className="org-children">
-                        {children.map((child, idx) => (
+                        {children.map((child) => (
                             <div key={child.id} className="org-child-column">
                                 <div className="org-connector-vertical-short" />
                                 <OrgNode

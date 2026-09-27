@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import { useId } from 'react';
 import { useI18n } from '../../context/I18nContext';
 import { useOrgUnits } from '../../hooks/useOrgUnits';
 

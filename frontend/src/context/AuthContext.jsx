@@ -1,6 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+/* eslint-disable react-refresh/only-export-components -- This module exports its
+   provider *and* the `useAuth` hook together, which is the ordinary React context
+   pattern and how every one of its ~20 import sites consumes it. The rule only
+   affects dev-time fast refresh, so splitting the hook into a second module would
+   churn every import for a development-only hint. */
+import { createContext, useContext, useState, useEffect } from 'react';
 import { useLogto } from '@logto/react';
-import { authApi, clearSession } from '../api/apiClient';
+import { authApi, clearSession, beginSignOut } from '../api/apiClient';
 import { isLogtoConfigured, postSignOutRedirectUri } from '../auth/logtoConfig';
 
 const AuthContext = createContext(null);
@@ -83,9 +88,14 @@ const AuthInner = ({ children }) => {
     return data;
   };
 
-  const { signIn, signOut, isAuthenticated, getIdTokenClaims } = useLogto(); 
-
   const logout = () => {
+    // Before either branch clears the session, so the interceptor already knows
+    // that the 401s about to arrive are this sign-out's own fallout. Without it
+    // the interceptor answers them with a hard navigation to /login, which races
+    // the Logto sign-out below and can cancel it — leaving Logto's session alive
+    // behind a sign-out that otherwise looks successful. See `beginSignOut`.
+    beginSignOut();
+
     // A Logto session outlives ours: Logto keeps its own session cookie, so
     // dropping only our tokens would leave the next "Sign in with Logto" completing
     // silently, with no credential prompt. signOut ends that session too and lands
@@ -110,14 +120,18 @@ const AuthInner = ({ children }) => {
       // browser that cannot reach Logto.
       clearSession();
       setUser(null);
-      // logtoSignOut(postSignOutRedirectUri);
-      signOut("http://localhost:5173");
+      // `postSignOutRedirectUri` is `${window.location.origin}/login`, and it must
+      // stay derived. A hardcoded `"http://localhost:5173"` is wrong twice over:
+      // it drops the `/login` path Logto Console has registered (matching there is
+      // exact, scheme and path included), and it pins the redirect to one origin,
+      // which is the same origin-crossing trap that breaks the PKCE callback when
+      // the app is opened anywhere else.
+      logtoSignOut(postSignOutRedirectUri);
       return;
     }
     authApi.logout();
     setUser(null);
   };
-
   const updateUser = async (profileData) => {
     const updated = await authApi.updateProfile(profileData);
     setUser(updated);

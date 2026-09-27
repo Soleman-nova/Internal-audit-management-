@@ -172,12 +172,26 @@ class HeatmapAndSummaryTest(RoleFixtureMixin, TestCase):
         )
 
     def test_heatmap_returns_a_cell_per_assessment(self):
-        response = self.as_user(self.auditee).get(f'{ASSESSMENTS_URL}heatmap/')
+        response = self.as_user(self.auditor).get(f'{ASSESSMENTS_URL}heatmap/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 2)
         cell = next(row for row in response.data if row['likelihood'] == 5)
         self.assertEqual(cell['impact'], 5)
         self.assertEqual(cell['department__name'], self.department.name)
+
+    def test_heatmap_is_scoped_to_the_auditees_own_department(self):
+        """The heat map is the EEU-wide risk register, so for an auditee it has to
+        narrow to their own department.
+
+        Read as the whole organisation it tells the party being assessed which
+        directorates are rated critical — and, since the universe is ordered by
+        risk, effectively what is audited next. One cell is `this_year` (their
+        department); `last_year` belongs to `other_department` and must not appear.
+        """
+        response = self.as_user(self.auditee).get(f'{ASSESSMENTS_URL}heatmap/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['department__name'], self.department.name)
 
     def test_heatmap_respects_the_year_filter(self):
         response = self.as_user(self.auditor).get(f'{ASSESSMENTS_URL}heatmap/?year=2024')

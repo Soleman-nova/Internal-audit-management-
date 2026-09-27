@@ -1,32 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { findingsApi, planningApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import useAsyncData from '../../hooks/useAsyncData';
 import { useI18n } from '../../context/I18nContext';
 import { validateForm, validators, hasErrors } from '../../utils/validation';
 import Modal from '../../components/ui/Modal';
-import Badge from '../../components/ui/Badge';
-import Spinner from '../../components/ui/Spinner';
-import EmptyState from '../../components/ui/EmptyState';
-import FormField from '../../components/ui/FormField';
+import FormErrorSummary from '../../components/ui/FormErrorSummary';
 import EngagementPickerBar from '../../components/ui/EngagementPickerBar';
-import { ShieldAlert, Plus, Layers, List, MessageCircle, FileText, ChevronRight } from 'lucide-react';
+import { Plus, Layers, List } from 'lucide-react';
 
 function FindingsPage() {
   const toast = useToast();
   const { t } = useI18n();
   const navigate = useNavigate();
-  const { canWriteAudit, canCloseFindings } = usePermissions();
-  const [engagements, setEngagements] = useState([]);
+  const { canWriteAudit } = usePermissions();
   const [selectedEngId, setSelectedEngId] = useState('');
-  const [findings, setFindings] = useState([]);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'kanban'
-  const [loading, setLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
 
-  // Selected Finding Inspection Detail
-  const [activeFinding, setActiveFinding] = useState(null);
+  // Which finding the detail pane shows, held as an **id** rather than as the row
+  // object. The list is re-fetched whenever the engagement changes, so a stored
+  // object goes stale the moment that happens — the id cannot, because the row is
+  // derived from whatever list is current.
+  const [selectedFindingId, setSelectedFindingId] = useState(null);
 
   // Add Finding Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -35,45 +33,53 @@ function FindingsPage() {
     description: '', condition: '', criteria: '', cause: '', effect: '', recommendation: ''
   });
 
-  useEffect(() => {
-    fetchEngagements();
-  }, []);
+  // The two loads are independent hooks rather than one fetch chained onto
+  // another. Previously the engagements load ended by calling `fetchFindings` and
+  // the findings load ended by choosing an `activeFinding` — three pieces of state
+  // mutated from the inside of each other's responses, none of them cancellable.
+  // Here the chain is plain derived state: `activeEngId` becomes non-empty, and the
+  // findings hook below re-runs on that dependency; the selected row is picked from
+  // the list on every render instead of being copied out of one.
+  const { data: engagementsData, loading: engagementsLoading } = useAsyncData(
+    async () => {
+      const { items } = await planningApi.getEngagements();
+      // The first engagement rides along as the initial selection, so the page
+      // opens on something without an effect writing state back into a dependency.
+      return { items, defaultId: items.length > 0 ? items[0].id : '' };
+    },
+    [],
+    { onError: () => toast.error(t('engagementsLoadFailed')) },
+  );
 
-  const fetchEngagements = async () => {
-    try {
-      const page = await planningApi.getEngagements();
-      const engList = page.items;
-      setEngagements(engList);
-      if (engList.length > 0) {
-        setSelectedEngId(engList[0].id);
-        fetchFindings(engList[0].id);
-      }
-    } catch (err) {
-      toast.error('Failed to load engagements');
-    }
-  };
+  const engagements = engagementsData?.items ?? [];
+  const activeEngId = selectedEngId || engagementsData?.defaultId || '';
 
-  const fetchFindings = async (engId) => {
-    setLoading(true);
-    try {
-      const list = await findingsApi.getFindings({ engagement: engId });
-      const fList = Array.isArray(list) ? list : [];
-      setFindings(fList);
-      if (fList.length > 0) {
-        setActiveFinding(fList[0]);
-      } else {
-        setActiveFinding(null);
-      }
-    } catch (err) {
-      toast.error('Failed to load findings');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: findingsData, loading: findingsLoading, setData: setFindingsData } = useAsyncData(
+    async () => {
+      const list = await findingsApi.getFindings({ engagement: activeEngId });
+      return Array.isArray(list) ? list : [];
+    },
+    [activeEngId],
+    // `enabled` is load-bearing, not a nicety: before the engagements arrive
+    // `activeEngId` is '' and the request would be an unfiltered one, returning
+    // every finding in the system.
+    { enabled: Boolean(activeEngId), onError: () => toast.error(t('findingsLoadFailed')) },
+  );
+
+  const findings = findingsData ?? [];
+  const loading = engagementsLoading || findingsLoading;
+
+  // Selecting an id that is not in the current list — it belonged to the engagement
+  // the user has just left — falls back to the first row rather than rendering an
+  // empty pane.
+  const activeFinding = findings.length === 0
+    ? null
+    : findings.find(f => f.id === selectedFindingId) ?? findings[0];
 
   const handleEngChange = (val) => {
+    // Setting the selection *is* the request now; re-picking the same engagement is
+    // correctly a no-op rather than a redundant refetch.
     setSelectedEngId(val);
-    fetchFindings(val);
   };
 
   const handleCreateFinding = async (e) => {
@@ -92,34 +98,42 @@ function FindingsPage() {
 
     // finding_number is assigned server-side (FND-#####) — sending one here was
     // silently discarded by perform_create, so the client value never applied.
+    //
+    // `activeEngId`, not `selectedEngId`: the selection only leaves the picker once
+    // the user has touched it, so the raw state is '' while the page is displaying
+    // the first engagement. Posting that would file the finding against no
+    // engagement at all — a 400 that looks like the button is broken.
     const data = {
       ...newFinding,
-      engagement: selectedEngId,
+      engagement: activeEngId,
     };
 
     try {
       const response = await findingsApi.createFinding(data);
-      setFindings([response, ...findings]);
-      setActiveFinding(response);
+      // Optimistic prepend: the created row is already in hand, so a refetch would
+      // only be to receive data we just sent. `setData` is the hook's escape hatch
+      // for exactly this, and the new id makes it the visible selection.
+      setFindingsData([response, ...findings]);
+      setSelectedFindingId(response.id);
       setShowAddModal(false);
       // Reset
       setNewFinding({
         title: '', severity: 'medium', category: 'control_deficiency',
         description: '', condition: '', criteria: '', cause: '', effect: '', recommendation: ''
       });
-      toast.success('Finding logged successfully!');
+      toast.success(t('findingsCreatedToast'));
     } catch (err) {
       const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
-      toast.error('Failed to create finding: ' + msg);
+      toast.error(t('findingsCreateFailed', msg));
     }
   };
 
   // Kanban Columns configuration
   const columns = [
-    { id: 'draft', title: 'Draft' },
-    { id: 'open', title: 'Open' },
-    { id: 'in_progress', title: 'In Progress' },
-    { id: 'resolved', title: 'Resolved' },
+    { id: 'draft', title: t('draft') },
+    { id: 'open', title: t('open') },
+    { id: 'in_progress', title: t('inProgress') },
+    { id: 'resolved', title: t('resolved') },
   ];
 
   return (
@@ -129,7 +143,10 @@ function FindingsPage() {
         <EngagementPickerBar
           idPrefix="findings"
           engagements={engagements}
-          value={selectedEngId}
+          // The resolved id, not the raw selection: the picker must show the
+          // engagement whose findings are actually on screen, and that is the
+          // default one until the user picks otherwise.
+          value={activeEngId}
           onChange={handleEngChange}
           label={t('selectAuditEngagement')}
         />
@@ -172,9 +189,9 @@ function FindingsPage() {
                       <div
                         key={f.id}
                         className={`finding-list-item ${activeFinding?.id === f.id ? 'active' : ''}`}
-                        onClick={() => setActiveFinding(f)}
+                        onClick={() => setSelectedFindingId(f.id)}
                         onDoubleClick={() => navigate(`/findings/${f.id}`)}
-                        title={t('clickForDetails') || 'Click to view details'}
+                        title={t('clickForDetails')}
                       >
                         <div className="finding-item-meta">
                           <span className="finding-num">{f.finding_number}</span>
@@ -203,40 +220,40 @@ function FindingsPage() {
 
                   <div className="detail-body">
                     <div className="detail-section">
-                      <h4>Description</h4>
+                      <h4>{t('description')}</h4>
                       <p>{activeFinding.description}</p>
                     </div>
 
                     <div className="detail-section">
-                      <h4>Condition (What was found?)</h4>
+                      <h4>{t('condition')}</h4>
                       <p>{activeFinding.condition || 'N/A'}</p>
                     </div>
 
                     <div className="detail-section">
-                      <h4>Criteria (What policies/standards apply?)</h4>
+                      <h4>{t('criteria')}</h4>
                       <p>{activeFinding.criteria || 'N/A'}</p>
                     </div>
 
                     <div className="detail-section">
-                      <h4>Root Cause Analysis</h4>
+                      <h4>{t('rootCause')}</h4>
                       <p>{activeFinding.cause || 'N/A'}</p>
                     </div>
 
                     <div className="detail-section">
-                      <h4>Effect & Impact (Potential Risk)</h4>
+                      <h4>{t('effectImpact')}</h4>
                       <p>{activeFinding.effect || 'N/A'}</p>
                     </div>
 
                     <div className="detail-section highlight-box">
-                      <h4>Auditor Recommendation</h4>
+                      <h4>{t('auditorRecommendation')}</h4>
                       <p>{activeFinding.recommendation || 'N/A'}</p>
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="card text-center py-8">
-                  <h3>No Finding Selected</h3>
-                  <p className="text-muted">Select a finding from the left panel to inspect details.</p>
+                  <h3>{t('noFindingSelected')}</h3>
+                  <p className="text-muted">{t('selectFinding')}</p>
                 </div>
               )}
             </div>
@@ -253,7 +270,7 @@ function FindingsPage() {
                     </div>
                     <div className="kanban-cards-container">
                       {colFindings.map(f => (
-                        <div key={f.id} className="kanban-card" onClick={() => { setViewMode('list'); setActiveFinding(f); }}>
+                        <div key={f.id} className="kanban-card" onClick={() => { setViewMode('list'); setSelectedFindingId(f.id); }}>
                           <span className={`risk-tag tag-xs ${f.severity === 'critical' ? 'critical' : f.severity === 'high' ? 'high' : 'medium'}`}>
                             {f.severity?.toUpperCase()}
                           </span>
@@ -274,25 +291,32 @@ function FindingsPage() {
       <Modal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        title="Log New Audit Finding"
+        title={t('logNewFinding')}
         size="xl"
         footer={(
           <>
-            <button type="button" className="btn btn-outline" onClick={() => setShowAddModal(false)}>Cancel</button>
+            <button type="button" className="btn btn-outline" onClick={() => setShowAddModal(false)}>{t('cancel')}</button>
             {/* `form=` because Modal renders the footer as a sibling of its
                 children, so the submit button sits outside the <form>. */}
-            <button type="submit" form="finding-form" className="btn btn-accent">Save &amp; Log Finding</button>
+            <button type="submit" form="finding-form" className="btn btn-accent">{t('saveLogFinding')}</button>
           </>
         )}
       >
-        <form id="finding-form" onSubmit={handleCreateFinding}>
+        {/* `noValidate` hands validation to the app, as UsersPage's forms already
+            do. Without it the browser's own check intercepts an empty submit and
+            React's onSubmit never fires — so `validateForm` never runs, the banner
+            below never renders, and the user gets a browser tooltip instead of the
+            named fields. The three `required` inputs here are all also covered by
+            the app's validators, so nothing stops being enforced. */}
+        <form id="finding-form" onSubmit={handleCreateFinding} noValidate>
+          <FormErrorSummary errors={formErrors} />
           <div className="form-group">
-            <label className="form-label" htmlFor="finding_title">Finding Title</label>
+            <label className="form-label" htmlFor="finding_title">{t('findingTitle')}</label>
             <input
               id="finding_title"
               type="text"
               className="form-control"
-              placeholder="e.g. Inadequate data replication verification logs"
+              placeholder={t('findingsTitlePlaceholder')}
               value={newFinding.title}
               onChange={(e) => setNewFinding({ ...newFinding, title: e.target.value })}
               required
@@ -301,38 +325,38 @@ function FindingsPage() {
 
           <div className="form-group-row">
             <div className="form-group">
-              <label className="form-label" htmlFor="finding_severity">Severity Level</label>
+              <label className="form-label" htmlFor="finding_severity">{t('severityLevel')}</label>
               <select
                 id="finding_severity"
                 className="form-control"
                 value={newFinding.severity}
                 onChange={(e) => setNewFinding({ ...newFinding, severity: e.target.value })}
               >
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
+                <option value="critical">{t('critical')}</option>
+                <option value="high">{t('high')}</option>
+                <option value="medium">{t('medium')}</option>
+                <option value="low">{t('low')}</option>
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="finding_category">Finding Category</label>
+              <label className="form-label" htmlFor="finding_category">{t('findingCategory')}</label>
               <select
                 id="finding_category"
                 className="form-control"
                 value={newFinding.category}
                 onChange={(e) => setNewFinding({ ...newFinding, category: e.target.value })}
               >
-                <option value="control_deficiency">Control Deficiency</option>
-                <option value="compliance">Compliance Issue</option>
-                <option value="fraud">Fraud Risk</option>
-                <option value="operational">Operational Weakness</option>
-                <option value="it_security">IT/Security Issue</option>
+                <option value="control_deficiency">{t('controlDeficiency')}</option>
+                <option value="compliance">{t('complianceIssue')}</option>
+                <option value="fraud">{t('fraudRisk')}</option>
+                <option value="operational">{t('operationalWeakness')}</option>
+                <option value="it_security">{t('itSecurityIssue')}</option>
               </select>
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="finding_description">Description (Summary)</label>
+            <label className="form-label" htmlFor="finding_description">{t('descriptionSummary')}</label>
             <textarea
               id="finding_description"
               rows="3"
@@ -345,7 +369,7 @@ function FindingsPage() {
 
           <div className="form-group-row">
             <div className="form-group">
-              <label className="form-label" htmlFor="finding_condition">Condition (Actual Situation)</label>
+              <label className="form-label" htmlFor="finding_condition">{t('conditionActual')}</label>
               <textarea
                 id="finding_condition"
                 rows="2"
@@ -355,7 +379,7 @@ function FindingsPage() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="finding_criteria">Criteria (Policy / Policy Standard)</label>
+              <label className="form-label" htmlFor="finding_criteria">{t('criteriaPolicy')}</label>
               <textarea
                 id="finding_criteria"
                 rows="2"
@@ -368,7 +392,7 @@ function FindingsPage() {
 
           <div className="form-group-row">
             <div className="form-group">
-              <label className="form-label" htmlFor="finding_cause">Root Cause (Why it happened?)</label>
+              <label className="form-label" htmlFor="finding_cause">{t('rootCauseWhy')}</label>
               <textarea
                 id="finding_cause"
                 rows="2"
@@ -378,7 +402,7 @@ function FindingsPage() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="finding_effect">Effect &amp; Risk (Impact)</label>
+              <label className="form-label" htmlFor="finding_effect">{t('effectRisk')}</label>
               <textarea
                 id="finding_effect"
                 rows="2"
@@ -390,12 +414,12 @@ function FindingsPage() {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="finding_recommendation">Auditor Recommendation</label>
+            <label className="form-label" htmlFor="finding_recommendation">{t('auditorRecommendation')}</label>
             <textarea
               id="finding_recommendation"
               rows="2"
               className="form-control"
-              placeholder="Provide actionable correction advice..."
+              placeholder={t('findingsRecommendationPlaceholder')}
               value={newFinding.recommendation}
               onChange={(e) => setNewFinding({ ...newFinding, recommendation: e.target.value })}
               required

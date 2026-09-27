@@ -66,7 +66,6 @@ test('a generated report flips to READY and downloads without a manual refresh',
     title, format: 'pdf', engagement: engagementId,
   });
   expect(generated.status).toBe(201);
-  const reportId = generated.body.id;
 
   // The reports page polls while any row is generating, so the row must flip
   // to READY here with no manual refresh — exactly the walkthrough's step 2.13.

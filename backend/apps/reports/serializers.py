@@ -8,7 +8,9 @@ class ReportTemplateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ReportTemplate
-        fields = '__all__'
+        fields = ['id', 'type_display', 'created_by_name', 'name', 'template_type',
+                  'description', 'is_default', 'template_file', 'created_at',
+                  'created_by']
 
     def get_created_by_name(self, obj):
         if obj.created_by:
@@ -23,7 +25,9 @@ class GeneratedReportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = GeneratedReport
-        fields = '__all__'
+        fields = ['id', 'generated_by_name', 'file_url', 'engagement_title', 'title',
+                  'format', 'status', 'parameters', 'file', 'generated_at',
+                  'error_message', 'template', 'engagement', 'generated_by']
 
     def get_file_url(self, obj):
         if obj.file:

@@ -11,7 +11,11 @@ class AuditProcedureSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AuditProcedure
-        fields = '__all__'
+        fields = ['id', 'assigned_to_name', 'completed_by_name', 'status_display',
+                  'type_display', 'step_number', 'title', 'description',
+                  'procedure_type', 'risk_area', 'assertion', 'expected_evidence',
+                  'status', 'completed_at', 'conclusion', 'is_template', 'order',
+                  'created_at', 'updated_at', 'program', 'assigned_to', 'completed_by']
 
 
 class AuditProgramSerializer(serializers.ModelSerializer):
@@ -23,7 +27,11 @@ class AuditProgramSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AuditProgram
-        fields = '__all__'
+        fields = ['id', 'procedures', 'prepared_by_name', 'approved_by_name',
+                  'status_display', 'completion_percent', 'title', 'objectives',
+                  'scope', 'status', 'version', 'approved_at', 'created_at',
+                  'updated_at', 'engagement', 'prepared_by', 'reviewed_by',
+                  'approved_by']
 
     def get_completion_percent(self, obj):
         total = obj.procedures.count()
@@ -40,7 +48,10 @@ class WorkingPaperSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkingPaper
-        fields = '__all__'
+        fields = ['id', 'prepared_by_name', 'reviewed_by_name', 'file_url',
+                  'reference', 'title', 'description', 'paper_type', 'file',
+                  'is_reviewed', 'review_notes', 'created_at', 'updated_at',
+                  'engagement', 'procedure', 'prepared_by', 'reviewed_by']
 
     def get_file_url(self, obj):
         if obj.file:

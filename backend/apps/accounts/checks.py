@@ -1,23 +1,14 @@
-"""Startup checks for the Logto integration.
+"""Startup checks.
 
-Django runs these on `manage.py check`, on `runserver`, and in CI. That matters
-because the failure they guard against is otherwise invisible: PyJWT decides
-whether it can verify ES384 **once, at import**, and caches the answer. A venv
-missing `cryptography` therefore produces a running server that rejects every
-valid Logto token with:
+Django runs these on `manage.py check`, on `runserver`, and in CI, which makes
+them the right place for failures that are otherwise invisible — a server that
+starts cleanly but cannot do its job.
 
-    Rejected Logto ID token: ES384 requires 'cryptography' to be installed.
-
-which reaches the user as a 401 "Logto token could not be verified" — a message
-that points at the token, the audience, or an attacker, and never at the missing
-package. Worse, a server already running when the package is installed keeps the
-stale answer until it is restarted, so "I installed it" and "it still fails" are
-both true at once.
-
-Checking here turns all of that into a startup error naming the real cause.
+Two so far: the Logto dependency below, and the scheduled-CAPA-job check that
+follows it.
 """
 from django.conf import settings
-from django.core.checks import Error, register
+from django.core.checks import Error, Warning, register
 
 
 @register()
@@ -44,3 +35,63 @@ def logto_crypto_available(app_configs, **kwargs):
         ]
 
     return []
+
+
+@register()
+def overdue_capas_are_still_open(app_configs, **kwargs):
+    """Warn when past-due corrective actions are still open — the job is not running.
+
+    `flag_overdue_actions` is the only thing that moves a past-due CAPA to
+    `overdue` and emits the `action_overdue` / `action_due` / `follow_up`
+    notifications. Nothing calls it on its own: the deployment has to schedule it
+    (README "scheduled jobs", USER_MANUAL#scheduled-jobs). When nobody has, the
+    entire feature is inert — and inert is indistinguishable from "nothing is
+    overdue", so it goes unnoticed for as long as the deployment survives.
+
+    **Derived, deliberately.** A past-due action still sitting in `open` /
+    `in_progress` *is* the evidence that the job has not run, so this needs no new
+    column, migration or bookkeeping — and there is no timestamp to forget to
+    write.
+
+    A Warning rather than an Error: the application is fully functional, it is the
+    automation that is missing. An Error would also fail `manage.py test`, which
+    runs these checks against an empty database.
+    """
+    from django.db.models import Q
+    from django.db.utils import OperationalError, ProgrammingError
+    from django.utils import timezone
+
+    from apps.corrective_actions.models import CorrectiveAction
+
+    try:
+        today = timezone.now().date()
+        stale = CorrectiveAction.objects.filter(
+            # Mirrors the command's own notion of "past due": an extension wins
+            # over the original due date, so an action with a past `due_date` and
+            # a future `extended_due_date` is correctly left alone by the job and
+            # must not be counted as evidence against it here.
+            Q(extended_due_date__lt=today)
+            | Q(extended_due_date__isnull=True, due_date__lt=today),
+            status__in=['open', 'in_progress'],
+        ).count()
+    except (OperationalError, ProgrammingError):
+        # `check` runs before `migrate` on a fresh database, and in CI. A table
+        # that does not exist yet is not this check's business to report.
+        return []
+
+    if not stale:
+        return []
+
+    return [
+        Warning(
+            f'{stale} corrective action(s) are past due but still marked open, so '
+            f'`flag_overdue_actions` is not being run on a schedule. They will never '
+            f'flip to `overdue`, and their owners will never receive an overdue, '
+            f'due-soon or follow-up notification.',
+            hint='Schedule the job daily — see README.md "scheduled jobs" and '
+                 'USER_MANUAL.md#scheduled-jobs for the Task Scheduler and cron '
+                 'commands. Running it once by hand also clears this: '
+                 'python manage.py flag_overdue_actions',
+            id='accounts.W001',
+        )
+    ]

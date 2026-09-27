@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+/* eslint-disable react-refresh/only-export-components -- provider and `useToast`
+   hook in one module, as in AuthContext; see the note there. */
+import { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { CheckCircle2, AlertTriangle, AlertCircle, Info, X } from 'lucide-react';
 import { useI18n } from './I18nContext';
 

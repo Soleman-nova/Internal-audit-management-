@@ -1,17 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { reportsApi, planningApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
+import useAsyncData from '../../hooks/useAsyncData';
 import { validateForm, validators, hasErrors } from '../../utils/validation';
 import Modal from '../../components/ui/Modal';
-import Badge from '../../components/ui/Badge';
-import Spinner from '../../components/ui/Spinner';
-import EmptyState from '../../components/ui/EmptyState';
-import FormField from '../../components/ui/FormField';
+import FormErrorSummary from '../../components/ui/FormErrorSummary';
 import EngagementPickerBar from '../../components/ui/EngagementPickerBar';
 import Pagination from '../../components/ui/Pagination';
-import { FileText, Download, Plus, RefreshCw, BarChart2 } from 'lucide-react';
+import { FileText, Download, Plus, RefreshCw } from 'lucide-react';
 
 function ReportsPage() {
   const toast = useToast();
@@ -19,17 +17,13 @@ function ReportsPage() {
   const [searchParams] = useSearchParams();
   // reports/jobs.py notifies with /reports?id=<id> when a report finishes.
   const focusReportId = searchParams.get('id');
-  const [templates, setTemplates] = useState([]);
-  const [engagements, setEngagements] = useState([]);
-  // `generated` holds only the current page slice of the archive; the page,
-  // size and reload key drive server-side pagination (reloadKey lets the poll
-  // and the generate flow force a refetch even when the page is unchanged).
-  const [generated, setGenerated] = useState([]);
-  const [generatedCount, setGeneratedCount] = useState(0);
+
+  // The archive's fetch dependencies: a page click, the size selector, the
+  // Refresh button and the poll below each re-run its request by changing one of
+  // the three, rather than calling a fetcher by hand.
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [genReloadKey, setGenReloadKey] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [formErrors, setFormErrors] = useState({});
   const [downloadingId, setDownloadingId] = useState(null);
 
@@ -38,20 +32,109 @@ function ReportsPage() {
   const [selectedEngId, setSelectedEngId] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [selectedFormat, setSelectedFormat] = useState('pdf');
-  const [reportTitle, setReportTitle] = useState('');
+  const [reportTitle, setReportTitle] = useState(null);
   const [generating, setGenerating] = useState(false);
 
-  useEffect(() => {
-    fetchReportsData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  /* ── Reference data: report templates + the engagement picker's list ────
+   * One request — the two were already fetched together with `Promise.all` — and
+   * the *defaults* ride back with it. The old mount fetch wrote them into five
+   * pieces of state (`templates`, `engagements`, `selectedEngId`,
+   * `selectedTemplateId` and the report title) from inside its own response, so
+   * the fetcher depended on the state it was setting. They are resolved at render
+   * time below instead: a value the user has not chosen yet falls back to the
+   * default the loader returned, and nothing writes it back into state.
+   */
+  const { data: referenceData, loading: referenceLoading } = useAsyncData(
+    async () => {
+      const [tempRes, engRes] = await Promise.all([
+        reportsApi.getTemplates(),
+        planningApi.getEngagements({ page_size: 1000 }),
+      ]);
+      const templates = Array.isArray(tempRes) ? tempRes : [];
+      const engagements = engRes.items ?? [];
+      return {
+        templates,
+        engagements,
+        defaultEngId: engagements[0]?.id ?? '',
+        defaultTemplateId: templates[0]?.id ?? '',
+        defaultTitle: engagements[0] ? `Audit Report for ${engagements[0].title}` : '',
+      };
+    },
+    [],
+    { onError: () => toast.error('Failed to load reports data') },
+  );
+
+  const templates = referenceData?.templates ?? [];
+  const engagements = referenceData?.engagements ?? [];
+
+  // The user's pick, or the default until they make one. Resolved here rather
+  // than stored, because the raw selection is still '' on load while the page is
+  // already displaying — and submitting — the first engagement/template.
+  const engId = selectedEngId || referenceData?.defaultEngId || '';
+  const templateId = selectedTemplateId || referenceData?.defaultTemplateId || '';
+  // `reportTitle` stays null until the user types, so the default shows through
+  // without an effect copying it into state. Clearing the box yields '' (not
+  // null) and therefore keeps the box empty, exactly as before.
+  const reportTitleValue = reportTitle ?? referenceData?.defaultTitle ?? '';
+
+  // ── Generated reports archive (server-side paginated) ────────────
+  // The page slice and its total were two pieces of state fed by `fetchGenerated`
+  // from three different callers (mount, the paged effect, the deep-link scan).
+  // The loader now returns both halves of the single response, as AuditTrailPage
+  // does, and page/pageSize/genReloadKey *are* the request. Nothing special-cases
+  // the mount — the hook runs on mount — so the `generatedLoadedRef` guard that
+  // skipped the first paged effect is gone.
+  const archiveNeverLoadedRef = useRef(true);
+
+  const { data: archiveData, loading: archiveLoading } = useAsyncData(
+    async () => {
+      const res = await reportsApi.getGeneratedReports({ page, page_size: pageSize });
+      archiveNeverLoadedRef.current = false;
+      return { items: res.items ?? [], count: res.count ?? 0 };
+    },
+    [page, pageSize, genReloadKey],
+    {
+      onError: () => {
+        // The first load used to sit inside `fetchReportsData`'s catch, which
+        // toasted; a failed *refetch* was deliberately silent ("the next tick
+        // retries"). Same message for both, so the guard is what keeps the poll
+        // from repeating it every three seconds. `referenceData` keeps a total
+        // outage to the single toast the old combined load produced.
+        if (archiveNeverLoadedRef.current && referenceData) {
+          toast.error('Failed to load reports data');
+        }
+      },
+    },
+  );
+
+  // Memoised so the two effects below can depend on the slice without the `?? []`
+  // making a fresh array every render.
+  const generated = useMemo(() => archiveData?.items ?? [], [archiveData]);
+  const generatedCount = archiveData?.count ?? 0;
+
+  const totalPages = Math.max(1, Math.ceil(generatedCount / pageSize));
+
+  // `fetchGenerated` clamped the page from inside its own response, so that a
+  // refresh which shrank the archive could not leave the pointer past the last
+  // page. That branch was unreachable: a *successful* page response always proves
+  // `page <= last` (DRF's PageNumberPagination 404s an out-of-range page, and
+  // `max_page_size` is 1000 against a control that offers at most 100), and the
+  // 404 path — the only way the pointer can really end up out of range, e.g. when
+  // the page size grows under a later page — never reached the clamp at all. It
+  // is not reimplemented here: `page` is left as the user's pointer, and the
+  // Pagination control still walks it back with its prev button.
+
+  // Only the *first* archive load blanks the table. A page change or a poll tick
+  // must not — the old archive fetch deliberately left `loading` alone so the
+  // poll could never flicker the table.
+  const loading = referenceLoading || (archiveData === null && archiveLoading);
 
   // ── Poll while anything is still being generated ─────────────────
   // Generation runs off-thread in reports/jobs.py, so the row lands as
   // `generating` and flips to ready/failed seconds later. Each tick bumps the
-  // reload key, which drives the paged fetch effect below — so whatever page is
-  // visible is what gets refetched. If the generating row is on another page,
-  // polling naturally stops until the user returns to that page.
+  // reload key, which is one of the archive request's dependencies below — so
+  // whatever page is visible is what gets refetched. If the generating row is on
+  // another page, polling naturally stops until the user returns to that page.
   const pollRef = useRef(null);
   const anyGenerating = generated.some(g => g.status === 'generating');
 
@@ -82,38 +165,11 @@ function ReportsPage() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [loading, focusReportId, generated]);
 
-  // ── Paged archive helpers ────────────────────────────────────────
-  const generatedLoadedRef = useRef(false);
+  // ── Deep-link lookup ─────────────────────────────────────────────
   const focusLocatedRef = useRef(false);
 
-  // Fetch one page of generated reports (defaults to the current page/size).
-  // Used by the mount load, page navigation and the generate/poll reload path.
-  // Does not toggle `loading`, so the poll never blanks the table.
-  const fetchGenerated = async (pageNo = page, size = pageSize) => {
-    const res = await reportsApi.getGeneratedReports({ page: pageNo, page_size: size });
-    setGenerated(res.items || []);
-    setGeneratedCount(res.count || 0);
-    // Clamp: after a refresh the current page may exceed the new last page.
-    const last = Math.max(1, Math.ceil((res.count || 0) / size));
-    if (pageNo > last) setPage(last);
-    return res;
-  };
-
-  // Refetch the visible page whenever the page, page size or reload key change.
-  // The very first run is skipped — fetchReportsData loads page 1 on mount.
-  useEffect(() => {
-    if (!generatedLoadedRef.current) {
-      generatedLoadedRef.current = true;
-      return undefined;
-    }
-    fetchGenerated(page, pageSize).catch(() => {
-      // A failed refetch is not worth a toast — the next tick retries.
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize, genReloadKey]);
-
   // Deep link (?id=N from reports/jobs.py): the report may live beyond page 1.
-  // Scan forward once and jump to its page; the paged effect refetches it and
+  // Scan forward once and jump to its page; that page change refetches it and
   // the scroll effect then centers the ringed row.
   useEffect(() => {
     if (loading || !focusReportId || focusLocatedRef.current) return;
@@ -131,41 +187,15 @@ function ReportsPage() {
         }
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, focusReportId, generated, generatedCount, pageSize]);
-
-  const fetchReportsData = async () => {
-    setLoading(true);
-    try {
-      const [tempRes, engRes] = await Promise.all([
-        reportsApi.getTemplates(),
-        planningApi.getEngagements({ page_size: 1000 }),
-      ]);
-      const templateList = Array.isArray(tempRes) ? tempRes : [];
-      const engList = engRes.items;
-
-      setTemplates(templateList);
-      setEngagements(engList);
-
-      if (engList.length > 0) {
-        setSelectedEngId(engList[0].id);
-        setReportTitle(`Audit Report for ${engList[0].title}`);
-      }
-      if (templateList.length > 0) {
-        setSelectedTemplateId(templateList[0].id);
-      }
-      await fetchGenerated(1, pageSize);
-    } catch (err) {
-      toast.error('Failed to load reports data');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleGenerateReport = async (e) => {
     e.preventDefault();
-    // Validate form
-    const errors = validateForm({ title: reportTitle, engagement: selectedEngId, template: selectedTemplateId }, {
+    // Validate form. The resolved ids and title, not the raw selections: on mount
+    // those are still '' while the form is showing the first template and
+    // engagement, so validating (and then posting) the raw state would look like a
+    // 400 from nowhere on the one path a user takes when the defaults are right.
+    const errors = validateForm({ title: reportTitleValue, engagement: engId, template: templateId }, {
       title: { validators: [validators.required, validators.minLength(5)] },
       engagement: { validators: [validators.required] },
       template: { validators: [validators.required] },
@@ -177,9 +207,9 @@ function ReportsPage() {
     setFormErrors({});
     setGenerating(true);
     const data = {
-      title: reportTitle,
-      template: selectedTemplateId,
-      engagement: selectedEngId,
+      title: reportTitleValue,
+      template: templateId,
+      engagement: engId,
       format: selectedFormat
     };
 
@@ -188,8 +218,9 @@ function ReportsPage() {
       setShowGenModal(false);
       toast.success('Report generation triggered. Download available when status is READY.');
       // Newest-first ordering (-generated_at) puts the new generating row on
-      // page 1, so jump there and let the paged effect refetch it; the poll
-      // above then keeps refetching until the file is ready.
+      // page 1, so jump there and let the page change (or the reload key, if the
+      // page is already 1) refetch it; the poll above then keeps refetching until
+      // the file is ready.
       setPage(1);
       setGenReloadKey(k => k + 1);
     } catch (err) {
@@ -318,7 +349,7 @@ function ReportsPage() {
 
           <Pagination
             page={page}
-            pageCount={Math.max(1, Math.ceil(generatedCount / pageSize))}
+            pageCount={totalPages}
             totalCount={generatedCount}
             onPageChange={setPage}
             pageSize={pageSize}
@@ -345,26 +376,37 @@ function ReportsPage() {
           </>
         )}
       >
-        <form id="report-form" onSubmit={handleGenerateReport}>
+        {/* `noValidate` hands validation to the app, as UsersPage's forms already
+            do. Without it the browser's own check on the `required` title
+            intercepts an empty submit, React's onSubmit never fires — so
+            `validateForm` never runs and the FormErrorSummary below never
+            renders. The title is covered by validators.required (plus
+            minLength), and the engagement/template fields by their own required
+            validators, so nothing stops being enforced. */}
+        <form id="report-form" onSubmit={handleGenerateReport} noValidate>
+          <FormErrorSummary errors={formErrors} />
           <div className="form-group">
             <label className="form-label" htmlFor="report_title">{t('reportDocumentTitle')}</label>
             <input
               id="report_title"
               type="text"
               className="form-control"
-              value={reportTitle}
+              value={reportTitleValue}
               onChange={(e) => setReportTitle(e.target.value)}
               required
             />
           </div>
 
+          {/* `value` is the resolved id, not the raw selection: the picker must
+              show the engagement whose report will actually be generated, which
+              is the loader's default until the user picks another. */}
           <EngagementPickerBar
             idPrefix="report"
             engagements={engagements}
-            value={selectedEngId}
+            value={engId}
             onChange={(id) => {
               setSelectedEngId(id);
-              const engObj = engagements.find(eng => eng.id.toString() === id.toString());
+              const engObj = engagements.find(eng => String(eng.id) === String(id));
               if (engObj) setReportTitle(`Audit Report for ${engObj.title}`);
             }}
             label={t('selectAuditEngagement')}
@@ -376,7 +418,7 @@ function ReportsPage() {
               <select
                 id="report_template"
                 className="form-control"
-                value={selectedTemplateId}
+                value={templateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
               >
                 {templates.map(tpl => (

@@ -7,11 +7,12 @@ class NotificationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Notification
-        fields = '__all__'
+        fields = ['id', 'type_display', 'notification_type', 'title', 'message',
+                  'link', 'is_read', 'read_at', 'created_at', 'user']
         read_only_fields = ['user', 'created_at', 'read_at']
 
 
 class SystemSettingSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemSetting
-        fields = '__all__'
+        fields = ['id', 'key', 'value', 'description', 'updated_at', 'updated_by']

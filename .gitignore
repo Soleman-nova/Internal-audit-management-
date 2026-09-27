@@ -34,6 +34,11 @@ yarn-error.log*
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
-backend/.env 
-.env 
-"simple signin/" 
+
+# `backend/.env` and `simple signin/` are already covered by the rules above,
+# but an ignore pattern never applies to a path git already tracks — both were
+# committed before those rules existed, so removing them from the index
+# (`git rm --cached`) is what actually untracks them. Kept explicit so the
+# intent is not silently lost if either is ever re-added.
+backend/.env
+"simple signin/"

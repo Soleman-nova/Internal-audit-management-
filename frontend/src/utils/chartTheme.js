@@ -4,9 +4,13 @@
  * Recharts renders `fill` / `stroke` as SVG presentation attributes, where
  * `var(--token)` does not resolve — so the palette has to exist as literal
  * strings here as well as in index.css, and only one of the two can be the
- * source of truth. This module is it; the `--sev-*` / `--st-*` custom
- * properties in index.css mirror these values for the parts of the dashboard
- * that are styled in CSS (the lifecycle strip, the legends).
+ * source of truth. This module is it: everything that draws takes its colours
+ * from the literals below.
+ *
+ * The `--sev-*` / `--st-*` custom properties in index.css mirror these values
+ * but are referenced nowhere. An earlier version of this comment claimed the
+ * lifecycle strip and the legends consumed them; they never did. Editing that
+ * block in index.css changes nothing — see the note beside it.
  *
  * Kept theme-aware via {@link useChartTheme}: the old module-level constants
  * were dark-only, which made the gridlines invisible on white and left a dark

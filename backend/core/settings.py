@@ -8,7 +8,11 @@ from decouple import config, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DEBUG = config('DEBUG', default=True, cast=bool)
+# Secure by default: an unset DEBUG means production behaviour, not development.
+# Debug pages leak stack traces, settings and source, so it is opt-*in*
+# (`DEBUG=True` in .env) rather than opt-out. Local development is unaffected —
+# backend/.env sets it explicitly, and .env.example documents that it must.
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 # No fallback once DEBUG is off. A deployment that ships without a .env should
 # fail to boot rather than come up quietly signing tokens with a key published

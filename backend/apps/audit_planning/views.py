@@ -17,6 +17,7 @@ from apps.common.permissions import (
     CanWriteAudit, RequiresCapability, InvolvedPartyOrCapability, APPROVE_PLANS,
 )
 from apps.common.audit_utils import log_audit
+from apps.common.scoping import AuditeeScopeMixin
 from apps.common.reference_numbers import save_with_reference_number
 from apps.common.request_utils import with_parent
 from apps.notifications.services import notify, notify_roles
@@ -290,12 +291,22 @@ def _coerce_universe_row(fields, dept_by_code, dept_by_name, creating):
     return values, errors
 
 
-class AuditUniverseViewSet(viewsets.ModelViewSet):
+class AuditUniverseViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
     queryset = AuditUniverse.objects.select_related(
         'department', 'region', 'service_center', 'directorate',
     ).all()
     serializer_class = AuditUniverseSerializer
     permission_classes = [CanWriteAudit]
+
+    # The risk-weighted universe is the audit department's forward plan: sorted by
+    # risk score, it effectively announces which entities are audited next. An
+    # auditee sees only the entries for their own department.
+    #
+    # `department` is nullable, so an entry with no department matches nobody —
+    # the same "missing department means least access" reading the other scoped
+    # viewsets use.
+    auditee_scope_fields = ('department_id',)
+    auditee_scope_personal_fields = ()
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['category', 'status', 'department', 'region', 'service_center', 'directorate']
     search_fields = ['name', 'code', 'owner']
@@ -543,11 +554,16 @@ class AuditUniverseViewSet(viewsets.ModelViewSet):
         })
 
 
-class ProjectViewSet(viewsets.ModelViewSet):
+class ProjectViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
     """PPM project registry feeding the Audit Universe project dropdown."""
     queryset = Project.objects.select_related('department', 'region', 'service_center').all()
     serializer_class = ProjectSerializer
     permission_classes = [CanWriteAudit]
+
+    # Same reasoning as the universe it feeds: an auditee sees their own
+    # department's projects and no others.
+    auditee_scope_fields = ('department_id',)
+    auditee_scope_personal_fields = ()
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['department', 'region', 'service_center']
     search_fields = ['name', 'code']
@@ -569,10 +585,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
             instance.delete()
 
 
-class AuditPlanViewSet(viewsets.ModelViewSet):
+class AuditPlanViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
     queryset = AuditPlan.objects.select_related('created_by', 'approved_by', 'directorate', 'parent_plan').prefetch_related('engagements').all()
     serializer_class = AuditPlanSerializer
     permission_classes = [CanWriteAudit]
+
+    # `AuditPlan` carries no department of its own — it is scoped through the
+    # engagements it contains, which is where the department lives. A plan whose
+    # engagements are all elsewhere matches nothing, and the plan author keeps
+    # sight of their own either way.
+    auditee_scope_fields = ('engagements__department_id',)
+    auditee_scope_personal_fields = ('created_by',)
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'year', 'directorate', 'plan_scope']
     search_fields = ['title', 'description']

@@ -1,55 +1,110 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { usersApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
+import useAsyncData from '../../hooks/useAsyncData';
 import DataTable from '../../components/ui/DataTable';
 import Badge from '../../components/ui/Badge';
-import { Activity, Search, RefreshCw, Filter, Clock, User, Shield } from 'lucide-react';
+import { Activity, Search, RefreshCw, Filter } from 'lucide-react';
+
+const changeValue = (value) => {
+  if (value === null || value === undefined || value === '') return '—';
+  return String(value);
+};
+
+/** A compact "from → to" rendering of an audit entry's change diff.
+ *
+ * This is what makes the trail worth reading: "an UPDATE happened" is not an audit
+ * finding, but "status went draft → approved" is. The diff has been recorded
+ * (`AuditTrail.changes`, a JSONField) and returned by the API all along — the
+ * server populates it at a dozen call sites — it was simply never displayed.
+ *
+ * Two shapes arrive here. Most entries store `{field: [old, new]}`; the bulk
+ * commands log a plain dict of facts typed by hand (e.g. `{demo_case: true}`), so
+ * anything that is not a two-item list is rendered as a value, not a transition.
+ */
+function ChangeSummary({ changes }) {
+  const entries =
+    changes && typeof changes === 'object' && !Array.isArray(changes)
+      ? Object.entries(changes)
+      : [];
+
+  if (entries.length === 0) return <span className="text-muted">—</span>;
+
+  // Capped at three: a status change plus a couple of edited fields is the
+  // readable case, and a long field list would set the row height for the page.
+  const shown = entries.slice(0, 3);
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {shown.map(([field, value]) => (
+        <span key={field} className="text-xs font-mono text-secondary">
+          <span className="text-muted">{field}:</span>{' '}
+          {Array.isArray(value)
+            ? `${changeValue(value[0])} → ${changeValue(value[1])}`
+            : changeValue(value)}
+        </span>
+      ))}
+      {entries.length > shown.length && (
+        <span className="text-xs text-muted">+{entries.length - shown.length}</span>
+      )}
+    </div>
+  );
+}
 
 function AuditTrailPage() {
   const toast = useToast();
   const { t } = useI18n();
-  const [trail, setTrail] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  // What the *server* is filtered by, as distinct from what is typed in the box.
+  // Search is submit-driven, so the input itself is not a fetch dependency — but
+  // giving the applied term its own state is what lets the fetch below be a pure
+  // function of its dependencies rather than a manual call, which is where the
+  // race lived.
+  const [submittedQuery, setSubmittedQuery] = useState('');
   const [filterAction, setFilterAction] = useState('');
   const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
   const [sortBy, setSortBy] = useState('timestamp');
   const [sortDirection, setSortDirection] = useState('desc');
   const [filters, setFilters] = useState({});
   const PAGE_SIZE = 25;
 
-  const fetchAuditTrail = async () => {
-    setLoading(true);
-    try {
+  // One request per distinct query, and a superseded one is discarded — so
+  // clicking a sortable column twice, or paging faster than the server answers,
+  // can no longer let an earlier response land last and render the wrong page
+  // under the current filters with no error to hint at it.
+  const { data, loading, reload: fetchAuditTrail } = useAsyncData(
+    async () => {
       const params = { page, page_size: PAGE_SIZE };
       if (filterAction) params.action = filterAction;
-      if (searchQuery) params.search = searchQuery;
+      if (submittedQuery) params.search = submittedQuery;
       if (sortBy) params.ordering = (sortDirection === 'desc' ? '-' : '') + sortBy;
       // Apply column filters
       Object.entries(filters).forEach(([key, value]) => {
         if (value) params[key] = value;
       });
       const res = await usersApi.getAuditTrail(params);
-      setTrail(res.results || res || []);
-      setTotalCount(res.count || (Array.isArray(res) ? res.length : 0));
-    } catch (err) {
-      toast.error('Failed to load audit trail');
-    } finally {
-      setLoading(false);
-    }
-  };
+      // One request yields two pieces of state, so the loader returns both rather
+      // than the page keeping a second copy in sync by hand.
+      return {
+        items: res.results || res || [],
+        count: res.count || (Array.isArray(res) ? res.length : 0),
+      };
+    },
+    [page, submittedQuery, filterAction, sortBy, sortDirection, filters],
+    { onError: () => toast.error(t('auditTrailLoadFailed')) },
+  );
 
-  useEffect(() => {
-    fetchAuditTrail();
-    // eslint-disable-next-line
-  }, [page, filterAction, sortBy, sortDirection, filters]);
+  const trail = data?.items ?? [];
+  const totalCount = data?.count ?? 0;
 
   const handleSearch = (e) => {
     e.preventDefault();
+    // Both are fetch dependencies now, so setting them *is* the request. Repeating
+    // an identical search therefore no longer refetches, which is the correct
+    // reading of "nothing changed" rather than a regression.
+    setSubmittedQuery(searchQuery);
     setPage(1);
-    fetchAuditTrail();
   };
 
   const handleFilterChange = (e) => {
@@ -114,6 +169,11 @@ function AuditTrailPage() {
       ),
     },
     {
+      header: t('changes'),
+      key: 'changes',
+      cell: (row) => <ChangeSummary changes={row.changes} />,
+    },
+    {
       header: t('ipAddress'),
       key: 'ip_address',
       cell: (row) => <span className="font-mono text-xs text-muted">{row.ip_address || '127.0.0.1'}</span>,
@@ -149,7 +209,7 @@ function AuditTrailPage() {
               className="btn btn-sm btn-outline flex items-center gap-1.5"
               onClick={() => { setPage(1); fetchAuditTrail(); }}
             >
-              <RefreshCw className="w-3.5 h-3.5" /> Refresh
+              <RefreshCw className="w-3.5 h-3.5" /> {t('refresh')}
             </button>
           </div>
         </div>
@@ -170,7 +230,7 @@ function AuditTrailPage() {
               />
             </div>
             <button type="submit" className="btn btn-primary">
-              Search
+              {t('search')}
             </button>
           </form>
 

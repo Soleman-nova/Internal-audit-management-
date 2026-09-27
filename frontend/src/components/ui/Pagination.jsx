@@ -1,5 +1,5 @@
-import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useI18n } from '../../context/I18nContext';
 
 /**
  * Server-side pagination control (page info + prev/next + optional page-size
@@ -23,6 +23,8 @@ const Pagination = ({
   onPageSizeChange,
   showPageSize = false,
 }) => {
+  const { t } = useI18n();
+
   if (!(pageCount > 1 || showPageSize)) return null;
 
   return (
@@ -30,7 +32,7 @@ const Pagination = ({
       <div className="flex items-center gap-3">
         {showPageSize && onPageSizeChange && (
           <div className="flex items-center gap-1.5">
-            <span className="text-gray-500 dark:text-gray-400">Rows:</span>
+            <span className="text-gray-500 dark:text-gray-400">{t('paginationRows')}</span>
             <select
               className="data-table-page-size-select"
               value={pageSize}
@@ -44,21 +46,23 @@ const Pagination = ({
         )}
         {totalCount !== undefined && (
           <span className="text-gray-500 dark:text-gray-400">
-            {totalCount} total record{totalCount !== 1 ? 's' : ''}
+            {t('paginationTotalRecords', totalCount)}
           </span>
         )}
       </div>
       {pageCount > 1 && onPageChange && (
         <div className="flex items-center gap-1">
           <span className="text-gray-500 dark:text-gray-400 mr-2">
-            Page <span className="font-medium text-gray-800 dark:text-gray-200">{page}</span> of{' '}
+            {t('paginationPageLabel')}{' '}
+            <span className="font-medium text-gray-800 dark:text-gray-200">{page}</span>{' '}
+            {t('paginationOfLabel')}{' '}
             <span className="font-medium text-gray-800 dark:text-gray-200">{pageCount}</span>
           </span>
           <button
             onClick={() => onPageChange(page - 1)}
             disabled={page <= 1}
             className="data-table-page-btn"
-            aria-label="Previous page"
+            aria-label={t('paginationPreviousPage')}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -66,7 +70,7 @@ const Pagination = ({
             onClick={() => onPageChange(page + 1)}
             disabled={page >= pageCount}
             className="data-table-page-btn"
-            aria-label="Next page"
+            aria-label={t('paginationNextPage')}
           >
             <ChevronRight className="w-4 h-4" />
           </button>

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState } from 'react';
 import Spinner from './Spinner';
 import EmptyState from './EmptyState';
+import { useI18n } from '../../context/I18nContext';
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Search, X } from 'lucide-react';
 
 /**
@@ -26,8 +27,8 @@ export const DataTable = ({
   data = [],
   loading = false,
   keyExtractor = (item, index) => item.id || index,
-  emptyTitle = 'No records found',
-  emptyDescription = 'There are no items to display.',
+  emptyTitle,
+  emptyDescription,
   emptyAction,
   page = 1,
   pageCount = 1,
@@ -44,17 +45,36 @@ export const DataTable = ({
   totalCount,
   showPageSize = false,
 }) => {
+  // The empty-state defaults live here rather than in the parameter list so they
+  // can be looked up through `t`; a caller-supplied value still wins, so the
+  // fallback behaves exactly as the literal defaults did.
+  const { t } = useI18n();
+  // These two mirror the controlled props so that a click on a header or a
+  // keystroke in a filter box shows up in the same frame, whether or not the
+  // parent feeds the change straight back in. They used to be re-synced from an
+  // effect, which meant the render that received a new prop still painted the
+  // *previous* sort arrow or filter text and only corrected itself afterwards.
+  //
+  // Comparing against the last-seen prop during render is React's documented way
+  // to adjust state when a prop changes ("You Might Not Need an Effect"): the
+  // update belongs to the same render pass, so nothing stale is ever committed,
+  // and no effect has to call setState after the fact. The two effects this
+  // replaces were also a genuine bug, one frame of the old filter being shown.
   const [localFilters, setLocalFilters] = useState(filters);
   const [localSort, setLocalSort] = useState({ key: sortBy, direction: sortDirection });
+  const [prevFilters, setPrevFilters] = useState(filters);
+  const [prevSortBy, setPrevSortBy] = useState(sortBy);
+  const [prevSortDirection, setPrevSortDirection] = useState(sortDirection);
 
-  // Sync local state with controlled props
-  useEffect(() => {
+  if (prevFilters !== filters) {
+    setPrevFilters(filters);
     setLocalFilters(filters);
-  }, [filters]);
-
-  useEffect(() => {
+  }
+  if (prevSortBy !== sortBy || prevSortDirection !== sortDirection) {
+    setPrevSortBy(sortBy);
+    setPrevSortDirection(sortDirection);
     setLocalSort({ key: sortBy, direction: sortDirection });
-  }, [sortBy, sortDirection]);
+  }
 
   const handleSort = (col) => {
     if (!col.sortable) return;
@@ -124,7 +144,7 @@ export const DataTable = ({
                         <input
                           type="text"
                           className="data-table-filter-input"
-                          placeholder={`Filter ${col.header}...`}
+                          placeholder={t('dataTableFilterPlaceholder', col.header)}
                           value={localFilters[col.key] || ''}
                           onChange={(e) => handleFilterInput(col.key, e.target.value)}
                         />
@@ -132,7 +152,7 @@ export const DataTable = ({
                           <button
                             className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                             onClick={() => clearFilter(col.key)}
-                            aria-label={`Clear ${col.header} filter`}
+                            aria-label={t('dataTableClearFilter', col.header)}
                           >
                             <X className="w-3 h-3" />
                           </button>
@@ -148,13 +168,13 @@ export const DataTable = ({
             {loading ? (
               <tr>
                 <td colSpan={columns.length} className="py-12">
-                  <Spinner message="Loading records..." />
+                  <Spinner message={t('dataTableLoadingRecords')} />
                 </td>
               </tr>
             ) : data.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="py-8">
-                  <EmptyState title={emptyTitle} description={emptyDescription} action={emptyAction} />
+                  <EmptyState title={emptyTitle ?? t('noRecords')} description={emptyDescription ?? t('dataTableNoItems')} action={emptyAction} />
                 </td>
               </tr>
             ) : (
@@ -194,7 +214,7 @@ export const DataTable = ({
           <div className="flex items-center gap-3">
             {showPageSize && onPageSizeChange && (
               <div className="flex items-center gap-1.5">
-                <span className="text-gray-500 dark:text-gray-400">Rows:</span>
+                <span className="text-gray-500 dark:text-gray-400">{t('paginationRows')}</span>
                 <select
                   className="data-table-page-size-select"
                   value={pageSize}
@@ -208,21 +228,23 @@ export const DataTable = ({
             )}
             {totalCount !== undefined && (
               <span className="text-gray-500 dark:text-gray-400">
-                {totalCount} total record{totalCount !== 1 ? 's' : ''}
+                {t('paginationTotalRecords', totalCount)}
               </span>
             )}
           </div>
           {pageCount > 1 && onPageChange && (
             <div className="flex items-center gap-1">
               <span className="text-gray-500 dark:text-gray-400 mr-2">
-                Page <span className="font-medium text-gray-800 dark:text-gray-200">{page}</span> of{' '}
+                {t('paginationPageLabel')}{' '}
+                <span className="font-medium text-gray-800 dark:text-gray-200">{page}</span>{' '}
+                {t('paginationOfLabel')}{' '}
                 <span className="font-medium text-gray-800 dark:text-gray-200">{pageCount}</span>
               </span>
               <button
                 onClick={() => onPageChange(page - 1)}
                 disabled={page <= 1}
                 className="data-table-page-btn"
-                aria-label="Previous page"
+                aria-label={t('paginationPreviousPage')}
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -230,7 +252,7 @@ export const DataTable = ({
                 onClick={() => onPageChange(page + 1)}
                 disabled={page >= pageCount}
                 className="data-table-page-btn"
-                aria-label="Next page"
+                aria-label={t('paginationNextPage')}
               >
                 <ChevronRight className="w-4 h-4" />
               </button>

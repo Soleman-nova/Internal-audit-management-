@@ -241,7 +241,15 @@ class UserViewSet(viewsets.ModelViewSet):
     filterset_fields = ['role', 'department', 'region', 'service_center', 'is_active']
     search_fields = ['email', 'first_name', 'last_name', 'employee_id']
     ordering_fields = ['first_name', 'created_at']
-    ordering = ['first_name']
+    # `employee_id` is the tiebreaker, and it matters for correctness rather than
+    # tidiness: ordering on `first_name` alone leaves rows tied whenever two
+    # accounts share a name, and offset pagination over ties can repeat or drop
+    # rows between page flips. The e2e suite proved it — `admin.spec.js` creates an
+    # account per run, and once enough shared the seeded 'E2E' first name the new
+    # one stopped reliably appearing on page 1. `employee_id` is the USERNAME_FIELD,
+    # so it is unique and the order is total. Same reasoning as the planning
+    # viewsets' `['-risk_score', 'name']`.
+    ordering = ['first_name', 'employee_id']
 
     def get_permissions(self):
         # `me` returns the caller's own profile — any authenticated user may read it.

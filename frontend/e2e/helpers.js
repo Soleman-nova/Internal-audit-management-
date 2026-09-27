@@ -45,7 +45,22 @@ export async function api(page, method, path, body) {
       return { status: res.status, body: text ? JSON.parse(text) : null };
     }, { method, path, body });
 
-    if (result.status !== 429 || attempt >= 3) return result;
+    if (result.status !== 429) return result;
+    if (attempt >= 3) {
+      // Raise rather than return. Handing the 429 body back like any other
+      // response is what made this bug expensive to find: the caller went on to
+      // read `.results` off `{detail: "Request was throttled…"}` and the spec
+      // reported `TypeError: Cannot read properties of undefined (reading
+      // 'find')`, naming neither throttling nor the endpoint. Throwing here is
+      // the difference between a five-minute diagnosis and an hour.
+      throw new Error(
+        `API rate limit exhausted after ${attempt + 1} attempts: ${method} ${path}. `
+        + 'DRF throttles per user (THROTTLE_USER, default 1000/hour) and the counter lives '
+        + "in the running server's process, so restart the backend to clear it — or raise "
+        + 'THROTTLE_USER for the e2e server (playwright.config.js sets it, but only when '
+        + 'Playwright starts the server itself; reuseExistingServer skips it otherwise).',
+      );
+    }
     await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
   }
 }

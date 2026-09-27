@@ -24,6 +24,7 @@ Risk assessment → Annual plan → Engagement → Program & procedures
 - [Roles and permissions](#roles-and-permissions)
 - [Management commands](#management-commands)
 - [Testing](#testing)
+- [Translations](#translations)
 - [Deployment](#deployment)
 - [Known limitations](#known-limitations)
 - [Documentation](#documentation)
@@ -120,11 +121,11 @@ Risk assessment → Annual plan → Engagement → Program & procedures
 │   │   └── App.css, index.css    Live stylesheets
 │   ├── package.json
 │   └── .env.example              Annotated frontend configuration reference
-├── css/styles.css                Legacy stylesheet — not used by the React app
 ├── README.md                     This file
+├── DEMO.md                       Presenter script for a live, role-by-role demo
 ├── USER_MANUAL.md               End-user guide and administrator runbook
 ├── TESTING.md                    Automated test map + manual role walkthrough
-└── ENHANCEMENT_PLAN.md           Roadmap notes
+└── ENHANCEMENT_PLAN.md           Superseded 2026-07-31 plan — kept as a marker only
 ```
 
 ---
@@ -426,8 +427,6 @@ Run from `backend/` with the virtualenv active.
 | `reassign_legacy_department_users` | Moves users off retired departments onto the current org tree | One-off migration |
 | `retire_legacy_departments` | Deactivates superseded departments after reassignment | One-off migration, after the above |
 
-Two standalone scripts are run with `python`, not `manage.py`: `backend/seed_risk_data.py` and `backend/smoke_planning_api.py`.
-
 Scheduling examples are in the [administrator runbook](USER_MANUAL.md#scheduled-jobs).
 
 ---
@@ -468,6 +467,30 @@ A backend lifecycle test — [backend/apps/common/test_e2e_lifecycle.py](backend
 
 ---
 
+## Translations
+
+The interface ships in English and Amharic. Both dictionaries live in one place — [frontend/src/context/I18nContext.jsx](frontend/src/context/I18nContext.jsx) — and `t()` falls back to English for any key the active language does not define:
+
+```js
+const value = dict[key] !== undefined ? dict[key] : TRANSLATIONS.en[key];
+```
+
+**Add new keys to the `en` block only.** The fallback means a key missing from `am` renders English rather than breaking, and it keeps a single source of truth: copying English into `am` would create a stale duplicate that goes on saying the old wording after someone edits the English.
+
+So Amharic is a pure data task, and the outstanding work is enumerable:
+
+```bash
+cd frontend
+npm run i18n:status             # summary + the keys still awaiting Amharic
+npm run i18n:status --scaffold  # paste-ready `am` entries for those keys
+```
+
+The command derives the list from the dictionaries themselves, so it cannot go stale, and it exits non-zero if `am` holds a key nothing requests (a typo that would otherwise sit there forever).
+
+Two conventions worth knowing before adding a string. Any text containing a value is a **function** in the dictionary, never concatenation at the call site — see `showingFirstOf` or `paginationTotalRecords`, which keeps its plural rule alongside its translation. And if a sentence is interrupted by inline markup, use **fragment keys** and keep the elements (`paginationPageLabel` / `paginationOfLabel`), because collapsing it into one interpolated string reads identically but silently drops the markup and its styling.
+
+---
+
 ## Deployment
 
 1. **Configure.** Set `DEBUG=False` and a fresh `SECRET_KEY`; add the hostname to `ALLOWED_HOSTS` and the frontend origin to `CORS_ALLOWED_ORIGINS`. Point `VITE_API_BASE_URL` at the public API URL — it is inlined at build time, so it must be set *before* `npm run build`.
@@ -488,9 +511,9 @@ A backend lifecycle test — [backend/apps/common/test_e2e_lifecycle.py](backend
 - **`generate_report_file` has no branch for an unknown format.** The three known formats are covered; an unrecognised one would leave the row on `generating` rather than `failed`.
 - **`departments/tree` is deliberately unpaginated** — the cascading picker needs the whole tree in one response. Every other list endpoint is paginated.
 - **No frontend unit tests.** There is no JS unit-test runner installed. UI behaviour is covered by the Playwright E2E suite in `frontend/e2e/` instead (see [Testing](#testing)), which drives the real browser as each role.
-- **`npm run lint` is not clean.** The current tree reports around 120 problems — mostly unused variables and `react-hooks/exhaustive-deps` warnings across `src/pages/**` and `src/utils/validation.js`. `npm run build` succeeds, so none of them break the bundle, but do not expect a green lint run until they are worked through.
+- **`npm run lint` is clean, and CI blocks on it.** The tree carried ~127 problems (unused variables, `react-hooks/exhaustive-deps`) when the pipeline was added, which is why the step started life as advisory; that backlog is now cleared to **0 errors, 0 warnings** and `continue-on-error` has been removed. If the step goes red, fix the error — do not restore the flag. The two error classes that dominated the old backlog were the fetch-into-state pattern (`src/hooks/useAsyncData.js` is the fix, and ten pages use it) and `no-unused-vars` on `formErrors` values that were evidence of a real bug rather than dead code.
 - **One seeding papercut on Windows**, verified against a scratch database: `seed_e2e_demo` crashes on a `cp1252` console unless `PYTHONUTF8=1` is set. (The login page's Audit Manager demo button previously carried a stale `User1234` password that no seeder assigned; it now matches the seeded `user123`.)
-- **The in-app Help modal's role checklists still reference email logins** (`admin@eeu.com` and similar). Authentication is by Employee ID. [USER_MANUAL.md](USER_MANUAL.md) is correct; the modal text has not been updated.
+- **Form validation messages are still English-only.** `frontend/src/utils/validation.js` returns hardcoded English (`'Please enter a valid email address.'` and similar) for every validator, even though the dictionary already holds matching keys. The messages surface through `FormErrorSummary` and each page's inline field errors. Translating them means deciding where the translation happens — the validators are a plain module with no access to `t`, so they would need to return keys and every render site would need to translate — which is why it is left as a known gap rather than a quick edit. Everything else in the interface is translated; see [Translations](#translations).
 
 ---
 
@@ -500,7 +523,8 @@ A backend lifecycle test — [backend/apps/common/test_e2e_lifecycle.py](backend
 |---|---|
 | [USER_MANUAL.md](USER_MANUAL.md) | End users, role by role, plus the administrator runbook |
 | [TESTING.md](TESTING.md) | Test coverage map, role × capability matrix, manual walkthrough |
-| [ENHANCEMENT_PLAN.md](ENHANCEMENT_PLAN.md) | Roadmap notes |
+| [DEMO.md](DEMO.md) | Presenter script for a live demo of the full lifecycle |
+| [ENHANCEMENT_PLAN.md](ENHANCEMENT_PLAN.md) | Superseded — a historical marker, not a to-do list |
 | [backend/.env.example](backend/.env.example) · [frontend/.env.example](frontend/.env.example) | Annotated configuration reference |
 
 Support: `audit.support@eeu.gov.et`

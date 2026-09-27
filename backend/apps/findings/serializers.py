@@ -11,7 +11,8 @@ class EvidenceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Evidence
-        fields = '__all__'
+        fields = ['id', 'uploaded_by_name', 'file_url', 'title', 'description',
+                  'evidence_type', 'file', 'uploaded_at', 'finding', 'uploaded_by']
         # `uploaded_by` is stamped from the request by both perform_create and
         # the upload-evidence action — left writable, a PATCH could reattribute
         # someone else's upload. Same shape as
@@ -44,7 +45,8 @@ class FindingCommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = FindingComment
-        fields = '__all__'
+        fields = ['id', 'author_name', 'comment', 'is_internal', 'created_at',
+                  'finding', 'author']
         read_only_fields = ['author', 'created_at']
 
     def get_author_name(self, obj):
@@ -66,7 +68,16 @@ class AuditFindingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AuditFinding
-        fields = '__all__'
+        fields = ['id', 'evidence', 'comments', 'identified_by_name',
+                  'assigned_to_name', 'auditee_name', 'severity_display',
+                  'status_display', 'engagement_title', 'corrective_actions_count',
+                  'finding_number', 'title', 'description', 'severity', 'category',
+                  'status', 'condition', 'criteria', 'cause', 'effect',
+                  'recommendation', 'management_response', 'risk_impact',
+                  'root_cause_category', 'target_resolution_date',
+                  'actual_resolution_date', 'is_repeat', 'created_at', 'updated_at',
+                  'engagement', 'procedure', 'identified_by', 'assigned_to', 'auditee',
+                  'previous_finding']
         # Both are the server's to set: perform_create assigns FND-YYYY-NNNN and
         # stamps the caller as the identifier. Left writable, `finding_number`
         # was a *required* field on create — so a client that correctly stopped
@@ -136,3 +147,23 @@ class AuditFindingListSerializer(AuditFindingSerializer):
     evidence_count = serializers.IntegerField(read_only=True)
     comments_count = serializers.IntegerField(read_only=True)
     corrective_actions_count = serializers.IntegerField(read_only=True)
+
+    class Meta(AuditFindingSerializer.Meta):
+        # The parent's list, minus the two collections dropped above, plus this
+        # class's counts.
+        #
+        # The list is *derived* rather than written out again, deliberately. This
+        # serializer's contract is that every scalar field comes across untouched,
+        # so a field added to the parent has to keep reaching the register without
+        # a second edit here. Note that `evidence`/`comments` cannot simply be left
+        # in the list: they are reverse relations the model does not own, so naming
+        # them where the declared field has been set to `None` raises
+        # ImproperlyConfigured instead of dropping them — hence the filter.
+        #
+        # This class previously had no `Meta` at all and inherited `fields =
+        # '__all__'`, which took the counts with it automatically. An explicit list
+        # is inherited as a *list*, so the counts have to be named.
+        fields = [
+            f for f in AuditFindingSerializer.Meta.fields
+            if f not in ('evidence', 'comments')
+        ] + ['evidence_count', 'comments_count']

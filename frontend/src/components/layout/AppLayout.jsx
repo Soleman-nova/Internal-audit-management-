@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { authApi, notificationApi, resolveApiBaseUrl, setApiBaseUrl } from '../../api/apiClient';
 import { hasCapability, CAPABILITIES } from '../../hooks/usePermissions';
+import useAsyncData from '../../hooks/useAsyncData';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
@@ -50,8 +51,6 @@ function AppLayout() {
   // Below 900px the sidebar is a drawer over the content, so it must start
   // closed — defaulting to open put a 260px panel across a phone on first paint.
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 900);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -80,9 +79,16 @@ function AppLayout() {
   const [showPwNew, setShowPwNew] = useState(false);
   const [showPwConfirm, setShowPwConfirm] = useState(false);
 
-  // Profile edit state
-  const [profileFirstName, setProfileFirstName] = useState(user.first_name || '');
-  const [profileLastName, setProfileLastName] = useState(user.last_name || '');
+  // Profile edit state. The two name fields are a *draft over* the account rather
+  // than a copy of it: `null` means "untouched — show whatever the account says".
+  // That is what lets the fields fill themselves in when `auth.user` arrives
+  // without an effect writing props into state, and — because the fallback `user`
+  // object above is rebuilt on every render when there is no account yet — without
+  // an effect that would re-run on every single render.
+  const [profileFirstNameDraft, setProfileFirstNameDraft] = useState(null);
+  const [profileLastNameDraft, setProfileLastNameDraft] = useState(null);
+  const profileFirstName = profileFirstNameDraft ?? (user.first_name || '');
+  const profileLastName = profileLastNameDraft ?? (user.last_name || '');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState(false);
   const [profileError, setProfileError] = useState('');
@@ -145,7 +151,7 @@ function AppLayout() {
     // "saved" while every call kept hitting the old endpoint until a reload.
     const applied = setApiBaseUrl(apiServer);
     setApiServer(applied);
-    toast.success('System settings saved.');
+    toast.success(t('layoutSettingsSavedToast'));
     setShowSettings(false);
   };
 
@@ -153,20 +159,20 @@ function AppLayout() {
     e.preventDefault();
     setPwError('');
     if (pwNew !== pwConfirm) {
-      setPwError('New passwords do not match.');
-      toast.error('New passwords do not match.');
+      setPwError(t('layoutPasswordsDoNotMatch'));
+      toast.error(t('layoutPasswordsDoNotMatch'));
       return;
     }
     if (pwNew.length < 8) {
-      setPwError('New password must be at least 8 characters.');
-      toast.error('New password must be at least 8 characters.');
+      setPwError(t('layoutPasswordMinLength'));
+      toast.error(t('layoutPasswordMinLength'));
       return;
     }
     setPwLoading(true);
     try {
       await authApi.changePassword(pwCurrent, pwNew);
       setPwSuccess(true);
-      toast.success('Password changed successfully.');
+      toast.success(t('layoutPasswordChangedToast'));
       setPwCurrent('');
       setPwNew('');
       setPwConfirm('');
@@ -176,7 +182,7 @@ function AppLayout() {
         err?.response?.data?.detail ||
         err?.response?.data?.current_password?.[0] ||
         err?.response?.data?.new_password?.[0] ||
-        'Password change failed. Please check your current password.';
+        t('layoutPasswordChangeFailed');
       setPwError(msg);
       toast.error(msg);
     } finally {
@@ -190,11 +196,16 @@ function AppLayout() {
     setProfileSaving(true);
     try {
       await auth.updateUser({ first_name: profileFirstName, last_name: profileLastName });
+      // Drop the drafts so the fields fall back to what the account now says.
+      // This is the saved record's own sync, rather than the old effect's blanket
+      // "any change to `user` overwrites whatever is in the inputs".
+      setProfileFirstNameDraft(null);
+      setProfileLastNameDraft(null);
       setProfileSuccess(true);
-      toast.success('Profile updated successfully.');
+      toast.success(t('layoutProfileUpdatedToast'));
       setTimeout(() => setProfileSuccess(false), 3000);
     } catch (err) {
-      const msg = err?.response?.data?.detail || 'Failed to update profile. Please try again.';
+      const msg = err?.response?.data?.detail || t('layoutProfileUpdateFailed');
       setProfileError(msg);
       toast.error(msg);
     } finally {
@@ -209,49 +220,54 @@ function AppLayout() {
 
   // On a narrow viewport the drawer sits on top of the page, so tapping a nav
   // link would otherwise leave it covering the page it just opened. Checked at
-  // navigation time rather than through a resize listener.
-  useEffect(() => {
+  // navigation time rather than through a resize listener — and against the
+  // previous path *during render* rather than from an effect, so the drawer is
+  // already shut in the frame that paints the new page instead of one frame
+  // later. Same documented "adjust state when a prop changes" pattern as
+  // DataTable's prop mirrors.
+  const [prevPathname, setPrevPathname] = useState(location.pathname);
+  if (prevPathname !== location.pathname) {
+    setPrevPathname(location.pathname);
     if (window.innerWidth <= 900) setSidebarOpen(false);
-  }, [location.pathname]);
+  }
 
-  useEffect(() => {
-    if (user) {
-      setProfileFirstName(user.first_name || '');
-      setProfileLastName(user.last_name || '');
-    }
-  }, [user]);
-
-  // Load notifications + unread count from the backend.
-  const loadNotifications = useCallback(async () => {
-    try {
+  // Load notifications + unread count from the backend. Both come out of the one
+  // pair of requests, so the loader returns them together and they are derived
+  // from it below — a superseded poll response can no longer land after a newer
+  // one and leave the badge counting something other than the list on screen.
+  const { data: notificationsData, reload: loadNotifications } = useAsyncData(
+    async () => {
       const [items, unread] = await Promise.all([
         notificationApi.list(),
         notificationApi.unreadCount(),
       ]);
-      setNotifications(Array.isArray(items) ? items : []);
-      setUnreadCount(unread);
-    } catch (err) {
-      // Non-fatal: leave the current state in place if the fetch fails.
-      console.error('Failed to load notifications', err);
-    }
-  }, []);
+      return { items: Array.isArray(items) ? items : [], unread };
+    },
+    [],
+    // Non-fatal: a failed poll leaves the last good list and count in place.
+    { onError: (err) => console.error('Failed to load notifications', err) },
+  );
 
-  // Fetch on mount and poll periodically so new events surface without a reload.
+  const notifications = notificationsData?.items ?? [];
+  const unreadCount = notificationsData?.unread ?? 0;
+
+  // Poll periodically so new events surface without a reload. The initial fetch
+  // belongs to the hook above; this effect owns only the timer, and the cleanup
+  // still cancels it on unmount.
   useEffect(() => {
-    loadNotifications();
-    const interval = setInterval(loadNotifications, 30000);
+    const interval = setInterval(() => { loadNotifications(); }, 30000);
     return () => clearInterval(interval);
   }, [loadNotifications]);
 
   const handleMarkAllRead = useCallback(async () => {
     try {
       await notificationApi.markAllRead();
-      toast.info('All notifications marked as read.');
+      toast.info(t('layoutNotificationsMarkedRead'));
     } catch (err) {
       console.error('Failed to mark all notifications read', err);
     }
     loadNotifications();
-  }, [loadNotifications, toast]);
+  }, [loadNotifications, toast, t]);
 
   const handleNotificationClick = useCallback(async (n) => {
     if (!n.is_read) {
@@ -301,7 +317,7 @@ function AppLayout() {
     navItems.push({ path: '/audit-trail', label: t('auditTrail'), icon: <Activity size={20} /> });
   }
 
-  const activeNavItem = navItems.find(item => location.pathname === item.path) || { label: 'Audit Management System' };
+  const activeNavItem = navItems.find(item => location.pathname === item.path) || { label: t('layoutAppNameFallback') };
 
   const closeSettingsModal = () => {
     setShowSettings(false);
@@ -313,15 +329,15 @@ function AppLayout() {
   };
 
   const settingsTabs = [
-    { id: 'general', icon: SlidersHorizontal, label: t('general'), desc: 'Language, theme & API' },
-    { id: 'password', icon: Lock, label: t('changePassword'), desc: 'Update your credentials' },
-    { id: 'profile', icon: UserIcon, label: t('profile'), desc: 'Manage your account' },
+    { id: 'general', icon: SlidersHorizontal, label: t('general'), desc: t('layoutSettingsGeneralDesc') },
+    { id: 'password', icon: Lock, label: t('changePassword'), desc: t('layoutSettingsPasswordDesc') },
+    { id: 'profile', icon: UserIcon, label: t('profile'), desc: t('layoutSettingsProfileDesc') },
   ];
 
   const helpTabs = [
-    { id: 'overview', icon: UsersRound, label: 'Roles Overview' },
-    { id: 'stages', icon: GitBranch, label: 'Workflow Stages' },
-    { id: 'checklist', icon: ListChecks, label: 'Task Checklists' },
+    { id: 'overview', icon: UsersRound, label: t('layoutHelpTabRoles') },
+    { id: 'stages', icon: GitBranch, label: t('layoutHelpTabStages') },
+    { id: 'checklist', icon: ListChecks, label: t('layoutHelpTabChecklist') },
   ];
 
   const pwStrength = pwNew.length >= 12 ? 'strong' : pwNew.length >= 10 ? 'good' : pwNew.length >= 8 ? 'fair' : pwNew.length > 0 ? 'weak' : '';
@@ -337,8 +353,8 @@ function AppLayout() {
       <aside className={`app-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <Link to="/dashboard" className="sidebar-brand" style={{ textDecoration: 'none' }}>
-            <img src="/eeu-logo.png" alt="EEU Logo" className="brand-logo" />
-            <span>EEU Internal Audit</span>
+            <img src="/eeu-logo.png" alt={t('brandLogoAlt')} className="brand-logo" />
+            <span>{t('layoutBrandName')}</span>
           </Link>
           <button className="sidebar-close-btn" onClick={() => setSidebarOpen(false)}>
             <X size={20} />
@@ -452,12 +468,17 @@ function AppLayout() {
               )}
             </div>
 
-            {/* Help Button */}
+            {/* Help Button.
+                `data-testid` because these two are opened by the E2E language test
+                *while the interface is in Amharic* — `title` and `aria-label` are
+                both translated now, so neither can identify the button. A test
+                locator must not be user-facing text. */}
             <button
               className="header-action-btn"
+              data-testid="header-help-btn"
               onClick={() => setShowHelp(true)}
-              title="Help & Support"
-              aria-label="Help and support"
+              title={t('help')}
+              aria-label={t('layoutHelpAria')}
             >
               <HelpCircle size={20} />
             </button>
@@ -465,8 +486,9 @@ function AppLayout() {
             {/* Settings Button */}
             <button
               className="header-action-btn"
+              data-testid="header-settings-btn"
               onClick={() => setShowSettings(true)}
-              title="System Settings"
+              title={t('systemSettings')}
               aria-label={t('systemSettings')}
             >
               <Settings size={20} />
@@ -501,7 +523,7 @@ function AppLayout() {
             <Settings size={18} /> {t('systemSettings')}
           </span>
         )}
-        subtitle="Customize your experience — language, appearance, security, and profile preferences."
+        subtitle={t('layoutSettingsSubtitle')}
         size="lg"
       >
         {/* Modal pads its body with p-6, but this layout is a full-bleed nav
@@ -509,7 +531,7 @@ function AppLayout() {
             gutter so the rail still meets the dialog edge. */}
         <div className="-m-6">
           <div className="app-modal-layout">
-              <nav className="app-modal-nav" aria-label="Settings sections">
+              <nav className="app-modal-nav" aria-label={t('layoutSettingsSectionsAria')}>
                 {settingsTabs.map((tab) => {
                   const TabIcon = tab.icon;
                   return (
@@ -535,7 +557,7 @@ function AppLayout() {
               <div className="app-modal-content">
                 {settingsTab === 'general' && (
                   <form onSubmit={handleSaveSettings}>
-                    <p className="app-modal-section-title">Preferences</p>
+                    <p className="app-modal-section-title">{t('layoutPreferences')}</p>
 
                     {saveSuccess && (
                       <div className="app-modal-alert success">
@@ -554,15 +576,15 @@ function AppLayout() {
                         className="font-mono"
                         required
                       />
-                      <p className="app-modal-field-hint">The base URL of the EEU Audit backend server (no trailing slash).</p>
+                      <p className="app-modal-field-hint">{t('layoutApiEndpointHint')}</p>
                     </div>
 
                     <div className="app-modal-field">
                       <label><Globe size={14} /> {t('systemLanguage')}</label>
                       <div className="app-modal-lang-grid">
                         {[
-                          { val: 'EN', flag: '🇬🇧', name: 'English', sub: 'Default' },
-                          { val: 'AM', flag: '🇪🇹', name: 'Amharic', sub: 'አማርኛ' },
+                          { val: 'EN', flag: '🇬🇧', name: t('layoutLanguageEnglish'), sub: t('layoutLanguageDefault') },
+                          { val: 'AM', flag: '🇪🇹', name: t('layoutLanguageAmharic'), sub: 'አማርኛ' },
                         ].map((lang) => (
                           <label
                             key={lang.val}
@@ -639,12 +661,12 @@ function AppLayout() {
 
                 {settingsTab === 'password' && (
                   <form onSubmit={handleChangePassword}>
-                    <p className="app-modal-section-title">Security</p>
+                    <p className="app-modal-section-title">{t('layoutSecurity')}</p>
 
                     <div className="app-modal-alert info">
                       <Lock size={16} style={{ flexShrink: 0, marginTop: 1 }} />
                       <span>
-                        Your password must be at least <strong>8 characters</strong> long. After a successful change, you will remain logged in.
+                        {t('layoutPasswordPolicyBefore')} <strong>{t('layoutPasswordPolicyBold')}</strong> {t('layoutPasswordPolicyAfter')}
                       </span>
                     </div>
 
@@ -657,14 +679,14 @@ function AppLayout() {
                     {pwSuccess && (
                       <div className="app-modal-alert success">
                         <CircleCheck size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-                        <span>Password changed successfully!</span>
+                        <span>{t('layoutPasswordChangedSuccess')}</span>
                       </div>
                     )}
 
                     {[
-                      { id: 'pwCurrent', label: 'Current Password', val: pwCurrent, setter: setPwCurrent, show: showPwCurrent, toggle: setShowPwCurrent, placeholder: 'Enter your current password' },
-                      { id: 'pwNew', label: 'New Password', val: pwNew, setter: setPwNew, show: showPwNew, toggle: setShowPwNew, placeholder: 'Enter new password (min. 8 chars)' },
-                      { id: 'pwConfirm', label: 'Confirm New Password', val: pwConfirm, setter: setPwConfirm, show: showPwConfirm, toggle: setShowPwConfirm, placeholder: 'Re-enter new password' },
+                      { id: 'pwCurrent', label: t('layoutCurrentPassword'), val: pwCurrent, setter: setPwCurrent, show: showPwCurrent, toggle: setShowPwCurrent, placeholder: t('layoutCurrentPasswordPlaceholder') },
+                      { id: 'pwNew', label: t('layoutNewPassword'), val: pwNew, setter: setPwNew, show: showPwNew, toggle: setShowPwNew, placeholder: t('layoutNewPasswordPlaceholder') },
+                      { id: 'pwConfirm', label: t('layoutConfirmNewPassword'), val: pwConfirm, setter: setPwConfirm, show: showPwConfirm, toggle: setShowPwConfirm, placeholder: t('layoutConfirmPasswordPlaceholder') },
                     ].map((field) => (
                       <div key={field.id} className="app-modal-field">
                         <label>{field.label}</label>
@@ -682,7 +704,7 @@ function AppLayout() {
                             onClick={() => field.toggle((v) => !v)}
                             className="app-modal-pw-toggle"
                             tabIndex={-1}
-                            aria-label={field.show ? 'Hide password' : 'Show password'}
+                            aria-label={field.show ? t('layoutHidePassword') : t('layoutShowPassword')}
                           >
                             {field.show ? <EyeOff size={16} /> : <Eye size={16} />}
                           </button>
@@ -709,11 +731,11 @@ function AppLayout() {
                         className="app-modal-btn app-modal-btn-secondary"
                         onClick={() => { setPwCurrent(''); setPwNew(''); setPwConfirm(''); setPwError(''); }}
                       >
-                        Clear
+                        {t('layoutClear')}
                       </button>
                       <button type="submit" disabled={pwLoading} className="app-modal-btn app-modal-btn-primary">
                         {pwLoading ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />}
-                        {pwLoading ? 'Changing...' : 'Change Password'}
+                        {pwLoading ? t('layoutChanging') : t('changePassword')}
                       </button>
                     </div>
                   </form>
@@ -721,7 +743,7 @@ function AppLayout() {
 
                 {settingsTab === 'profile' && (
                   <div>
-                    <p className="app-modal-section-title">Your Account</p>
+                    <p className="app-modal-section-title">{t('layoutYourAccount')}</p>
 
                     <div className="app-modal-profile-card">
                       <div className="app-modal-avatar">
@@ -731,7 +753,7 @@ function AppLayout() {
                         <p className="app-modal-profile-name">
                           {user.first_name || user.last_name
                             ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
-                            : user.email || 'Unknown User'}
+                            : user.email || t('layoutUnknownUser')}
                         </p>
                         <p className="app-modal-profile-email">{user.email}</p>
                         <span className="app-modal-role-badge">
@@ -742,10 +764,10 @@ function AppLayout() {
 
                     <div className="app-modal-info-grid">
                       {[
-                        { label: 'Employee ID', val: user.employee_id || user.id || '—' },
-                        { label: 'Department', val: user.department || '—' },
-                        { label: 'Role', val: (user.role || 'auditor').replace(/_/g, ' ') },
-                        { label: 'Status', val: user.is_active === false ? 'Inactive' : 'Active' },
+                        { label: t('employeeId'), val: user.employee_id || user.id || '—' },
+                        { label: t('department'), val: user.department || '—' },
+                        { label: t('role'), val: (user.role || 'auditor').replace(/_/g, ' ') },
+                        { label: t('status'), val: user.is_active === false ? t('inactive') : t('active') },
                       ].map((f) => (
                         <div key={f.label} className="app-modal-info-item">
                           <label>{f.label}</label>
@@ -755,24 +777,24 @@ function AppLayout() {
                     </div>
 
                     <form onSubmit={handleSaveProfile}>
-                      <p className="app-modal-section-title">Edit Name</p>
+                      <p className="app-modal-section-title">{t('layoutEditName')}</p>
                       <div className="app-modal-info-grid">
                         <div className="app-modal-field" style={{ marginBottom: 0 }}>
-                          <label>First Name</label>
+                          <label>{t('firstName')}</label>
                           <input
                             type="text"
                             value={profileFirstName}
-                            onChange={(e) => setProfileFirstName(e.target.value)}
-                            placeholder="First name"
+                            onChange={(e) => setProfileFirstNameDraft(e.target.value)}
+                            placeholder={t('layoutFirstNamePlaceholder')}
                           />
                         </div>
                         <div className="app-modal-field" style={{ marginBottom: 0 }}>
-                          <label>Last Name</label>
+                          <label>{t('lastName')}</label>
                           <input
                             type="text"
                             value={profileLastName}
-                            onChange={(e) => setProfileLastName(e.target.value)}
-                            placeholder="Last name"
+                            onChange={(e) => setProfileLastNameDraft(e.target.value)}
+                            placeholder={t('layoutLastNamePlaceholder')}
                           />
                         </div>
                       </div>
@@ -786,14 +808,14 @@ function AppLayout() {
                       {profileSuccess && (
                         <div className="app-modal-alert success" style={{ marginTop: 16 }}>
                           <CircleCheck size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-                          <span>Profile updated successfully!</span>
+                          <span>{t('layoutProfileUpdated')}</span>
                         </div>
                       )}
 
                       <div className="app-modal-actions">
                         <button type="submit" disabled={profileSaving} className="app-modal-btn app-modal-btn-primary">
                           {profileSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                          {profileSaving ? 'Saving...' : 'Save Profile'}
+                          {profileSaving ? t('layoutSaving') : t('layoutSaveProfile')}
                         </button>
                       </div>
                     </form>
@@ -810,10 +832,10 @@ function AppLayout() {
         onClose={() => setShowHelp(false)}
         title={(
           <span className="flex items-center gap-2">
-            <HelpCircle size={18} /> Workflow &amp; Support Center
+            <HelpCircle size={18} /> {t('layoutHelpTitle')}
           </span>
         )}
-        subtitle="Guides, role responsibilities, and step-by-step checklists for the EEU Internal Audit system."
+        subtitle={t('layoutHelpSubtitle')}
         size="xl"
         footer={(
           /* Modal's footer is justify-end; this one wants the support line on
@@ -821,17 +843,17 @@ function AppLayout() {
           <div className="flex flex-1 items-center justify-between gap-3">
             <div className="app-modal-footer-support">
               <Mail size={14} />
-              <span>IT Help Desk: <strong>audit.support@eeu.gov.et</strong></span>
+              <span>{t('layoutItHelpDesk')} <strong>audit.support@eeu.gov.et</strong></span>
             </div>
             <button type="button" className="app-modal-btn app-modal-btn-secondary" onClick={() => setShowHelp(false)}>
-              Close Guide
+              {t('layoutCloseGuide')}
             </button>
           </div>
         )}
       >
         <div className="-m-6">
           <div className="app-modal-layout">
-              <nav className="app-modal-nav" aria-label="Help sections">
+              <nav className="app-modal-nav" aria-label={t('layoutHelpSectionsAria')}>
                 {helpTabs.map((tab) => {
                   const TabIcon = tab.icon;
                   return (
@@ -852,20 +874,19 @@ function AppLayout() {
                 {helpTab === 'overview' && (
                   <div>
                     <div className="app-modal-help-card">
-                      <h4>EEU Internal Audit Management System</h4>
+                      <h4>{t('layoutHelpAboutTitle')}</h4>
                       <p>
-                        This system automates the step-by-step annual audit cycles, scheduling, procedure execution,
-                        working paper registry, findings logging, and CAPA resolution for the Ethiopian Electric Utility.
+                        {t('layoutHelpAboutText')}
                       </p>
                     </div>
 
-                    <p className="app-modal-section-title">System Roles</p>
+                    <p className="app-modal-section-title">{t('layoutHelpSystemRoles')}</p>
                     {[
-                      { role: 'Super Admin (admin)', desc: 'Responsible for user management, system configuration, access control, and auditing security logs.' },
-                      { role: 'Audit Manager (audit_manager)', desc: 'Drives the annual audit cycle, manages the Audit Universe, creates and approves Annual Plans, and initiates/schedules Engagements.' },
-                      { role: 'Audit Supervisor (supervisor)', desc: 'Reviews audit programs, reviews fieldwork working papers, and coordinates the execution.' },
-                      { role: 'Auditor / Lead Auditor (auditor)', desc: 'Designs audit program procedures, conducts fieldwork (checklists and workpapers), logs findings, and drafts final reports.' },
-                      { role: 'Auditee (auditee)', desc: 'Represents audited departments, completes risk self-assessments, and owns corrective actions (CAPA) execution and updates.' },
+                      { role: t('layoutHelpRoleSuperAdmin'), desc: t('layoutHelpRoleSuperAdminDesc') },
+                      { role: t('layoutHelpRoleManager'), desc: t('layoutHelpRoleManagerDesc') },
+                      { role: t('layoutHelpRoleSupervisor'), desc: t('layoutHelpRoleSupervisorDesc') },
+                      { role: t('layoutHelpRoleAuditor'), desc: t('layoutHelpRoleAuditorDesc') },
+                      { role: t('layoutHelpRoleAuditee'), desc: t('layoutHelpRoleAuditeeDesc') },
                     ].map((r, idx) => (
                       <div key={idx} className="app-modal-role-item">
                         <span className="app-modal-role-dot" />
@@ -880,16 +901,16 @@ function AppLayout() {
 
                 {helpTab === 'stages' && (
                   <div>
-                    <p className="app-modal-section-title">Audit Lifecycle</p>
+                    <p className="app-modal-section-title">{t('layoutHelpLifecycle')}</p>
                     <div className="app-modal-timeline">
                       {[
-                        { title: 'Stage 1: Risk Assessment & Universe Setup', actor: 'Auditor / Manager / Auditee', text: 'Auditors and Managers set up entities in the Audit Universe. Auditees complete risk self-assessments. Managers rank priority entities via the 5x5 Risk Heat Map.' },
-                        { title: 'Stage 2: Annual Plan Creation & Submission', actor: 'Audit Manager', text: 'Managers outline annual plans (budgets, schedules, objectives), map universe nodes, and submit plans for approval.' },
-                        { title: 'Stage 3: Engagement Scheduling & Staffing', actor: 'Audit Manager', text: 'Managers schedule specific audits under active plans, allocating team members (lead auditor and supervisor).' },
-                        { title: 'Stage 4: Execution & Fieldwork', actor: 'Auditor / Supervisor', text: 'Auditors build the audit program and procedures. Supervisors approve the program. Auditors transition procedure status and upload evidence files (Working Papers).' },
-                        { title: 'Stage 5: Findings & Recommendations', actor: 'Auditor', text: 'Auditors log deficiency, compliance, or security findings (condition, criteria, cause, effect, recommendation) for supervisor review.' },
-                        { title: 'Stage 6: Corrective Action Plan (CAPA) Portal', actor: 'Auditor / Auditee', text: 'Auditors spawn CAPAs. Auditees respond with progress notes and documentation. Supervisors verify and close CAPAs.' },
-                        { title: 'Stage 7: Reports & Analytics', actor: 'Auditor / Manager', text: 'Auditors and Managers create final audit reports and close the engagement.' },
+                        { title: t('layoutHelpStage1Title'), actor: t('layoutHelpStage1Actor'), text: t('layoutHelpStage1Text') },
+                        { title: t('layoutHelpStage2Title'), actor: t('layoutHelpStage2Actor'), text: t('layoutHelpStage2Text') },
+                        { title: t('layoutHelpStage3Title'), actor: t('layoutHelpStage3Actor'), text: t('layoutHelpStage3Text') },
+                        { title: t('layoutHelpStage4Title'), actor: t('layoutHelpStage4Actor'), text: t('layoutHelpStage4Text') },
+                        { title: t('layoutHelpStage5Title'), actor: t('layoutHelpStage5Actor'), text: t('layoutHelpStage5Text') },
+                        { title: t('layoutHelpStage6Title'), actor: t('layoutHelpStage6Actor'), text: t('layoutHelpStage6Text') },
+                        { title: t('layoutHelpStage7Title'), actor: t('layoutHelpStage7Actor'), text: t('layoutHelpStage7Text') },
                       ].map((s, idx) => (
                         <div key={idx} className="app-modal-timeline-item">
                           <div className="stage-header">
@@ -905,14 +926,14 @@ function AppLayout() {
 
                 {helpTab === 'checklist' && (
                   <div>
-                    <p className="app-modal-section-title">Role-based Tasks</p>
+                    <p className="app-modal-section-title">{t('layoutHelpRoleTasks')}</p>
                     <div className="app-modal-role-pills">
                       {[
-                        { id: 'admin', label: 'Admin' },
-                        { id: 'manager', label: 'Manager' },
-                        { id: 'supervisor', label: 'Supervisor' },
-                        { id: 'auditor', label: 'Auditor' },
-                        { id: 'auditee', label: 'Auditee' },
+                        { id: 'admin', label: t('layoutHelpPillAdmin') },
+                        { id: 'manager', label: t('layoutHelpPillManager') },
+                        { id: 'supervisor', label: t('layoutHelpPillSupervisor') },
+                        { id: 'auditor', label: t('layoutHelpPillAuditor') },
+                        { id: 'auditee', label: t('layoutHelpPillAuditee') },
                       ].map((role) => (
                         <button
                           key={role.id}
@@ -927,10 +948,10 @@ function AppLayout() {
 
                     <div>
                       {helpRole === 'admin' && [
-                        { id: 'a1', label: 'Step 1.1: Log in as administrator using admin@eeu.com.' },
-                        { id: 'a2', label: 'Step 1.2: Access User Management in the sidebar.' },
-                        { id: 'a3', label: 'Step 1.3: Add new users and activate/deactivate accounts.' },
-                        { id: 'a4', label: 'Step 1.4: Check Audit Trail in the sidebar to review system access logs.' },
+                        { id: 'a1', label: t('layoutHelpTaskA1') },
+                        { id: 'a2', label: t('layoutHelpTaskA2') },
+                        { id: 'a3', label: t('layoutHelpTaskA3') },
+                        { id: 'a4', label: t('layoutHelpTaskA4') },
                       ].map((task) => (
                         <label key={task.id} className={`app-modal-checklist-item ${checkedTasks[task.id] ? 'checked' : ''}`}>
                           <input type="checkbox" checked={!!checkedTasks[task.id]} onChange={() => toggleTask(task.id)} />
@@ -939,13 +960,13 @@ function AppLayout() {
                       ))}
 
                       {helpRole === 'manager' && [
-                        { id: 'm1', label: 'Step 2.1: Log in as manager using manager@eeu.com.' },
-                        { id: 'm2', label: 'Step 2.2: Manage the Audit Universe (add entities, projects, or processes).' },
-                        { id: 'm3', label: 'Step 2.3: Open Risk Assessment weights and view the 5x5 Risk Heat Map.' },
-                        { id: 'm4', label: 'Step 2.4: Create a new Annual Audit Plan (year, budget, dates, objectives).' },
-                        { id: 'm5', label: 'Step 2.5: Submit and approve the Annual Plan (change status to Approved).' },
-                        { id: 'm6', label: 'Step 2.6: Schedule individual Audit Engagements and assign team members.' },
-                        { id: 'm7', label: 'Step 2.7: Open Reports and compile/review/lock final audit reports.' },
+                        { id: 'm1', label: t('layoutHelpTaskM1') },
+                        { id: 'm2', label: t('layoutHelpTaskM2') },
+                        { id: 'm3', label: t('layoutHelpTaskM3') },
+                        { id: 'm4', label: t('layoutHelpTaskM4') },
+                        { id: 'm5', label: t('layoutHelpTaskM5') },
+                        { id: 'm6', label: t('layoutHelpTaskM6') },
+                        { id: 'm7', label: t('layoutHelpTaskM7') },
                       ].map((task) => (
                         <label key={task.id} className={`app-modal-checklist-item ${checkedTasks[task.id] ? 'checked' : ''}`}>
                           <input type="checkbox" checked={!!checkedTasks[task.id]} onChange={() => toggleTask(task.id)} />
@@ -954,11 +975,11 @@ function AppLayout() {
                       ))}
 
                       {helpRole === 'supervisor' && [
-                        { id: 's1', label: 'Step 3.1: Log in as supervisor using supervisor@eeu.com.' },
-                        { id: 's2', label: 'Step 3.2: Open Audit Execution and review Objectives & Scope.' },
-                        { id: 's3', label: 'Step 3.3: Approve program (transitions from draft to approved).' },
-                        { id: 's4', label: 'Step 3.4: Monitor active fieldwork of assigned lead auditors.' },
-                        { id: 's5', label: 'Step 3.5: Inspect uploaded working papers and post review notes.' },
+                        { id: 's1', label: t('layoutHelpTaskS1') },
+                        { id: 's2', label: t('layoutHelpTaskS2') },
+                        { id: 's3', label: t('layoutHelpTaskS3') },
+                        { id: 's4', label: t('layoutHelpTaskS4') },
+                        { id: 's5', label: t('layoutHelpTaskS5') },
                       ].map((task) => (
                         <label key={task.id} className={`app-modal-checklist-item ${checkedTasks[task.id] ? 'checked' : ''}`}>
                           <input type="checkbox" checked={!!checkedTasks[task.id]} onChange={() => toggleTask(task.id)} />
@@ -967,14 +988,14 @@ function AppLayout() {
                       ))}
 
                       {helpRole === 'auditor' && [
-                        { id: 'au1', label: 'Step 4.1: Log in as auditor using auditor@eeu.com.' },
-                        { id: 'au2', label: 'Step 4.2: Navigate to Audit Execution and select active engagement.' },
-                        { id: 'au3', label: 'Step 4.3: Create/define the Audit Program if missing.' },
-                        { id: 'au4', label: 'Step 4.4: Add specific Fieldwork Procedures under the program.' },
-                        { id: 'au5', label: 'Step 4.5: Complete procedures and upload Working Papers evidence files.' },
-                        { id: 'au6', label: 'Step 4.6: Navigate to Findings Registry and Log Findings.' },
-                        { id: 'au7', label: 'Step 4.7: Navigate to Corrective Actions and spawn CAPA tasks.' },
-                        { id: 'au8', label: 'Step 4.8: Access Reports & Analytics to draft engagement reports.' },
+                        { id: 'au1', label: t('layoutHelpTaskAu1') },
+                        { id: 'au2', label: t('layoutHelpTaskAu2') },
+                        { id: 'au3', label: t('layoutHelpTaskAu3') },
+                        { id: 'au4', label: t('layoutHelpTaskAu4') },
+                        { id: 'au5', label: t('layoutHelpTaskAu5') },
+                        { id: 'au6', label: t('layoutHelpTaskAu6') },
+                        { id: 'au7', label: t('layoutHelpTaskAu7') },
+                        { id: 'au8', label: t('layoutHelpTaskAu8') },
                       ].map((task) => (
                         <label key={task.id} className={`app-modal-checklist-item ${checkedTasks[task.id] ? 'checked' : ''}`}>
                           <input type="checkbox" checked={!!checkedTasks[task.id]} onChange={() => toggleTask(task.id)} />
@@ -983,10 +1004,10 @@ function AppLayout() {
                       ))}
 
                       {helpRole === 'auditee' && [
-                        { id: 'aud1', label: 'Step 5.1: Log in as auditee using auditee@eeu.com.' },
-                        { id: 'aud2', label: 'Step 5.2: Go to Risk Assessment -> Self Assessment operational survey.' },
-                        { id: 'aud3', label: 'Step 5.3: Open the Corrective Actions portal.' },
-                        { id: 'aud4', label: 'Step 5.4: Locate assigned CAPAs, respond, upload evidence, and update status.' },
+                        { id: 'aud1', label: t('layoutHelpTaskAud1') },
+                        { id: 'aud2', label: t('layoutHelpTaskAud2') },
+                        { id: 'aud3', label: t('layoutHelpTaskAud3') },
+                        { id: 'aud4', label: t('layoutHelpTaskAud4') },
                       ].map((task) => (
                         <label key={task.id} className={`app-modal-checklist-item ${checkedTasks[task.id] ? 'checked' : ''}`}>
                           <input type="checkbox" checked={!!checkedTasks[task.id]} onChange={() => toggleTask(task.id)} />

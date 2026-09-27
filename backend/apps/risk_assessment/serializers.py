@@ -8,7 +8,8 @@ class RiskParameterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RiskParameter
-        fields = '__all__'
+        fields = ['id', 'category_display', 'name', 'category', 'description',
+                  'weight', 'is_active', 'created_at', 'created_by']
 
 
 class SelfAssessmentSerializer(serializers.ModelSerializer):
@@ -16,7 +17,10 @@ class SelfAssessmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SelfAssessment
-        fields = '__all__'
+        fields = ['id', 'submitted_by_name', 'submitted_at', 'status',
+                  'likelihood_self', 'impact_self', 'control_effectiveness_self',
+                  'justification', 'mitigating_controls', 'reviewer_notes',
+                  'reviewed_at', 'risk_assessment', 'submitted_by', 'reviewed_by']
 
 
 class RiskAssessmentSerializer(OrgScopeNamesMixin, serializers.ModelSerializer):
@@ -27,7 +31,15 @@ class RiskAssessmentSerializer(OrgScopeNamesMixin, serializers.ModelSerializer):
 
     class Meta:
         model = RiskAssessment
-        fields = '__all__'
+        fields = ['id', 'department_name', 'department_name_am', 'region_name',
+                  'region_name_am', 'service_center_name', 'service_center_name_am',
+                  'assessed_by_name', 'risk_rating_display', 'audit_universe_name',
+                  'self_assessment', 'assessment_period', 'year', 'likelihood',
+                  'impact', 'risk_score', 'risk_rating', 'inherent_risk',
+                  'control_effectiveness', 'residual_risk', 'notes',
+                  'is_self_assessment', 'created_at', 'updated_at', 'department',
+                  'region', 'service_center', 'audit_universe', 'assessed_by',
+                  'reviewed_by']
         read_only_fields = ['risk_score', 'risk_rating', 'residual_risk']
 
     def get_audit_universe_name(self, obj):

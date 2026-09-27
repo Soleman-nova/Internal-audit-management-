@@ -28,7 +28,28 @@ export default defineConfig({
       url: 'http://localhost:8000/admin/login/',
       reuseExistingServer: true,
       timeout: 60_000,
-      env: { PYTHONUTF8: '1' },
+      env: {
+        PYTHONUTF8: '1',
+        // The suite authenticates as the same five seeded accounts hundreds of
+        // times per run, so DRF's default `user: 1000/hour` is exhausted after a
+        // handful of runs. The failure does not look like throttling at all:
+        // `api()` returned the 429 body, the caller read `.results` off it, and
+        // the spec reported `TypeError: Cannot read properties of undefined
+        // (reading 'find')` — so the diagnosis pointed at the tests.
+        //
+        // `login` is raised for the same reason: the setup project signs in five
+        // accounts through the real login page on every run, and `login.spec.js`
+        // signs in repeatedly, all against a default of 30/min.
+        //
+        // CAVEAT: `reuseExistingServer: true` means this block is IGNORED when a
+        // dev server is already listening on :8000 — which is the common local
+        // case, and the one where the exhaustion was actually hit. The counter
+        // lives in that server's process, so restarting it is what clears it.
+        // `api()` in helpers.js now raises a named error when it does run out, so
+        // a reused server fails loudly rather than confusingly.
+        THROTTLE_USER: '100000/hour',
+        THROTTLE_LOGIN: '10000/min',
+      },
     },
     {
       command: 'npm run dev',
@@ -58,6 +79,14 @@ export default defineConfig({
       use: { storageState: 'e2e/.auth/manager.json' },
     },
     {
+      // The planning page's own spec, as the manager: it is the role that can
+      // create and approve, so every control on the page is rendered for it.
+      name: 'planning',
+      testMatch: /planning\.spec\.js/,
+      dependencies: ['setup'],
+      use: { storageState: 'e2e/.auth/manager.json' },
+    },
+    {
       name: 'supervisor',
       testMatch: /supervisor\.spec\.js/,
       dependencies: ['setup'],
@@ -79,6 +108,13 @@ export default defineConfig({
       name: 'cross-cutting',
       testMatch: /cross-cutting\.spec\.js/,
       dependencies: ['setup'],
+    },
+    {
+      // The i18n integrity checks — no data setup, so it can run anywhere.
+      name: 'i18n',
+      testMatch: /i18n\.spec\.js/,
+      dependencies: ['setup'],
+      use: { storageState: 'e2e/.auth/admin.json' },
     },
   ],
 });

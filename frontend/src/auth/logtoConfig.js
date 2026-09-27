@@ -8,6 +8,12 @@ import { UserScope } from '@logto/react';
  * `cryptoSubtlePolyfill.ts` (a JS SHA-256 for PKCE) and `disableIdTokenVerification.ts`
  * (which made the SDK accept a token without checking who signed it).
  *
+ * That reference app is **not part of this repository** — it was a separate git
+ * checkout that the parent only ever recorded as a bare submodule pointer, and it
+ * has since been untracked (`.gitignore`). The comparison is kept because it
+ * explains why these two workarounds are absent; the path will not resolve on a
+ * fresh clone.
+ *
  * Both exist there because the reference runs on `http://<LAN-IP>:5173`, which is an
  * insecure context — `crypto.subtle` is `undefined`, so PKCE cannot be computed and
  * ES384 signatures cannot be verified. Running on `http://localhost:5173` instead

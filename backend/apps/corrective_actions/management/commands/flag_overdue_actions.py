@@ -2,12 +2,18 @@
 Management command to detect overdue and due-soon corrective actions.
 
 Transitions past-due CAPAs to 'overdue', emits notifications for overdue items,
-due-soon reminders (within N days), and scheduled follow-ups.
+due-soon reminders (within N days), and scheduled follow-ups. Each reminder is
+also emailed when the `enable_email_alerts` setting is on.
 
 Idempotent: safe to run multiple times per day. Intended to be scheduled via
 Windows Task Scheduler / cron (e.g. daily at 8 AM):
 
     python manage.py flag_overdue_actions
+
+That last property is not free — each of the three loops below has to record that
+it has already spoken. Two of them get it for nothing by changing the row they
+select on; the follow-up loop has to write it down. Read the comments there before
+changing the filters.
 """
 from datetime import timedelta
 
@@ -63,6 +69,7 @@ class Command(BaseCommand):
                     f'The corrective action "{action.title}" was due on '
                     f'{effective_due.isoformat()} and is now overdue.',
                     link,
+                    email=True,
                 )
             elif effective_due <= due_soon_window and not action.due_reminder_sent:
                 # Due within the window and not yet reminded.
@@ -76,11 +83,24 @@ class Command(BaseCommand):
                     f'The corrective action "{action.title}" is due on '
                     f'{effective_due.isoformat()}.',
                     link,
+                    email=True,
                 )
 
         # Scheduled follow-ups that are due -> remind the corrective-action owner.
+        #
+        # `status='scheduled'` is NOT a once-only guard, and this loop used to rely
+        # on it: a follow-up stays `scheduled` until somebody completes it, so every
+        # daily run re-notified the same person about the same follow-up, and the
+        # "safe to run repeatedly" claim above was untrue for this loop. The two CAPA
+        # loops escape that by changing the row they select on (status, or the
+        # `due_reminder_sent` flag); a follow-up has to record that it has spoken.
+        #
+        # `email_sent` is the field the model already provides for exactly this, so it
+        # doubles as "reminder dispatched" — by whichever channels were enabled. It
+        # gates the *reminder*, not just the email: a duplicate in-app notification
+        # every day is noise, not a feature.
         follow_ups = FollowUp.objects.filter(
-            scheduled_date__lte=today, status='scheduled'
+            scheduled_date__lte=today, status='scheduled', email_sent=False,
         ).select_related('corrective_action', 'corrective_action__owner')
 
         for follow_up in follow_ups:
@@ -93,7 +113,11 @@ class Command(BaseCommand):
                 f'A follow-up scheduled for {follow_up.scheduled_date.isoformat()} '
                 f'on "{capa.title if capa else ""}" is due.',
                 f'/capa/{capa.id}' if capa else '',
+                email=True,
             )
+            follow_up.email_sent = True
+            follow_up.email_sent_at = timezone.now()
+            follow_up.save(update_fields=['email_sent', 'email_sent_at'])
 
         self.stdout.write(self.style.SUCCESS(
             f'Overdue flagged: {overdue_count} | '
