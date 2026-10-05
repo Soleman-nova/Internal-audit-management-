@@ -15,8 +15,9 @@ The replacement is a year-scoped sequence — ``FND-2026-0001`` — which is als
 what an audit function actually wants, since the number now says when the
 record was raised and how many preceded it that year.
 """
+import re
+
 from django.db import IntegrityError, transaction
-from django.db.models import Max
 from django.db.models.functions import Length
 from django.utils import timezone
 
@@ -35,6 +36,20 @@ def next_reference_number(model, field, prefix, year=None, width=SEQUENCE_WIDTH)
     prefix is true numeric order. A plain ``Max()`` on the char column would
     read '9999' as greater than '10000' and hand out a duplicate on the
     ten-thousandth record of the year.
+
+    The queryset is narrowed to purely numeric suffixes before that ordering
+    matters, and it has to be. The seeded registers carry human-numbered rows
+    beside the generated ones — ``ENG-2026-PP-001`` for the Power Plant audit
+    plan, for instance — and those are *longer* than ``ENG-2026-0426``, so a
+    length-first sort over the whole year ends on one of them. Two things then
+    go wrong at once: the sequence falls back to ``count() + 1``, which is not
+    the next number but merely one more row than exist (the numeric rows have
+    gaps, and the count is inflated further by the non-numeric ones), so it
+    hands out a number that is already taken. That is an ``IntegrityError`` on a
+    unique column — a 500, and the record the user was creating is lost.
+
+    Filtering to ``PREFIX-YYYY-<digits>`` keeps the hand-numbered rows visible as
+    the separate series they are, and out of the arithmetic.
     """
     if year is None:
         year = timezone.now().year
@@ -42,19 +57,14 @@ def next_reference_number(model, field, prefix, year=None, width=SEQUENCE_WIDTH)
     latest = (
         model.objects
         .filter(**{f'{field}__startswith': stem})
+        .filter(**{f'{field}__regex': rf'^{re.escape(stem)}\d+$'})
         .order_by(Length(field), field)
         .values_list(field, flat=True)
         .last()
     )
-    sequence = 1
-    if latest:
-        try:
-            sequence = int(latest[len(stem):]) + 1
-        except (TypeError, ValueError):
-            # A hand-seeded or imported number that does not parse. Fall back to
-            # the count so we still move forward instead of restarting at 1.
-            sequence = model.objects.filter(**{f'{field}__startswith': stem}).count() + 1
-    return f'{stem}{sequence:0{width}d}'
+    if latest is None:
+        return f'{stem}{1:0{width}d}'
+    return f'{stem}{int(latest[len(stem):]) + 1:0{width}d}'
 
 
 def save_with_reference_number(serializer, field, prefix, **extra):

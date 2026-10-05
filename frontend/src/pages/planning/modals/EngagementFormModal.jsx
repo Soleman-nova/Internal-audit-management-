@@ -47,6 +47,14 @@ function EngagementFormModal({
 
   const auditors = users.filter(u => u.role === 'auditor' || u.role === 'audit_manager');
   const supervisors = users.filter(u => u.role === 'supervisor' || u.role === 'audit_manager');
+  // Findings raised against this engagement are addressed to whoever is picked
+  // here — it is the only place the named auditee comes from (see the finding
+  // serializer). Left blank, the engagement's findings still reach the
+  // department's auditee as readers, but nothing can answer them: the
+  // object-level check on respond / comment / upload-evidence / dispute matches
+  // on the finding's own `auditee` field, so a blank here is a finding nobody
+  // is on the hook for. Hence the hint rather than silent omission.
+  const auditees = users.filter(u => u.role === 'auditee');
 
   // The three *_name fields are tracked separately from the form payload so
   // the picker can still name a retired unit, which the org tree omits.
@@ -60,6 +68,11 @@ function EngagementFormModal({
     const errors = validateForm(newEngagement, {
       title: { validators: [validators.required, validators.minLength(5)] },
       plan: { validators: [validators.required] },
+      // An engagement is where the audit gets its bounds. Blank here is not
+      // "no constraints", it is an unscoped audit, so both are required to
+      // match the server-side (blank=False) rule.
+      objectives: { validators: [validators.required] },
+      scope: { validators: [validators.required] },
       planned_days: { validators: [validators.integer, validators.min(0)] },
       planned_start: { validators: [validators.required, validators.date] },
       planned_end: {
@@ -86,6 +99,7 @@ function EngagementFormModal({
       if (!payload.audit_universe) delete payload.audit_universe;
       if (!payload.lead_auditor) delete payload.lead_auditor;
       if (!payload.supervisor) delete payload.supervisor;
+      if (!payload.auditee) delete payload.auditee;
       if (engagement) {
         await planningApi.updateEngagement(engagement.id, payload);
         toast.success(t('engagementUpdatedToast'));
@@ -154,6 +168,20 @@ function EngagementFormModal({
           </div>
         </div>
 
+        {/* These two are what the generated report prints under "Audit
+            Objectives" / "Audit Scope". Both are mandatory — the engagement is
+            where scope is fixed, and the audit program inherits from it. */}
+        <div className="form-group">
+          <label className="form-label" htmlFor="engagement_objectives">{t('objectives')}</label>
+          <textarea id="engagement_objectives" rows="2" className="form-control" placeholder={t('planObjectivesPlaceholder')}
+            value={newEngagement.objectives} onChange={(e) => setNewEngagement({ ...newEngagement, objectives: e.target.value })} required />
+        </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="engagement_scope_text">{t('scope')}</label>
+          <textarea id="engagement_scope_text" rows="2" className="form-control" placeholder={t('planScopePlaceholder')}
+            value={newEngagement.scope} onChange={(e) => setNewEngagement({ ...newEngagement, scope: e.target.value })} required />
+        </div>
+
         {/* ★ Manager Section: Lead Auditor, Supervisor & Allocated Days */}
         <div className="form-section-divider">
           <span><Users size={14} /> {t('teamAssignment')}</span>
@@ -178,6 +206,22 @@ function EngagementFormModal({
                 <option key={u.id} value={u.id}>{u.full_name || `${u.first_name} ${u.last_name}`} ({u.employee_id})</option>
               ))}
             </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="engagement_auditee">{t('auditeeRepresentative')}</label>
+            <select id="engagement_auditee" className="form-control" value={newEngagement.auditee}
+              onChange={(e) => setNewEngagement({ ...newEngagement, auditee: e.target.value })}>
+              <option value="">{t('selectAuditee')}</option>
+              {auditees.map(u => (
+                <option key={u.id} value={u.id}>{u.full_name || `${u.first_name} ${u.last_name}`} ({u.employee_id})</option>
+              ))}
+            </select>
+            {/* The department picker sits above this one, so the representative
+                for the unit being audited is usually the loudest option in the
+                list. Saying what a blank costs is cheaper than the alternative,
+                which is a finding that looks live to the department and answers
+                to nobody. */}
+            <small className="form-hint">{t('auditeeRepresentativeHint')}</small>
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="engagement_planned_days">{t('allocatedDays')}</label>

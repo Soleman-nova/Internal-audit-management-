@@ -16,7 +16,92 @@ from .serializers import ReportTemplateSerializer, GeneratedReportSerializer
 from apps.notifications.services import notify
 from apps.common.permissions import CanManageSettings, CanWriteAudit
 from apps.common.audit_utils import log_audit
-from apps.common.scoping import AuditeeScopeMixin
+from apps.common.scoping import AuditeeScopeMixin, RegionScopeMixin
+
+
+def _pdf_escape(text):
+    """Escape free text for a reportlab `Paragraph`.
+
+    `Paragraph` parses its text as XML markup, so anything the user typed has to be
+    escaped before it gets there. Measured on reportlab 4.5.1, the failure is
+    silent rather than loud: a title of `R&D <legacy> upgrade` is drawn as
+    `R&D; upgrade` — the `<legacy>` is read as an unknown tag, dropped, and a stray
+    `;` left in its place. Nothing raises, so the report compiles and the finding
+    title is quietly wrong — which is exactly the kind of defect a "does it
+    compile" test cannot see.
+
+    The surrounding report markup (`<b>`, `<i>`) is written by this module and is
+    deliberately not passed through here.
+    """
+    from xml.sax.saxutils import escape
+    return escape('' if text is None else str(text))
+
+
+def _pdf_cell(text, style):
+    """A table cell that wraps inside its column.
+
+    A plain string in a reportlab `Table` is drawn with `canvas.drawString`, which
+    neither wraps nor clips against the column width — so a long title simply
+    paints over the next column. Wrapping requires a `Paragraph`, which is also why
+    the escaping above is not optional once cells become markup.
+    """
+    from reportlab.platypus import Paragraph
+    return Paragraph(_pdf_escape(text), style)
+
+
+def _clip(text, limit):
+    """Cap a cell's text at `limit` characters.
+
+    Wrapping makes rows grow with their content, so the cap bounds how tall a
+    single long title (the field is 300 chars) can make one.
+    """
+    text = '' if text is None else str(text)
+    return text[:limit] + ('...' if len(text) > limit else '')
+
+
+def _plural(count, noun):
+    """`1 finding` / `3 findings`."""
+    return f'{count} {noun}' + ('' if count == 1 else 's')
+
+
+def _withheld_capas_note(count):
+    """Why this many corrective actions are absent from a report.
+
+    The *finding* is what is unendorsed, not the action — an action inherits its
+    finding's publication state, which is the whole reason it is being withheld,
+    so saying the action itself was not endorsed would name the wrong record.
+    """
+    subject = 'finding has' if count == 1 else 'findings have'
+    return (f'{_plural(count, "corrective action")} whose {subject} not yet '
+            'been endorsed for publication.')
+
+
+def _withheld_findings_note(count):
+    """The same sentence for findings the report left out."""
+    subject = 'has' if count == 1 else 'have'
+    return (f'{_plural(count, "finding")} that {subject} not yet been endorsed '
+            'for publication.')
+
+
+def _absence_message(withheld, note, fallback):
+    """What a section says when it has no rows to show.
+
+    `fallback` asserts that none of this kind of record exists. That is only
+    knowable once the withheld count is in hand, which is the defect this
+    replaces: the assertion was printed whether or not the query had dropped
+    anything, so a report could deny the existence of an action the reader had
+    just seen in the register.
+    """
+    if not withheld:
+        return fallback
+    return f'Not included in this report: {note(withheld)}'
+
+
+def _withheld_above_message(withheld, note):
+    """The footnote for a section that has rows *and* withheld siblings."""
+    if not withheld:
+        return None
+    return f'Not shown above: {note(withheld)}'
 
 
 class ReportTemplateViewSet(viewsets.ModelViewSet):
@@ -44,7 +129,7 @@ class ReportTemplateViewSet(viewsets.ModelViewSet):
             instance.delete()
 
 
-class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
+class GeneratedReportViewSet(RegionScopeMixin, AuditeeScopeMixin, viewsets.ModelViewSet):
     queryset = GeneratedReport.objects.select_related(
         'template', 'engagement', 'generated_by'
     ).all()
@@ -55,7 +140,9 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
 
     # An auditee sees a report only when it is about their own engagement, or when
     # they generated it. `engagement` is nullable, so an org-wide report matches
-    # neither and stays out of reach — which is the intent.
+    # neither and stays out of reach — which is the intent. A regional FPA
+    # auditor sees only reports whose engagement is tagged with their region.
+    region_scope_fields = ('engagement__region_id',)
     auditee_scope_fields = ('engagement__department_id',)
     auditee_scope_personal_fields = ('generated_by',)
 
@@ -85,12 +172,41 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
         risk_data = []
         engagement = report.engagement
         engagement_info = {}
+        # How much the two queries below left out, so the sections can say so. Zero
+        # rather than undefined for the no-engagement report, which has both empty
+        # and nothing withheld.
+        withheld_findings = 0
+        withheld_capas = 0
         
         if engagement:
-            findings = list(AuditFinding.objects.filter(engagement=engagement))
+            # Published findings only. A report is a distributable document — it is
+            # stored as a file, and an auditee reaches it through
+            # GeneratedReportViewSet — so an unendorsed finding compiled into one
+            # would leave the audit team's draft in the hands of the party it is
+            # about. The corrective actions and risk rows follow their finding for
+            # the same reason.
+            findings = list(AuditFinding.objects.filter(engagement=engagement).exclude(
+                status__in=AuditFinding.PRE_PUBLICATION_STATUSES,
+            ))
             corrective_actions = list(CorrectiveAction.objects.filter(
-                finding__engagement=engagement
+                finding__engagement=engagement,
+            ).exclude(
+                finding__status__in=AuditFinding.PRE_PUBLICATION_STATUSES,
             ).select_related('finding'))
+            # Counted, not listed: the withheld rows are exactly what must not reach
+            # the document, so only their number crosses into it. Without this the
+            # sections below could not tell "none exist" from "none I am allowed to
+            # print", and printed the first when the second was true — the lead
+            # auditor had just seen the action in the register, which applies the
+            # same exclusion to auditees only.
+            withheld_findings = AuditFinding.objects.filter(
+                engagement=engagement,
+                status__in=AuditFinding.PRE_PUBLICATION_STATUSES,
+            ).count()
+            withheld_capas = CorrectiveAction.objects.filter(
+                finding__engagement=engagement,
+                finding__status__in=AuditFinding.PRE_PUBLICATION_STATUSES,
+            ).count()
             risk_data = list(RiskAssessment.objects.filter(
                 department=engagement.department
             ) if engagement.department else [])
@@ -101,8 +217,6 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                 'type': engagement.get_engagement_type_display(),
                 'department': engagement.department.name if engagement.department else 'N/A',
                 'status': engagement.get_status_display(),
-                'objectives': engagement.objectives,
-                'scope': engagement.scope,
                 'lead_auditor': engagement.lead_auditor.full_name if engagement.lead_auditor else 'N/A',
                 'supervisor': engagement.supervisor.full_name if engagement.supervisor else 'N/A',
                 'planned_start': engagement.planned_start,
@@ -131,6 +245,31 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
         high_count = severity_counts.get('HIGH', 0)
         medium_count = severity_counts.get('MEDIUM', 0)
         low_count = severity_counts.get('LOW', 0)
+
+        # Objectives and scope are read by all three formats, so they are resolved
+        # once here, for the same reason the tally above is.
+        #
+        # Two sources, because either may carry them: the engagement is the record
+        # the auditee was scheduled against, while the program is the audit team's
+        # plan of attack and often where they are actually written. When both are
+        # empty the report says so in words — an empty paragraph reads as a broken
+        # report rather than as missing input.
+        #
+        # `getattr(..., None)` rather than `engagement.program`: the reverse side of
+        # a OneToOneField raises RelatedObjectDoesNotExist for an engagement with no
+        # program, and that exception subclasses AttributeError, so this returns
+        # None instead of raising.
+        program = getattr(engagement, 'program', None) if engagement else None
+        objectives_text = (
+            (engagement.objectives if engagement else '')
+            or (program.objectives if program else '')
+            or 'No specific objectives have been recorded for this engagement.'
+        )
+        scope_text = (
+            (engagement.scope if engagement else '')
+            or (program.scope if program else '')
+            or 'No scope has been recorded for this engagement.'
+        )
 
         # The real extension, not the format key: `.excel` / `.word` are not file
         # types, so `mimetypes.guess_type` in `export` returned None and the
@@ -169,8 +308,16 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                                       fontSize=10, leading=14, alignment=TA_JUSTIFY,
                                       spaceAfter=8))
             styles.add(ParagraphStyle('TableHeader', parent=styles['Normal'],
-                                      fontSize=9, textColor=colors.white))
-            
+                                      fontSize=9, leading=11, fontName='Helvetica-Bold',
+                                      textColor=colors.white))
+            # Cell styles for the wrapped tables. A Paragraph carries its own style,
+            # so the TableStyle FONTSIZE/FONTNAME entries no longer reach these cells
+            # — they are set here instead, at the sizes those tables used to declare.
+            styles.add(ParagraphStyle('TableCell', parent=styles['Normal'],
+                                      fontSize=7, leading=8.5))
+            styles.add(ParagraphStyle('TableCellCenter', parent=styles['TableCell'],
+                                      alignment=TA_CENTER))
+
             elements = []
             
             # ========== COVER PAGE ==========
@@ -178,7 +325,7 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
             elements.append(Paragraph("ETHIOPIAN ELECTRIC UTILITY", styles['CoverTitle']))
             elements.append(Paragraph("Internal Audit Department", styles['CoverSubtitle']))
             elements.append(Spacer(1, 20))
-            elements.append(Paragraph(report.title, styles['CoverTitle']))
+            elements.append(Paragraph(_pdf_escape(report.title), styles['CoverTitle']))
             elements.append(Spacer(1, 30))
             
             # Engagement info box
@@ -203,7 +350,7 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
             elements.append(info_table)
             elements.append(Spacer(1, 40))
             elements.append(Paragraph(f"Date: {timezone.now().strftime('%d %B %Y')}", styles['CoverSubtitle']))
-            elements.append(Paragraph(f"Generated By: {report.generated_by.full_name if report.generated_by else 'System'}", styles['CoverSubtitle']))
+            elements.append(Paragraph(f"Generated By: {_pdf_escape(report.generated_by.full_name if report.generated_by else 'System')}", styles['CoverSubtitle']))
             elements.append(PageBreak())
             
             # ========== TABLE OF CONTENTS ==========
@@ -225,7 +372,7 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
             elements.append(Spacer(1, 10))
             elements.append(Paragraph(
                 f"This report presents the findings and recommendations from the audit engagement "
-                f"<b>{engagement_info.get('title', 'N/A')}</b> conducted by the EEU Internal Audit Department. "
+                f"<b>{_pdf_escape(engagement_info.get('title', 'N/A'))}</b> conducted by the EEU Internal Audit Department. "
                 f"The audit was performed in accordance with the International Standards for the Professional "
                 f"Practice of Internal Auditing (IPPF) and the EEU Internal Audit Charter.",
                 styles['SectionBody']
@@ -256,13 +403,11 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
             elements.append(bg_table)
             elements.append(Spacer(1, 15))
             
-            objectives_text = engagement_info.get('objectives', 'No specific objectives defined for this engagement.')
-            scope_text = engagement_info.get('scope', 'No scope defined for this engagement.')
             elements.append(Paragraph("<b>Audit Objectives:</b>", styles['SectionBody']))
-            elements.append(Paragraph(objectives_text, styles['SectionBody']))
+            elements.append(Paragraph(_pdf_escape(objectives_text), styles['SectionBody']))
             elements.append(Spacer(1, 8))
             elements.append(Paragraph("<b>Audit Scope:</b>", styles['SectionBody']))
-            elements.append(Paragraph(scope_text, styles['SectionBody']))
+            elements.append(Paragraph(_pdf_escape(scope_text), styles['SectionBody']))
             elements.append(PageBreak())
             
             # ========== 2. EXECUTIVE SUMMARY ==========
@@ -305,7 +450,7 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
             
             if risk_data:
                 elements.append(Paragraph(
-                    f"The following risk assessment data relates to the department <b>{engagement_info.get('department', 'N/A')}</b>. "
+                    f"The following risk assessment data relates to the department <b>{_pdf_escape(engagement_info.get('department', 'N/A'))}</b>. "
                     f"The risk analysis considers inherent risk, control effectiveness, and residual risk levels.",
                     styles['SectionBody']
                 ))
@@ -351,7 +496,13 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
             elements.append(Spacer(1, 10))
             
             if not findings:
-                elements.append(Paragraph("No findings were registered for this engagement.", styles['SectionBody']))
+                elements.append(Paragraph(
+                    _pdf_escape(_absence_message(
+                        withheld_findings, _withheld_findings_note,
+                        "No findings were registered for this engagement.",
+                    )),
+                    styles['SectionBody'],
+                ))
             else:
                 elements.append(Paragraph(
                     f"The following table provides a comprehensive summary of all <b>{total_findings}</b> finding(s) "
@@ -360,34 +511,32 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                 ))
                 elements.append(Spacer(1, 10))
                 
-                findings_table_data = [['#', 'Ref No.', 'Title', 'Severity', 'Category', 'Status', 'Recommendation']]
+                center = styles['TableCellCenter']
+                body = styles['TableCell']
+                f_headers = ['#', 'Ref No.', 'Title', 'Severity', 'Category', 'Status', 'Recommendation']
+                findings_table_data = [[_pdf_cell(h, styles['TableHeader']) for h in f_headers]]
                 for idx, f in enumerate(findings, 1):
-                    sev_color = colors.HexColor('#F44336') if f.severity == 'critical' else \
-                                colors.HexColor('#FF9800') if f.severity == 'high' else \
-                                colors.HexColor('#FFC107') if f.severity == 'medium' else \
-                                colors.HexColor('#4CAF50')
                     findings_table_data.append([
-                        str(idx),
-                        f.finding_number,
-                        f.title[:50] + ('...' if len(f.title) > 50 else ''),
-                        f.severity.upper() if f.severity else 'N/A',
-                        f.category.replace('_', ' ').title() if f.category else 'N/A',
-                        f.status.upper() if f.status else 'N/A',
-                        f.recommendation[:60] + ('...' if len(f.recommendation) > 60 else '') if f.recommendation else 'N/A',
+                        _pdf_cell(idx, center),
+                        _pdf_cell(f.finding_number, body),
+                        _pdf_cell(_clip(f.title, 50), body),
+                        _pdf_cell(f.severity.upper() if f.severity else 'N/A', center),
+                        _pdf_cell(f.category.replace('_', ' ').title() if f.category else 'N/A', center),
+                        _pdf_cell(f.status.upper() if f.status else 'N/A', center),
+                        _pdf_cell(_clip(f.recommendation, 60) if f.recommendation else 'N/A', body),
                     ])
-                
-                f_table = Table(findings_table_data, colWidths=[20, 60, 90, 60, 65, 55, 110])
+
+                # 481pt is what A4 leaves between the document's 20mm margins. The
+                # table used to sum to 460 with the slack going nowhere; it now goes
+                # to the two columns that wrap, which is where it was needed.
+                f_table = Table(findings_table_data, colWidths=[22, 58, 120, 52, 60, 50, 119])
                 f_table.setStyle(TableStyle([
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                     ('FONTSIZE', (0, 0), (-1, -1), 7),
-                    ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-                    ('ALIGN', (3, 0), (5, -1), 'CENTER'),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                     ('TOPPADDING', (0, 0), (-1, -1), 4),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
                     ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A5F')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                     ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F8F9FA')]),
                 ]))
                 elements.append(f_table)
@@ -398,18 +547,27 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                 elements.append(Spacer(1, 10))
                 for f in findings:
                     elements.append(Paragraph(
-                        f"<b>{f.finding_number}: {f.title}</b> "
-                        f"[Severity: {f.severity.upper() if f.severity else 'N/A'}] "
-                        f"[Status: {f.status.upper() if f.status else 'N/A'}]",
+                        f"<b>{_pdf_escape(f.finding_number)}: {_pdf_escape(f.title)}</b> "
+                        f"[Severity: {_pdf_escape(f.severity.upper() if f.severity else 'N/A')}] "
+                        f"[Status: {_pdf_escape(f.status.upper() if f.status else 'N/A')}]",
                         styles['SectionBody']
                     ))
-                    elements.append(Paragraph(f"<b>Condition:</b> {f.condition or 'N/A'}", styles['SectionBody']))
-                    elements.append(Paragraph(f"<b>Criteria:</b> {f.criteria or 'N/A'}", styles['SectionBody']))
-                    elements.append(Paragraph(f"<b>Cause:</b> {f.cause or 'N/A'}", styles['SectionBody']))
-                    elements.append(Paragraph(f"<b>Effect/Impact:</b> {f.effect or 'N/A'}", styles['SectionBody']))
-                    elements.append(Paragraph(f"<b>Recommendation:</b> {f.recommendation or 'N/A'}", styles['SectionBody']))
-                    elements.append(Paragraph(f"<b>Management Response:</b> {f.management_response or 'N/A'}", styles['SectionBody']))
+                    elements.append(Paragraph(f"<b>Condition:</b> {_pdf_escape(f.condition or 'N/A')}", styles['SectionBody']))
+                    elements.append(Paragraph(f"<b>Criteria:</b> {_pdf_escape(f.criteria or 'N/A')}", styles['SectionBody']))
+                    elements.append(Paragraph(f"<b>Cause:</b> {_pdf_escape(f.cause or 'N/A')}", styles['SectionBody']))
+                    elements.append(Paragraph(f"<b>Effect/Impact:</b> {_pdf_escape(f.effect or 'N/A')}", styles['SectionBody']))
+                    elements.append(Paragraph(f"<b>Recommendation:</b> {_pdf_escape(f.recommendation or 'N/A')}", styles['SectionBody']))
+                    elements.append(Paragraph(f"<b>Management Response:</b> {_pdf_escape(f.management_response or 'N/A')}", styles['SectionBody']))
                     elements.append(Spacer(1, 8))
+
+                # The count of what was left out goes last, so it reads as a note on
+                # the table rather than as a heading for it.
+                note = _withheld_above_message(withheld_findings, _withheld_findings_note)
+                if note:
+                    elements.append(Paragraph(
+                        f"<i>{_pdf_escape(note)}</i>",
+                        styles['SectionBody'],
+                    ))
             elements.append(PageBreak())
             
             # ========== 5. CAPA - CORRECTIVE ACTION PLAN ==========
@@ -418,9 +576,12 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
             
             if not corrective_actions:
                 elements.append(Paragraph(
-                    "No corrective actions have been assigned for findings in this engagement. "
-                    "Corrective actions should be defined for each finding to address identified issues.",
-                    styles['SectionBody']
+                    _pdf_escape(_absence_message(
+                        withheld_capas, _withheld_capas_note,
+                        "No corrective actions have been assigned for findings in this engagement. "
+                        "Corrective actions should be defined for each finding to address identified issues.",
+                    )),
+                    styles['SectionBody'],
                 ))
             else:
                 elements.append(Paragraph(
@@ -430,31 +591,28 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                 ))
                 elements.append(Spacer(1, 10))
                 
-                capa_table_data = [['#', 'Action No.', 'Title', 'Finding Ref', 'Priority', 'Status', 'Owner', 'Due Date']]
+                capa_headers = ['#', 'Action No.', 'Title', 'Finding Ref', 'Priority', 'Status', 'Owner', 'Due Date']
+                capa_table_data = [[_pdf_cell(h, styles['TableHeader']) for h in capa_headers]]
                 for idx, ca in enumerate(corrective_actions, 1):
                     capa_table_data.append([
-                        str(idx),
-                        ca.action_number,
-                        ca.title[:45] + ('...' if len(ca.title) > 45 else ''),
-                        ca.finding.finding_number if ca.finding else 'N/A',
-                        ca.priority.upper() if ca.priority else 'N/A',
-                        ca.status.upper() if ca.status else 'N/A',
-                        ca.owner.full_name if ca.owner else 'Unassigned',
-                        str(ca.due_date),
+                        _pdf_cell(idx, center),
+                        _pdf_cell(ca.action_number, body),
+                        _pdf_cell(_clip(ca.title, 45), body),
+                        _pdf_cell(ca.finding.finding_number if ca.finding else 'N/A', center),
+                        _pdf_cell(ca.priority.upper() if ca.priority else 'N/A', center),
+                        _pdf_cell(ca.status.upper() if ca.status else 'N/A', center),
+                        _pdf_cell(ca.owner.full_name if ca.owner else 'Unassigned', center),
+                        _pdf_cell(str(ca.due_date), center),
                     ])
-                
-                capa_table = Table(capa_table_data, colWidths=[18, 55, 85, 55, 48, 55, 60, 55])
+
+                capa_table = Table(capa_table_data, colWidths=[20, 55, 125, 52, 45, 55, 70, 59])
                 capa_table.setStyle(TableStyle([
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                     ('FONTSIZE', (0, 0), (-1, -1), 7),
-                    ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-                    ('ALIGN', (3, 0), (-1, -1), 'CENTER'),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                     ('TOPPADDING', (0, 0), (-1, -1), 4),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
                     ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A5F')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                     ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F8F9FA')]),
                 ]))
                 elements.append(capa_table)
@@ -465,19 +623,27 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                 elements.append(Spacer(1, 10))
                 for ca in corrective_actions:
                     elements.append(Paragraph(
-                        f"<b>{ca.action_number}: {ca.title}</b> "
-                        f"[Priority: {ca.priority.upper()} - Status: {ca.status.upper()}]",
+                        f"<b>{_pdf_escape(ca.action_number)}: {_pdf_escape(ca.title)}</b> "
+                        f"[Priority: {_pdf_escape((ca.priority or '').upper() or 'N/A')} - "
+                        f"Status: {_pdf_escape((ca.status or '').upper() or 'N/A')}]",
                         styles['SectionBody']
                     ))
-                    elements.append(Paragraph(f"<b>Finding:</b> {ca.finding.finding_number + ' - ' + ca.finding.title if ca.finding else 'N/A'}", styles['SectionBody']))
-                    elements.append(Paragraph(f"<b>Description:</b> {ca.description or 'N/A'}", styles['SectionBody']))
-                    elements.append(Paragraph(f"<b>Recommendation:</b> {ca.recommendation or 'N/A'}", styles['SectionBody']))
-                    elements.append(Paragraph(f"<b>Owner:</b> {ca.owner.full_name if ca.owner else 'Unassigned'}", styles['SectionBody']))
-                    elements.append(Paragraph(f"<b>Due Date:</b> {ca.due_date}", styles['SectionBody']))
+                    elements.append(Paragraph(f"<b>Finding:</b> {_pdf_escape(ca.finding.finding_number + ' - ' + ca.finding.title if ca.finding else 'N/A')}", styles['SectionBody']))
+                    elements.append(Paragraph(f"<b>Description:</b> {_pdf_escape(ca.description or 'N/A')}", styles['SectionBody']))
+                    elements.append(Paragraph(f"<b>Recommendation:</b> {_pdf_escape(ca.recommendation or 'N/A')}", styles['SectionBody']))
+                    elements.append(Paragraph(f"<b>Owner:</b> {_pdf_escape(ca.owner.full_name if ca.owner else 'Unassigned')}", styles['SectionBody']))
+                    elements.append(Paragraph(f"<b>Due Date:</b> {_pdf_escape(ca.due_date)}", styles['SectionBody']))
                     if ca.management_response:
-                        elements.append(Paragraph(f"<b>Management Response:</b> {ca.management_response}", styles['SectionBody']))
+                        elements.append(Paragraph(f"<b>Management Response:</b> {_pdf_escape(ca.management_response)}", styles['SectionBody']))
                     elements.append(Spacer(1, 8))
-            
+
+                note = _withheld_above_message(withheld_capas, _withheld_capas_note)
+                if note:
+                    elements.append(Paragraph(
+                        f"<i>{_pdf_escape(note)}</i>",
+                        styles['SectionBody'],
+                    ))
+
             # Footer disclaimer
             elements.append(Spacer(1, 30))
             elements.append(Paragraph(
@@ -568,14 +734,14 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
             ws_cover[f'A{row}'] = 'Audit Objectives:'
             ws_cover[f'A{row}'].font = bold_font
             ws_cover.merge_cells(f'A{row+1}:H{row+3}')
-            ws_cover[f'A{row+1}'] = engagement_info.get('objectives', 'No objectives defined.')
+            ws_cover[f'A{row+1}'] = objectives_text
             ws_cover[f'A{row+1}'].font = normal_font
             ws_cover[f'A{row+1}'].alignment = Alignment(wrap_text=True, vertical='top')
-            
+
             ws_cover[f'A{row+5}'] = 'Audit Scope:'
             ws_cover[f'A{row+5}'].font = bold_font
             ws_cover.merge_cells(f'A{row+6}:H{row+8}')
-            ws_cover[f'A{row+6}'] = engagement_info.get('scope', 'No scope defined.')
+            ws_cover[f'A{row+6}'] = scope_text
             ws_cover[f'A{row+6}'].font = normal_font
             ws_cover[f'A{row+6}'].alignment = Alignment(wrap_text=True, vertical='top')
             
@@ -694,9 +860,14 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                         cell = ws_findings.cell(row=f_idx, column=c_idx, value=val)
                         cell.font = normal_font
                         cell.border = thin_border
-                        if c_idx == 4:  # Severity column
-                            cell.alignment = Alignment(horizontal='center')
-                        if c_idx in (1, 5, 6):
+                        if c_idx in (3, 7):
+                            # Title and Recommendation are the two long columns.
+                            # Excel clips text against a non-empty neighbour rather
+                            # than overflowing, so without the wrap the title is
+                            # simply cut off at the column edge. No explicit row
+                            # height: leaving it unset keeps Excel's auto-fit.
+                            cell.alignment = Alignment(wrap_text=True, vertical='top')
+                        else:
                             cell.alignment = Alignment(horizontal='center')
                 
                 # Detailed findings section
@@ -708,29 +879,41 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                     dr = detail_row + 1 + (f_idx * 7)
                     ws_findings[f'A{dr}'] = f"{f.finding_number}: {f.title}"
                     ws_findings[f'A{dr}'].font = bold_font
-                    ws_findings[f'C{dr+1}'] = f'Condition: {f.condition or "N/A"}'
-                    ws_findings[f'A{dr+1}'].font = normal_font
-                    ws_findings[f'C{dr+2}'] = f'Criteria: {f.criteria or "N/A"}'
-                    ws_findings[f'A{dr+2}'].font = normal_font
-                    ws_findings[f'C{dr+3}'] = f'Cause: {f.cause or "N/A"}'
-                    ws_findings[f'A{dr+3}'].font = normal_font
-                    ws_findings[f'C{dr+4}'] = f'Effect/Impact: {f.effect or "N/A"}'
-                    ws_findings[f'A{dr+4}'].font = normal_font
-                    ws_findings[f'C{dr+5}'] = f'Recommendation: {f.recommendation or "N/A"}'
-                    ws_findings[f'A{dr+5}'].font = normal_font
-                    ws_findings[f'C{dr+6}'] = f'Management Response: {f.management_response or "N/A"}'
-                    ws_findings[f'A{dr+6}'].font = normal_font
+                    # The font belongs to the cell the text was written to. These
+                    # six lines wrote to column C and then styled column A, so the
+                    # detail text was left unstyled.
+                    for offset, text in enumerate([
+                        f'Condition: {f.condition or "N/A"}',
+                        f'Criteria: {f.criteria or "N/A"}',
+                        f'Cause: {f.cause or "N/A"}',
+                        f'Effect/Impact: {f.effect or "N/A"}',
+                        f'Recommendation: {f.recommendation or "N/A"}',
+                        f'Management Response: {f.management_response or "N/A"}',
+                    ], start=1):
+                        ws_findings[f'C{dr+offset}'] = text
+                        ws_findings[f'C{dr+offset}'].font = normal_font
+
+                note = _withheld_above_message(withheld_findings, _withheld_findings_note)
+                if note:
+                    # Clear of the detail block above it, which is 7 rows per
+                    # finding — so this cannot land on top of the last one.
+                    note_row = detail_row + 1 + (len(findings) * 7)
+                    ws_findings[f'A{note_row}'] = note
+                    ws_findings[f'A{note_row}'].font = normal_font
             else:
-                ws_findings['A3'] = 'No findings registered for this engagement.'
+                ws_findings['A3'] = _absence_message(
+                    withheld_findings, _withheld_findings_note,
+                    'No findings registered for this engagement.',
+                )
                 ws_findings['A3'].font = normal_font
             
             ws_findings.column_dimensions['A'].width = 6
             ws_findings.column_dimensions['B'].width = 16
-            ws_findings.column_dimensions['C'].width = 45
+            ws_findings.column_dimensions['C'].width = 55
             ws_findings.column_dimensions['D'].width = 14
             ws_findings.column_dimensions['E'].width = 20
             ws_findings.column_dimensions['F'].width = 14
-            ws_findings.column_dimensions['G'].width = 40
+            ws_findings.column_dimensions['G'].width = 50
             
             # =========== SHEET 5: CAPA ===========
             ws_capa = wb.create_sheet("CAPA")
@@ -764,7 +947,12 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                         cell = ws_capa.cell(row=ca_idx, column=c_idx, value=val)
                         cell.font = normal_font
                         cell.border = thin_border
-                        if c_idx in (1, 4, 5, 6, 8):
+                        if c_idx in (3, 7):
+                            # Title and Owner, the two columns that hold prose —
+                            # Excel clips rather than overflows, so they need the
+                            # wrap. Row height is left unset for auto-fit.
+                            cell.alignment = Alignment(wrap_text=True, vertical='top')
+                        else:
                             cell.alignment = Alignment(horizontal='center')
                 
                 # Detailed CAPA section
@@ -787,8 +975,17 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                     if ca.management_response:
                         ws_capa[f'A{dr+5}'] = f"Management Response: {ca.management_response}"
                         ws_capa[f'A{dr+5}'].font = normal_font
+
+                note = _withheld_above_message(withheld_capas, _withheld_capas_note)
+                if note:
+                    note_row = detail_row + 1 + (len(corrective_actions) * 6)
+                    ws_capa[f'A{note_row}'] = note
+                    ws_capa[f'A{note_row}'].font = normal_font
             else:
-                ws_capa['A3'] = 'No corrective actions have been assigned for findings in this engagement.'
+                ws_capa['A3'] = _absence_message(
+                    withheld_capas, _withheld_capas_note,
+                    'No corrective actions have been assigned for findings in this engagement.',
+                )
                 ws_capa['A3'].font = normal_font
                 ws_capa.merge_cells('A3:H3')
             
@@ -902,6 +1099,20 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                 p = doc.add_paragraph(text)
                 p.paragraph_format.space_after = Pt(4)
                 return p
+
+            def set_col_widths(table, widths_cm):
+                """Pin a table's columns to `widths_cm`.
+
+                Word's default is to auto-fit, which sizes a 7- or 8-column table to
+                its content — i.e. wider than the page. Fixed widths make the cells
+                wrap inside their column instead. The totals are 15.0cm, inside the
+                15.24cm that python-docx's default Letter template leaves between
+                its 1.25in margins (`Document()` is not A4, and does not use 1in).
+                """
+                table.autofit = False
+                for row in table.rows:
+                    for cell, width in zip(row.cells, widths_cm):
+                        cell.width = Cm(width)
             
             # ========== 1. BACKGROUND ==========
             add_section_header('1. Background')
@@ -936,10 +1147,10 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
             
             doc.add_paragraph('')
             add_bold_text('Audit Objectives:')
-            add_normal_text(engagement_info.get('objectives', 'No objectives defined.'))
-            
+            add_normal_text(objectives_text)
+
             add_bold_text('Audit Scope:')
-            add_normal_text(engagement_info.get('scope', 'No scope defined.'))
+            add_normal_text(scope_text)
             
             doc.add_page_break()
             
@@ -997,6 +1208,7 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                 add_normal_text(f"The following table summarizes all {total_findings} finding(s):")
                 table = doc.add_table(rows=len(findings) + 1, cols=7)
                 table.style = 'Light Grid Accent 1'
+                set_col_widths(table, [0.8, 1.7, 4.0, 1.9, 2.0, 1.8, 2.8])
                 headers = ['#', 'Ref No.', 'Title', 'Severity', 'Category', 'Status', 'Recommendation']
                 for i, h in enumerate(headers):
                     table.rows[0].cells[i].text = h
@@ -1021,9 +1233,16 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                     add_normal_text(f"Recommendation: {f.recommendation or 'N/A'}")
                     add_normal_text(f"Management Response: {f.management_response or 'N/A'}")
                     doc.add_paragraph('')
+
+                note = _withheld_above_message(withheld_findings, _withheld_findings_note)
+                if note:
+                    add_normal_text(note)
             else:
-                add_normal_text('No findings were registered for this engagement.')
-            
+                add_normal_text(_absence_message(
+                    withheld_findings, _withheld_findings_note,
+                    'No findings were registered for this engagement.',
+                ))
+
             doc.add_page_break()
             
             # ========== 5. CAPA ==========
@@ -1033,6 +1252,7 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                 add_normal_text(f"The following {len(corrective_actions)} corrective action(s) have been defined:")
                 table = doc.add_table(rows=len(corrective_actions) + 1, cols=8)
                 table.style = 'Light Grid Accent 1'
+                set_col_widths(table, [0.65, 1.6, 3.8, 1.7, 1.5, 1.6, 2.25, 1.9])
                 headers = ['#', 'Action No.', 'Title', 'Finding Ref', 'Priority', 'Status', 'Owner', 'Due Date']
                 for i, h in enumerate(headers):
                     table.rows[0].cells[i].text = h
@@ -1058,8 +1278,15 @@ class GeneratedReportViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
                     if ca.management_response:
                         add_normal_text(f"Management Response: {ca.management_response}")
                     doc.add_paragraph('')
+
+                note = _withheld_above_message(withheld_capas, _withheld_capas_note)
+                if note:
+                    add_normal_text(note)
             else:
-                add_normal_text('No corrective actions have been assigned for findings in this engagement.')
+                add_normal_text(_absence_message(
+                    withheld_capas, _withheld_capas_note,
+                    'No corrective actions have been assigned for findings in this engagement.',
+                ))
             
             buf = BytesIO()
             doc.save(buf)

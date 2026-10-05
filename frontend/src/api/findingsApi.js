@@ -49,6 +49,12 @@ export const findingsApi = {
   /* ── Lifecycle transitions ─────────────────────────────────────────── */
   // Each of these stamps dates, writes the audit trail and notifies the
   // relevant party server-side, so never emulate them with a status PATCH.
+  // Supervisor sign-off: endorses the finding and puts it to the auditee. Gated
+  // on APPROVE_PLANS, so the auditor who raised it cannot also publish it.
+  publishFinding: async (id) => {
+    const res = await apiClient.post(`/findings/findings/${id}/publish/`);
+    return res.data;
+  },
   resolveFinding: async (id) => {
     const res = await apiClient.post(`/findings/findings/${id}/resolve/`);
     return res.data;

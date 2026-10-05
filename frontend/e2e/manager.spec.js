@@ -1,6 +1,6 @@
 // TESTING.md §2 — Audit Manager.
 import { test, expect } from '@playwright/test';
-import { api, NAV, expectNavHidden } from './helpers.js';
+import { api, createEngagement, NAV, expectNavHidden } from './helpers.js';
 
 test('/users is blocked by the route guard', async ({ page }) => {
   await page.goto('/dashboard');
@@ -54,9 +54,8 @@ test('a generated report flips to READY and downloads without a manual refresh',
   const approved = await api(page, 'POST', `/planning/plans/${created.body.id}/approve/`);
   expect(approved.status).toBe(200);
 
-  const engagement = await api(page, 'POST', '/planning/engagements/', {
+  const engagement = await createEngagement(page, {
     plan: created.body.id, title: `E2E Report Engagement ${stamp}`,
-    engagement_type: 'financial',
   });
   expect(engagement.status).toBe(201);
   const engagementId = engagement.body.id;

@@ -42,7 +42,11 @@ class Department(models.Model):
        Coordination, and the customer service centers under each region.
     2. The Internal Audit Executive Office structure (``AUDIT``): the IAEO
        node and the four core directorates it oversees:
-         - Financial & Performance Audit (FPA)
+         - Financial & Performance Audit (FPA) — which itself has two branches:
+             * FPA-STAFF: HQ auditor staff
+             * FPA-RAC: Regional Audit Coordination (one FPA-RGN-<XX> unit per
+               EEU region, each carrying ``region`` pointing at the matching
+               corporate region)
          - Technical Audit (TA)
          - Information Technology Audit (ITA)
          - Planning & Performance (PP)
@@ -55,6 +59,13 @@ class Department(models.Model):
     — because a single geographic *and* functional scope is legitimate: Finance,
     sitting in Adama Region, at Adama CSC No. 1. The picker therefore lets the
     department be chosen alongside a region rather than being overwritten by it.
+
+    Regional audit units (``FPA-RGN-*``) carry the additional ``region`` field
+    that points at the corporate ``REGION`` department they audit. This is the
+    structural anchor for ``RegionScopeMixin`` in ``apps.common.scoping``: the
+    binding lives on the unit, not on the user, so moving the unit moves
+    everyone in it. ``User.region`` stays what it already is — the 'based in'
+    field the Users page filters on — and does not drive queryset scoping.
     """
 
     DIRECTORATE_CHOICES = [
@@ -88,6 +99,19 @@ class Department(models.Model):
     )
     code = models.CharField(max_length=20, unique=True)
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='children')
+    region = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        limit_choices_to={'unit_type': 'REGION'},
+        help_text=(
+            'For a regional audit unit (e.g. FPA-RGN-BA), the EEU REGION '
+            'department it audits. Drives RegionScopeMixin — users in this unit '
+            'see only records tagged with this region. Leave blank for HQ units.'
+        ),
+    )
     head = models.CharField(max_length=200, blank=True)
     head_title = models.CharField(
         max_length=200,

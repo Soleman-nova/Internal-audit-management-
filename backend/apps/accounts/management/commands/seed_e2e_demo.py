@@ -273,6 +273,11 @@ class Command(BaseCommand):
                 "status": "completed",
                 "lead_auditor": auditor,
                 "supervisor": supervisor,
+                # Findings inherit this. The E2E seed names the auditee on each
+                # finding directly, but the engagement is what the register's
+                # create path reads, so setting it here keeps the seeded case
+                # shaped like one a manager would actually build.
+                "auditee": auditee,
                 "planned_start": datetime.date(current_year, 3, 1),
                 "planned_end": datetime.date(current_year, 5, 30),
                 "actual_start": datetime.date(current_year, 3, 1),

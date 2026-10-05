@@ -31,10 +31,26 @@ export const capaApi = {
     });
     return res.data;
   },
+  // Accept the remediation plan and start implementation. Goes through the
+  // action (not a status PATCH) so the APPROVE_PLANS gate, the approved_by/at
+  // stamps, the audit entry and the owner notification all apply.
+  approveAction: async (actionId, data = {}) => {
+    const res = await apiClient.post(`/corrective/actions/${actionId}/approve/`, data);
+    return res.data;
+  },
   // Supervisor/manager verification visit. Records scheduled_date, notes and
-  // outcome against the action and notifies its owner.
+  // outcome against the action and notifies its owner. Scheduling a visit does
+  // not settle anything — `verifyAndClose` is the closing act.
   scheduleFollowup: async (actionId, data) => {
     const res = await apiClient.post(`/corrective/actions/${actionId}/schedule-followup/`, data);
+    return res.data;
+  },
+  // The auditor's verification of the remedy, and the closure that follows. One
+  // route rather than a follow-up plus a status PATCH: the follow-up record is
+  // what proves the verification happened, so the server writes both or neither,
+  // closes the action, and cascades the closure to the finding behind it.
+  verifyAndClose: async (actionId, data = {}) => {
+    const res = await apiClient.post(`/corrective/actions/${actionId}/verify-and-close/`, data);
     return res.data;
   },
   // Derived from due_date server-side, so it is correct even before the

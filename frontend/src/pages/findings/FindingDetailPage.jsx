@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { findingsApi } from '../../api';
+import { capaApi, findingsApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import useAsyncData from '../../hooks/useAsyncData';
 import Spinner from '../../components/ui/Spinner';
 import {
     ArrowLeft, AlertTriangle, FileText, MessageCircle, CheckCircle2, XCircle,
-    Paperclip, Upload, Send, RotateCcw, Lock, Download, User as UserIcon
+    Paperclip, Upload, Send, RotateCcw, Lock, Download, User as UserIcon,
+    ClipboardList, Plus
 } from 'lucide-react';
 
 function FindingDetailPage() {
@@ -15,11 +17,25 @@ function FindingDetailPage() {
     const navigate = useNavigate();
     const toast = useToast();
     const { t } = useI18n();
-    const { user, canWriteAudit, canCloseFindings } = usePermissions();
+    const { user, canWriteAudit, canCloseFindings, canApprovePlans } = usePermissions();
 
     const [finding, setFinding] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
+    // The corrective actions raised against this finding, fetched alongside it.
+    // The finding's own payload carries the count, but a count alone cannot answer
+    // the two questions a reader arrives with: what is being done about this, and
+    // who is doing it. A failure here is deliberately silent — the finding itself
+    // is on screen and readable, and a remediation section that fails to load must
+    // not take the register's record with it.
+    const { data: capaRows } = useAsyncData(
+        async () => {
+            const res = await capaApi.getActions({ finding: id, page_size: 50 });
+            return res.items || [];
+        },
+        [id],
+    );
 
     // Discussion
     const [comment, setComment] = useState('');
@@ -54,12 +70,12 @@ function FindingDetailPage() {
             setError(null);
         } catch (err) {
             const notFound = err.response?.status === 404 || err.response?.status === 403;
-            setError(notFound ? 'Finding not found' : 'Failed to load finding details');
-            if (!notFound) toast.error('Failed to load finding details');
+            setError(notFound ? t('findingNotFound') : t('findingDetailLoadFailed'));
+            if (!notFound) toast.error(t('findingDetailLoadFailed'));
         } finally {
             setLoading(false);
         }
-    }, [id, toast]);
+    }, [id, toast, t]);
 
     useEffect(() => {
         // set-state-in-effect fires because the rule cannot tell that every
@@ -83,6 +99,18 @@ function FindingDetailPage() {
     const canDiscuss = canWriteAudit || isInvolvedParty;
     const isClosed = finding?.status === 'closed';
 
+    const capas = capaRows ?? [];
+
+    // Mirrors `AuditFinding.PRE_PUBLICATION_STATUSES` on the server: an unendorsed
+    // finding is the team's own draft, and `CorrectiveActionSerializer` refuses to
+    // link an action to one — so the button is withheld rather than offered and
+    // then rejected.
+    const isEndorsed = !['draft', 'open'].includes(finding?.status);
+    // The auditee's one write on the follow-up page, so the same offer belongs
+    // here: a remediation plan for a finding that concerns them is theirs to
+    // formulate, and it is the step that turns a published finding into work.
+    const canProposeCapa = canWriteAudit || user?.role === 'auditee';
+
     const handleAddComment = async (e) => {
         e.preventDefault();
         if (!comment.trim()) return;
@@ -91,10 +119,10 @@ function FindingDetailPage() {
             await findingsApi.addComment(id, comment.trim());
             setComment('');
             await fetchFinding();
-            toast.success('Comment posted');
+            toast.success(t('commentPosted'));
         } catch (err) {
             const msg = typeof err.response?.data === 'object'
-                ? JSON.stringify(err.response.data) : 'Failed to post comment';
+                ? JSON.stringify(err.response.data) : t('commentPostFailed');
             toast.error(msg);
         } finally {
             setPostingComment(false);
@@ -104,7 +132,7 @@ function FindingDetailPage() {
     const handleUploadEvidence = async (e) => {
         e.preventDefault();
         if (!evFile || !evTitle.trim()) {
-            toast.error('A title and a file are both required');
+            toast.error(t('evidenceNeedsTitleAndFile'));
             return;
         }
         setUploading(true);
@@ -116,10 +144,10 @@ function FindingDetailPage() {
             await findingsApi.uploadEvidence(id, formData);
             setEvTitle(''); setEvFile(null); setEvType('document');
             await fetchFinding();
-            toast.success('Evidence attached');
+            toast.success(t('evidenceAttached'));
         } catch (err) {
             const msg = typeof err.response?.data === 'object'
-                ? JSON.stringify(err.response.data) : 'Failed to attach evidence';
+                ? JSON.stringify(err.response.data) : t('evidenceAttachFailed');
             toast.error(msg);
         } finally {
             setUploading(false);
@@ -133,10 +161,10 @@ function FindingDetailPage() {
         try {
             await findingsApi.respondToFinding(id, responseText.trim());
             await fetchFinding();
-            toast.success('Management response saved');
+            toast.success(t('managementResponseSaved'));
         } catch (err) {
             const msg = typeof err.response?.data === 'object'
-                ? JSON.stringify(err.response.data) : 'Failed to save the management response';
+                ? JSON.stringify(err.response.data) : t('managementResponseSaveFailed');
             toast.error(msg);
         } finally {
             setSavingResponse(false);
@@ -145,15 +173,15 @@ function FindingDetailPage() {
 
     // Every transition goes through its own endpoint so the server stamps the
     // resolution date, writes the audit trail and notifies the right party.
-    const runTransition = async (key, call, successMsg) => {
+    const runTransition = async (key, call, successKey) => {
         setActionBusy(key);
         try {
             await call(id);
             await fetchFinding();
-            toast.success(successMsg);
+            toast.success(t(successKey));
         } catch (err) {
             const msg = typeof err.response?.data === 'object'
-                ? JSON.stringify(err.response.data) : `Failed to ${key} finding`;
+                ? JSON.stringify(err.response.data) : t('findingTransitionFailed', { action: key });
             toast.error(msg);
         } finally {
             setActionBusy('');
@@ -178,6 +206,8 @@ function FindingDetailPage() {
                 return 'badge-info';
             case 'disputed':
                 return 'badge-danger';
+            case 'awaiting_auditee_response':
+                return 'badge-accent';
             case 'open':
                 return 'badge-warning';
             default:
@@ -197,7 +227,7 @@ function FindingDetailPage() {
         return (
             <div className="card text-center py-12">
                 <AlertTriangle className="w-12 h-12 mx-auto text-amber-500 mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{error || 'Finding not found'}</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{error || t('findingNotFound')}</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{t('noFindingsForAudit')}</p>
                 <Link to="/findings" className="btn btn-primary mt-6 inline-flex items-center gap-2">
                     <ArrowLeft className="w-4 h-4" /> {t('findingsRegistry')}
@@ -240,8 +270,21 @@ function FindingDetailPage() {
                                 {finding.severity?.toUpperCase()}
                             </span>
                             <span className={`badge ${getStatusClass(finding.status)}`}>
-                                {finding.status?.replace('_', ' ').toUpperCase()}
+                                {/* The server's label, not the stored value.
+                                    A finding created by the lead auditor is
+                                    `draft` in the database but "Pending
+                                    Supervisor Review" to a reader, and the raw
+                                    value also rendered multi-word statuses
+                                    wrongly — `.replace('_', ' ')` only
+                                    substitutes the first underscore. */}
+                                {finding.status_display?.toUpperCase()}
                             </span>
+                            {/* Derived server-side from target_resolution_date, so
+                                it is right on first load — a finding is never
+                                quietly late and then not. */}
+                            {finding.is_overdue && (
+                                <span className="badge badge-danger">{t('overdue').toUpperCase()}</span>
+                            )}
                         </div>
                         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{finding.title}</h1>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -257,13 +300,26 @@ function FindingDetailPage() {
                 </div>
 
                 {/* Facts strip */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-200 dark:border-slate-800">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6 pt-6 border-t border-gray-200 dark:border-slate-800">
                     {[
                         [t('identifiedBy'), finding.identified_by_name],
                         [t('assignedTo'), finding.assigned_to_name],
                         [t('auditeeContact'), finding.auditee_name],
                         [finding.actual_resolution_date ? t('resolvedOn') : t('targetDate'),
                             finding.actual_resolution_date || finding.target_resolution_date],
+                        // The fieldwork behind the finding, linked back to the
+                        // board it came off. A finding is only evidence of
+                        // anything if you can see which test produced it, and
+                        // until this existed the link existed in the database and
+                        // nowhere a reader could reach.
+                        [t('sourceProcedure'), finding.procedure_label ? (
+                            <Link
+                                to={`/execution?engagement=${finding.engagement}&procedure=${finding.procedure}`}
+                                className="text-accent hover:underline"
+                            >
+                                {finding.procedure_label}
+                            </Link>
+                        ) : '—'],
                     ].map(([label, value]) => (
                         <div key={label}>
                             <span className="block text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">{label}</span>
@@ -273,17 +329,30 @@ function FindingDetailPage() {
                 </div>
 
                 {/* Lifecycle action bar — each button mirrors a backend gate */}
-                {(canCloseFindings || canDiscuss) && (
+                {(canApprovePlans || canCloseFindings || canDiscuss) && (
                     <div className="flex flex-wrap items-center gap-2 mt-6 pt-6 border-t border-gray-200 dark:border-slate-800">
                         <span className="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500 mr-1">
                             {t('lifecycle')}
                         </span>
+                        {/* Publish comes first: until a reviewer endorses the finding
+                            it is the team's own draft, and the auditee actions below
+                            have nothing to act on. */}
+                        {canApprovePlans && ['draft', 'open'].includes(finding.status) && (
+                            <button
+                                type="button"
+                                className="btn btn-accent btn-sm inline-flex items-center gap-2"
+                                disabled={Boolean(actionBusy)}
+                                onClick={() => runTransition('publish', findingsApi.publishFinding, 'findingPublishedToast')}
+                            >
+                                <Send className="w-4 h-4" /> {t('publishFinding')}
+                            </button>
+                        )}
                         {canCloseFindings && !isClosed && finding.status !== 'resolved' && (
                             <button
                                 type="button"
                                 className="btn btn-outline btn-sm inline-flex items-center gap-2"
                                 disabled={Boolean(actionBusy)}
-                                onClick={() => runTransition('resolve', findingsApi.resolveFinding, 'Finding marked as resolved')}
+                                onClick={() => runTransition('resolve', findingsApi.resolveFinding, 'findingResolvedToast')}
                             >
                                 <CheckCircle2 className="w-4 h-4" /> {t('resolve')}
                             </button>
@@ -293,7 +362,7 @@ function FindingDetailPage() {
                                 type="button"
                                 className="btn btn-primary btn-sm inline-flex items-center gap-2"
                                 disabled={Boolean(actionBusy)}
-                                onClick={() => runTransition('close', findingsApi.closeFinding, 'Finding closed')}
+                                onClick={() => runTransition('close', findingsApi.closeFinding, 'findingClosedToast')}
                             >
                                 <Lock className="w-4 h-4" /> {t('closeFinding')}
                             </button>
@@ -303,7 +372,7 @@ function FindingDetailPage() {
                                 type="button"
                                 className="btn btn-outline btn-sm inline-flex items-center gap-2"
                                 disabled={Boolean(actionBusy)}
-                                onClick={() => runTransition('reopen', findingsApi.reopenFinding, 'Finding reopened')}
+                                onClick={() => runTransition('reopen', findingsApi.reopenFinding, 'findingReopenedToast')}
                             >
                                 <RotateCcw className="w-4 h-4" /> {t('reopen')}
                             </button>
@@ -313,7 +382,7 @@ function FindingDetailPage() {
                                 type="button"
                                 className="btn btn-outline btn-sm inline-flex items-center gap-2 text-rose-600 dark:text-rose-400"
                                 disabled={Boolean(actionBusy)}
-                                onClick={() => runTransition('dispute', findingsApi.disputeFinding, 'Finding disputed')}
+                                onClick={() => runTransition('dispute', findingsApi.disputeFinding, 'findingDisputedToast')}
                             >
                                 <XCircle className="w-4 h-4" /> {t('dispute')}
                             </button>
@@ -332,6 +401,66 @@ function FindingDetailPage() {
                         <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-line">{value || '—'}</p>
                     </div>
                 ))}
+            </div>
+
+            {/* Remediation — the third stage, reachable from the second. Until this
+                existed a finding was a dead end: the count was serialized and
+                rendered nowhere, and the only way to raise a plan against one was
+                to navigate to the follow-up page and find it in a dropdown of
+                every finding in the register. */}
+            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        <ClipboardList className="w-4 h-4 text-blue-500" />
+                        {t('correctiveActions')} ({capas.length})
+                    </h3>
+                    {canProposeCapa && (
+                        <Link
+                            to={`/capa?finding=${finding.id}`}
+                            className="btn btn-outline btn-sm inline-flex items-center gap-2"
+                        >
+                            <Plus className="w-4 h-4" /> {canWriteAudit ? t('spawnCapaLinked') : t('formulateCapa')}
+                        </Link>
+                    )}
+                </div>
+
+                {capas.length === 0 ? (
+                    <>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{t('noCapaForFinding')}</p>
+                        {/* Saying why is the difference between "nothing to do
+                            here" and "not yet". A finding no supervisor has
+                            endorsed cannot carry an action — the server refuses
+                            the link — so an auditor here needs to know the wait is
+                            on the review, not on them. */}
+                        {!isEndorsed && (
+                            <small className="form-hint block mt-2">{t('unendorsedFindingNoCapaHint')}</small>
+                        )}
+                    </>
+                ) : (
+                    <ul className="space-y-2" data-testid="finding-capa-list">
+                        {capas.map(capa => (
+                            <li key={capa.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-100 dark:border-slate-800 last:border-0">
+                                <div className="min-w-0">
+                                    <Link
+                                        to={`/capa/${capa.id}`}
+                                        className="text-sm font-medium text-gray-900 dark:text-white hover:underline truncate block"
+                                    >
+                                        {capa.action_number} · {capa.title}
+                                    </Link>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {capa.owner_name || 'N/A'} · {capa.due_date || t('noDueDate')}
+                                        {/* Due-date-derived server-side, so it shows
+                                            before any scheduled job has run. */}
+                                        {capa.is_overdue && ` · ${t('overdue').toUpperCase()}`}
+                                    </p>
+                                </div>
+                                <span className={`badge ${capa.status === 'resolved' || capa.status === 'closed' ? 'badge-success' : 'badge-outline'} shrink-0`}>
+                                    {capa.status_display?.toUpperCase()}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
 
             {/* Management Response — the auditee's own position, not the audit

@@ -14,7 +14,7 @@ from django.test import TestCase, override_settings
 from apps.accounts.models import AuditTrail, Role
 from apps.audit_execution.models import AuditProcedure, AuditProgram, WorkingPaper
 from apps.common.role_fixtures import (
-    RoleFixtureMixin, make_engagement, make_procedure, make_program,
+    RoleFixtureMixin, make_engagement, make_finding, make_procedure, make_program,
     notification_titles,
 )
 from apps.notifications.models import Notification
@@ -171,6 +171,194 @@ class AuditProgramApproveTest(RoleFixtureMixin, TestCase):
                 action='APPROVE',
             ).exists()
         )
+
+    def test_a_program_cannot_be_approved_by_writing_the_field(self):
+        """The side door `approve` was built to be the only way through.
+
+        `approve` gates on APPROVE_PLANS, stamps who signed off and when, writes an
+        APPROVE entry to the trail and notifies the preparer. A PATCH carrying
+        `status` did none of that, so an auditor could approve their own fieldwork
+        program — and attribute the approval to a chosen user — leaving the record
+        indistinguishable from one the gate actually passed.
+        """
+        response = self.as_user(self.auditor).patch(
+            f'{PROGRAMS_URL}{self.program.id}/',
+            {'status': 'approved', 'approved_by': self.manager.id,
+             'approved_at': '2026-01-01T00:00:00Z'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.status, 'submitted')
+        self.assertIsNone(self.program.approved_by)
+        self.assertIsNone(self.program.approved_at)
+
+    def test_program_content_edits_still_work(self):
+        """The positive control: only the lifecycle fields were closed off."""
+        response = self.as_user(self.auditor).patch(
+            f'{PROGRAMS_URL}{self.program.id}/',
+            {'title': 'Revised fieldwork program'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.title, 'Revised fieldwork program')
+
+
+class ProgramCompletionPercentTest(RoleFixtureMixin, TestCase):
+    """A program's progress counts every step that reached an outcome.
+
+    `failed` and `not_applicable` are fieldwork *results*, not unfinished work:
+    one of them is the very thing that produces a finding. Counting `completed`
+    alone left a program whose tests legitimately failed permanently short of
+    100%, so the board read as "still working" long after the fieldwork ended.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.program = make_program(prepared_by=self.auditor)
+
+    def percent(self):
+        return self.as_user(self.auditor).get(
+            f'{PROGRAMS_URL}{self.program.id}/'
+        ).data['completion_percent']
+
+    def test_no_steps_reads_as_zero(self):
+        self.assertEqual(self.percent(), 0)
+
+    def test_a_pending_step_is_not_progress(self):
+        make_procedure(program=self.program, status='pending')
+        make_procedure(program=self.program, status='in_progress')
+        self.assertEqual(self.percent(), 0)
+
+    def test_failed_and_not_applicable_are_finished_work(self):
+        make_procedure(program=self.program, status='completed')
+        make_procedure(program=self.program, status='failed')
+        make_procedure(program=self.program, status='not_applicable')
+        make_procedure(program=self.program, status='pending')
+        self.assertEqual(self.percent(), 75)
+
+    def test_a_program_whose_steps_all_failed_still_reaches_full(self):
+        """The regression this fixes, stated as its own case.
+
+        A failed test is not an unfinished one. Reading it as unfinished meant the
+        auditor got no signal that the fieldwork was done — only that something,
+        somewhere, was still outstanding.
+        """
+        make_procedure(program=self.program, status=AuditProcedure.FAILED)
+        make_procedure(program=self.program, status=AuditProcedure.FAILED)
+        self.assertEqual(self.percent(), 100)
+
+
+class ProgramCompletionTest(RoleFixtureMixin, TestCase):
+    """`complete` is the only route to `completed`, and it checks the fieldwork.
+
+    `status` is read-only on the serializer, so without this route a program could
+    not be closed at all — and with the PATCH open it could be closed by anyone,
+    unchecked, which is worse: the execution board locks every procedure control
+    on `completed`, so a half-finished program closed that way read as finished
+    and immutable.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.lead = self.make_user(Role.AUDITOR, department=self.department)
+        self.engagement = make_engagement(lead_auditor=self.lead)
+        self.program = make_program(
+            engagement=self.engagement, prepared_by=self.auditor, status='approved',
+        )
+        self.url = f'{PROGRAMS_URL}{self.program.id}/complete/'
+
+    def mark(self, status, step='1'):
+        return make_procedure(program=self.program, status=status, step_number=step)
+
+    def test_a_step_still_pending_blocks_it_and_writes_nothing(self):
+        self.mark('completed', '1')
+        self.mark('pending', '2')
+
+        response = self.as_user(self.auditor).post(self.url)
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn('1 procedure(s)', response.data['detail'])
+        self.assertIn('2', response.data['detail'])
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.status, 'approved')
+
+    def test_in_progress_also_blocks(self):
+        self.mark('in_progress')
+        response = self.as_user(self.auditor).post(self.url)
+        self.assertEqual(response.status_code, 400, response.data)
+
+    def test_failed_and_inapplicable_steps_let_it_close(self):
+        """Both are fieldwork outcomes. One of them is what raises a finding."""
+        self.mark(AuditProcedure.FAILED, '1')
+        self.mark('not_applicable', '2')
+        self.mark('completed', '3')
+
+        response = self.as_user(self.auditor).post(self.url)
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['status'], 'completed')
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.status, 'completed')
+
+    def test_a_program_with_no_procedures_closes(self):
+        """Nothing outstanding is nothing outstanding — an empty program is a
+        legitimate state, and refusing to close it would strand it forever."""
+        self.assertEqual(self.as_user(self.auditor).post(self.url).status_code, 200)
+
+    def test_the_refusal_elides_long_lists(self):
+        for n in range(12):
+            self.mark('pending', str(n))
+        response = self.as_user(self.auditor).post(self.url)
+        self.assertEqual(response.status_code, 400)
+        # Twelve named would be unreadable; the count carries the rest.
+        self.assertIn('12 procedure(s)', response.data['detail'])
+        self.assertIn('…', response.data['detail'])
+
+    def test_completion_notifies_the_lead(self):
+        self.mark('completed')
+        self.as_user(self.auditor).post(self.url)
+        self.assertTrue(Notification.objects.filter(user=self.lead).exists())
+
+    def test_the_lead_is_not_told_about_their_own_closure(self):
+        self.mark('completed')
+        self.as_user(self.lead).post(self.url)
+        self.assertEqual(notification_titles(self.lead), [])
+
+    def test_it_is_audit_logged_with_the_status_change(self):
+        self.mark('completed')
+        self.as_user(self.auditor).post(self.url)
+        entry = AuditTrail.objects.filter(
+            model_name='AuditProgram', object_id=str(self.program.id), action='UPDATE',
+        ).first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.changes, {'status': ['approved', 'completed']})
+
+    def test_an_auditee_cannot_complete_a_program(self):
+        self.mark('completed')
+        self.assertEqual(self.as_user(self.auditee).post(self.url).status_code, 403)
+
+    # ── reopen ─────────────────────────────────────────────────────────────
+    def test_a_completed_program_can_be_reopened(self):
+        self.mark('completed')
+        self.as_user(self.auditor).post(self.url)
+
+        response = self.as_user(self.auditor).post(
+            f'{PROGRAMS_URL}{self.program.id}/reopen/'
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.status, 'approved')
+
+    def test_reopen_refuses_a_program_that_is_not_completed(self):
+        response = self.as_user(self.auditor).post(
+            f'{PROGRAMS_URL}{self.program.id}/reopen/'
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.status, 'approved')
 
 
 class AuditProcedureTest(RoleFixtureMixin, TestCase):
@@ -434,3 +622,115 @@ class WorkingPaperTest(RoleFixtureMixin, TestCase):
         response = self.as_user(self.auditor).delete(f'{PAPERS_URL}{paper.id}/')
         self.assertEqual(response.status_code, 204)
         self.assertFalse(WorkingPaper.objects.filter(pk=paper.pk).exists())
+
+
+class ProcedureFailureIsAnnouncedTest(RoleFixtureMixin, TestCase):
+    """A failed step is told to the engagement lead, like a completed one.
+
+    `complete` announced its outcome; nothing announced the other end of fieldwork.
+    That is the asymmetry that mattered: a step that passed needs nobody's
+    attention, while a step that failed is the trigger event for raising a finding,
+    and the lead had to notice a finding appear in a different register to learn
+    their own test had failed.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.lead = self.make_user(Role.AUDITOR, department=self.department)
+        self.engagement = make_engagement(lead_auditor=self.lead)
+        self.program = make_program(
+            engagement=self.engagement, prepared_by=self.auditor,
+        )
+
+    def mark_failed(self, procedure, user):
+        return self.as_user(user).patch(
+            f'{PROCEDURES_URL}{procedure.id}/', {'status': AuditProcedure.FAILED},
+            format='json',
+        )
+
+    def test_marking_a_step_failed_notifies_the_lead(self):
+        procedure = make_procedure(program=self.program)
+        self.mark_failed(procedure, self.auditor)
+        titles = notification_titles(self.lead)
+        self.assertEqual(len(titles), 1, titles)
+        self.assertIn(procedure.title, titles[0])
+
+    def test_ruling_a_step_inapplicable_also_notifies(self):
+        """The other terminal outcome a lead needs to hear about.
+
+        A step ruled inapplicable is off the board without being answered, so it
+        never produces a finding — and never appears on any completion count the
+        lead is looking at either.
+        """
+        procedure = make_procedure(program=self.program)
+        self.as_user(self.auditor).patch(
+            f'{PROCEDURES_URL}{procedure.id}/', {'status': 'not_applicable'},
+            format='json',
+        )
+        self.assertTrue(notification_titles(self.lead))
+
+    def test_the_lead_is_not_told_about_their_own_failure(self):
+        procedure = make_procedure(program=self.program)
+        self.mark_failed(procedure, self.lead)
+        self.assertEqual(notification_titles(self.lead), [])
+
+    def test_moving_a_step_back_to_in_progress_is_silent(self):
+        """Only the end of a step is news; the state it rests in between is not."""
+        procedure = make_procedure(program=self.program, status='in_progress')
+        self.as_user(self.auditor).patch(
+            f'{PROCEDURES_URL}{procedure.id}/', {'status': 'pending'}, format='json',
+        )
+        self.assertEqual(notification_titles(self.lead), [])
+
+    def test_the_transition_is_still_audit_logged(self):
+        procedure = make_procedure(program=self.program)
+        self.mark_failed(procedure, self.auditor)
+        entry = AuditTrail.objects.filter(
+            model_name='AuditProcedure', object_id=str(procedure.id), action='UPDATE',
+        ).first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.changes, {'status': ['pending', AuditProcedure.FAILED]})
+
+
+class ProcedureFindingsLinkTest(RoleFixtureMixin, TestCase):
+    """The reverse of the linkage the finding's create form enforces.
+
+    A finding must hang off a failed procedure, so every finding in the register
+    has a parent step. Nothing ran that relationship backwards: on the execution
+    board a failed step looked exactly like a failed step nobody had written up,
+    and the only way to find out was to go and look in the findings register.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.engagement = make_engagement(lead_auditor=self.auditor)
+        self.program = make_program(
+            engagement=self.engagement, prepared_by=self.auditor,
+        )
+        self.procedure = make_procedure(
+            program=self.program, step_number='3.1',
+            title='Agree disbursements to the ledger',
+        )
+
+    def row(self):
+        return self.as_user(self.auditor).get(
+            f'{PROCEDURES_URL}{self.procedure.id}/'
+        ).data
+
+    def test_a_step_with_no_findings_reports_zero(self):
+        self.assertEqual(self.row()['findings_count'], 0)
+
+    def test_the_count_follows_the_findings_raised_against_the_step(self):
+        for index in range(2):
+            make_finding(
+                engagement=self.engagement, identified_by=self.auditor,
+                procedure=self.procedure, title=f'Finding {index}',
+            )
+        self.assertEqual(self.row()['findings_count'], 2)
+
+    def test_findings_on_other_steps_are_not_counted(self):
+        other = make_procedure(program=self.program, step_number='3.2', title='Other step')
+        make_finding(
+            engagement=self.engagement, identified_by=self.auditor, procedure=other,
+        )
+        self.assertEqual(self.row()['findings_count'], 0)

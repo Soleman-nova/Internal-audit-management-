@@ -14,14 +14,43 @@ class AuditFinding(models.Model):
         ('informational', 'Informational'),
     ]
 
+    # The state a finding sits in between the supervisor publishing it and the
+    # auditee answering. It only does that job if the pre-publication states below
+    # are actually kept from the auditee — see PRE_PUBLICATION_STATUSES.
+    AWAITING_AUDITEE = 'awaiting_auditee_response'
+
+    # The stored value stays `draft` — it is load-bearing in
+    # PRE_PUBLICATION_STATUSES and ALLOWED_TRANSITIONS below, in the fixtures and
+    # in the E2E specs. Only the human label moves, so `get_status_display()`
+    # reports the queue a finding is actually sitting in: from the moment a lead
+    # auditor raises it until an approver publishes it, the finding is waiting on
+    # a supervisor, and "Draft" described the wrong party's job.
     STATUS_CHOICES = [
-        ('draft', 'Draft'),
+        ('draft', 'Pending Supervisor Review'),
         ('open', 'Open'),
+        (AWAITING_AUDITEE, 'Awaiting Auditee Response'),
         ('in_progress', 'In Progress'),
         ('resolved', 'Resolved'),
         ('closed', 'Closed'),
         ('disputed', 'Disputed'),
     ]
+
+    # ── Publication ─────────────────────────────────────────────────────────
+    # A finding is the audit team's own draft until a supervisor endorses it.
+    # `publish` is what starts the auditee's clock, and these two states are what
+    # it publishes *from*.
+    #
+    # `open` is here for the same reason rather than because anything creates it:
+    # no transition targets it any more, so every row still in it predates this
+    # rule. Keeping it in the hidden set means those rows fail closed — an
+    # unreviewed finding stays out of the auditee's reach until someone publishes
+    # it, rather than leaking back into view through a state nothing writes.
+    #
+    # Every read path filters with `.exclude(status__in=PRE_PUBLICATION_STATUSES)`
+    # rather than listing the published values, so a status added later is visible
+    # only once someone decides it should be — the failure mode is a missing
+    # finding, not a disclosed one.
+    PRE_PUBLICATION_STATUSES = ('draft', 'open')
 
     CATEGORY_CHOICES = [
         ('control_deficiency', 'Control Deficiency'),
@@ -35,13 +64,20 @@ class AuditFinding(models.Model):
     ]
 
     engagement = models.ForeignKey(AuditEngagement, on_delete=models.CASCADE, related_name='findings')
-    procedure = models.ForeignKey(AuditProcedure, on_delete=models.SET_NULL, null=True, blank=True, related_name='findings')
+    # `blank=False` but `null=True`, deliberately. A finding is raised *from* a
+    # failed procedure, so the API requires the parent link on create (see
+    # AuditFindingSerializer.validate). The column stays nullable because rows
+    # created before this rule existed have no parent, and there is no honest
+    # value to backfill them with — inventing a failed procedure for a historical
+    # finding would fabricate audit evidence. So: required at the boundary,
+    # optional in the table.
+    procedure = models.ForeignKey(AuditProcedure, on_delete=models.SET_NULL, null=True, blank=False, related_name='findings')
     finding_number = models.CharField(max_length=50, unique=True)
     title = models.CharField(max_length=400)
     description = models.TextField()
     severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES)
     category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='control_deficiency')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='draft')
     condition = models.TextField(help_text="What did we find?", blank=True)
     criteria = models.TextField(help_text="What should exist (policy/standard)?", blank=True)
     cause = models.TextField(help_text="Why did it happen (root cause)?", blank=True)

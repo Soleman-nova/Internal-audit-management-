@@ -15,13 +15,16 @@ from .serializers import (
     AuditFindingSerializer, AuditFindingListSerializer, EvidenceSerializer,
     FindingCommentSerializer,
 )
+from apps.accounts.models import Role, User
 from apps.notifications.services import notify
 from apps.common.permissions import (
     CanWriteAudit, RequiresCapability, InvolvedPartyOrCapability, CLOSE_FINDINGS,
+    APPROVE_PLANS, WRITE_AUDIT, ROLE_CAPABILITIES, has_capability,
 )
 from apps.common.audit_utils import log_audit
 from apps.common.reference_numbers import save_with_reference_number
 from apps.common.request_utils import with_parent
+from apps.common.scoping import region_for
 
 # Which status a finding may move to, per action. Every action used to assign
 # unconditionally, so a closed finding could be closed twice and `resolve` would
@@ -30,8 +33,11 @@ from apps.common.request_utils import with_parent
 ALLOWED_TRANSITIONS = {
     'resolved': {'draft', 'open', 'in_progress', 'disputed'},
     'closed': {'draft', 'open', 'in_progress', 'resolved', 'disputed'},
-    'disputed': {'draft', 'open', 'in_progress', 'resolved'},
-    'in_progress': {'resolved', 'closed', 'disputed'},
+    'disputed': {'draft', 'open', 'in_progress', 'resolved', AuditFinding.AWAITING_AUDITEE},
+    'in_progress': {'resolved', 'closed', 'disputed', AuditFinding.AWAITING_AUDITEE},
+    # Publishing is the supervisor's endorsement, so it only moves a finding the
+    # team has just raised — not one already out with the auditee or settled.
+    AuditFinding.AWAITING_AUDITEE: {'draft', 'open'},
 }
 
 
@@ -59,12 +65,22 @@ class AuditFindingViewSet(viewsets.ModelViewSet):
         return super().get_serializer_class()
 
     def get_queryset(self):
-        """Auditees see only findings that concern them.
+        """Auditees see only findings that concern them, and only once published.
+        Regional FPA auditors see only findings from their region's engagements.
 
         Same shape as CorrectiveActionViewSet.get_queryset — an auditee is a
         department representative, not an auditor, so a full EEU-wide findings
         register would expose other directorates' issues. Everyone with a
         capability keeps the unfiltered view.
+
+        The publication filter is the second half of that: a finding is the audit
+        team's own draft until a supervisor endorses it, so until then the auditee
+        has no business seeing it at all. This is also what makes `respond`,
+        `dispute`, `add_comment` and `upload_evidence` refuse an unpublished
+        finding — all four resolve it through ``self.get_object()``, which runs
+        against this queryset, so they 404 rather than needing a status check each.
+
+        A regional auditor is not an auditee, so the two scopes never interact.
         """
         user = self.request.user
         qs = super().get_queryset()
@@ -82,11 +98,17 @@ class AuditFindingViewSet(viewsets.ModelViewSet):
                 comments_count=Count('comments', distinct=True),
                 corrective_actions_count=Count('corrective_actions', distinct=True),
             )
+        # Region scoping (runs before auditee scoping — different roles).
+        region_id = region_for(user)
+        if region_id is not None:
+            return qs.filter(engagement__region_id=region_id).distinct()
         if user.is_authenticated and user.role == 'auditee':
             scope = Q(auditee=user) | Q(assigned_to=user)
             if user.department_id:
                 scope |= Q(engagement__department_id=user.department_id)
-            return qs.filter(scope).distinct()
+            return qs.filter(scope).exclude(
+                status__in=AuditFinding.PRE_PUBLICATION_STATUSES,
+            ).distinct()
         return qs
 
     def perform_create(self, serializer):
@@ -95,16 +117,25 @@ class AuditFindingViewSet(viewsets.ModelViewSet):
         # finding on failure rather than pointing at a record that never
         # committed — no post-commit hook needed.
         with transaction.atomic():
+            # Forced rather than left to the model default: a finding is always
+            # born a draft, whoever raises it, and the supervisor's publish is the
+            # only way out. `status` is read-only on the serializer, so this closes
+            # the loop — there is no input, here or upstream, that opens one live.
             finding = save_with_reference_number(
                 serializer, 'finding_number', 'FND',
-                identified_by=self.request.user,
+                identified_by=self.request.user, status='draft',
             )
             log_audit(self.request, 'CREATE', finding)
-            # Notify the people responsible for acting on this finding.
+            # Notify the audit team, and only the audit team. This used to go to
+            # `assigned_to` and `auditee` as well, which told the auditee a finding
+            # existed before anyone had reviewed it — and on the common shape where
+            # the assigned contact *is* the auditee, it told them directly.
+            # Publishing is what brings them in; `publish` notifies them there.
             link = f'/findings/{finding.id}'
             recipients = {finding.assigned_to, finding.auditee}
             recipients.discard(None)
             recipients.discard(self.request.user)
+            recipients = {u for u in recipients if has_capability(u, WRITE_AUDIT)}
             severity = (
                 finding.get_severity_display()
                 if hasattr(finding, 'get_severity_display') else finding.severity
@@ -117,6 +148,50 @@ class AuditFindingViewSet(viewsets.ModelViewSet):
                     f'A {severity} finding "{finding.title}" has been assigned to you.',
                     link,
                 )
+            # And whoever has to endorse it. This is the half that was missing:
+            # a finding is born `draft` and only `publish` moves it, so without a
+            # notification the reviewer was never told there was anything to
+            # review — the register just quietly accumulated findings nobody had
+            # been asked to look at, and the auditee's clock never started.
+            for recipient in self._reviewers_for(finding, self.request.user):
+                notify(
+                    recipient,
+                    'approval_needed',
+                    f'Finding awaiting your review: {finding.finding_number}',
+                    f'A {severity} finding "{finding.title}" needs supervisor '
+                    'endorsement before it goes to the auditee.',
+                    link,
+                )
+
+    @staticmethod
+    def _reviewers_for(finding, exclude):
+        """Who is asked to endorse a newly raised finding.
+
+        The engagement's own supervisor, since that is the person accountable
+        for the audit it came from. Falling back to every active APPROVE_PLANS
+        holder when the engagement names none: the finding is still publishable
+        by them (`publish` is gated on the capability, not the assignment), so
+        notifying nobody would leave a reviewable finding with no reviewer told —
+        the same dead end one level down.
+
+        The fallback narrows by role in the database rather than sifting every
+        user through `has_capability`: the roles that hold APPROVE_PLANS are
+        derived from the capability matrix, so this cannot drift from the gate it
+        is announcing. Superusers are included explicitly because they hold every
+        capability without appearing in the matrix.
+        """
+        reviewer = finding.engagement.supervisor
+        if reviewer is not None:
+            return [reviewer] if reviewer != exclude else []
+        approver_roles = [
+            role for role, caps in ROLE_CAPABILITIES.items() if APPROVE_PLANS in caps
+        ]
+        return list(
+            User.objects
+            .filter(Q(role__in=approver_roles) | Q(is_superuser=True), is_active=True)
+            .distinct()
+            .exclude(pk=getattr(exclude, 'pk', None))
+        )
 
     def perform_update(self, serializer):
         prev_assigned_id = serializer.instance.assigned_to_id
@@ -229,6 +304,64 @@ class AuditFindingViewSet(viewsets.ModelViewSet):
                 )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=['post'], url_path='publish',
+            permission_classes=[RequiresCapability.for_(APPROVE_PLANS)])
+    def publish(self, request, pk=None):
+        """Supervisor sign-off: endorse the finding and put it to the auditee.
+
+        A finding is the audit team's own draft until a reviewer agrees it stands
+        up. Publishing is what starts the auditee's response clock, and it is
+        gated on APPROVE_PLANS rather than CLOSE_FINDINGS so the auditor who
+        raised the finding cannot also be the one who endorses it.
+        """
+        finding = self.get_object()
+        with transaction.atomic():
+            _, error = self._transition(request, finding, AuditFinding.AWAITING_AUDITEE)
+            if error:
+                return error
+            recipients = self._publication_recipients(finding)
+            recipients.discard(request.user)
+            for recipient in recipients:
+                notify(
+                    recipient,
+                    'finding',
+                    f'Finding requires your response: {finding.finding_number}',
+                    f'Finding "{finding.title}" has been published for your response.',
+                    f'/findings/{finding.id}',
+                )
+        return Response({'detail': 'Finding published to the auditee.'})
+
+    @staticmethod
+    def _publication_recipients(finding):
+        """Everyone the published finding now concerns.
+
+        `finding.auditee` is the person it is addressed to, and on anything raised
+        through the register that is populated — it is inherited from the
+        engagement (see AuditFindingSerializer.validate). The engagement's own
+        auditee is added for rows stamped before that inheritance existed, and the
+        department's auditees are the last resort.
+
+        That last branch is not decoration. A finding with no auditee anywhere is
+        still *readable* by the auditee's department — the register's scope falls
+        back to `engagement.department` — so publishing it and telling only the
+        two fields that happen to be NULL meant the finding went live in front of
+        an audience that was never informed. Publishing must not be able to mean
+        "published into the void".
+        """
+        recipients = {finding.auditee, finding.assigned_to}
+        if finding.engagement_id:
+            recipients.add(finding.engagement.auditee)
+        if not any(u is not None for u in (finding.auditee, finding.engagement.auditee)) \
+                and finding.engagement_id and finding.engagement.department_id:
+            recipients.update(
+                User.objects.filter(
+                    role=Role.AUDITEE, is_active=True,
+                    department_id=finding.engagement.department_id,
+                )
+            )
+        recipients.discard(None)
+        return recipients
+
     @action(detail=True, methods=['post'], url_path='close',
             permission_classes=[RequiresCapability.for_(CLOSE_FINDINGS)])
     def close(self, request, pk=None):
@@ -300,9 +433,23 @@ class AuditFindingViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         previous = finding.management_response
+        was_awaiting = finding.status == AuditFinding.AWAITING_AUDITEE
         with transaction.atomic():
             finding.management_response = text
-            finding.save(update_fields=['management_response', 'updated_at'])
+            if was_awaiting:
+                # The ball was with the auditee, so their response is the event
+                # that ends that state. Any other status keeps its own — revising
+                # an open finding's text is not a lifecycle move, and `dispute`
+                # is the action for disagreement.
+                finding.status = 'in_progress'
+                finding.save(update_fields=[
+                    'management_response', 'status', 'updated_at',
+                ])
+                log_audit(request, 'UPDATE', finding, changes={
+                    'status': [AuditFinding.AWAITING_AUDITEE, 'in_progress'],
+                })
+            else:
+                finding.save(update_fields=['management_response', 'updated_at'])
             # Truncated to 300 in `changes` for the same reason log_audit
             # truncates object_repr: a long response should not bloat every
             # audit-trail row that records one.
@@ -385,14 +532,26 @@ class EvidenceViewSet(viewsets.ModelViewSet):
     filterset_fields = ['finding', 'evidence_type']
 
     def get_queryset(self):
-        """Evidence inherits its finding's visibility — auditees see only theirs."""
+        """Evidence inherits its finding's visibility — auditees see only theirs.
+        Regional FPA auditors see only evidence from their region's engagements.
+
+        Including publication: evidence on an unpublished finding would otherwise
+        hand back the file and its title, which is the finding's content by
+        another route.
+        """
         user = self.request.user
         qs = super().get_queryset()
+        # Region scoping (runs before auditee scoping — different roles).
+        region_id = region_for(user)
+        if region_id is not None:
+            return qs.filter(finding__engagement__region_id=region_id).distinct()
         if user.is_authenticated and user.role == 'auditee':
             scope = Q(finding__auditee=user) | Q(finding__assigned_to=user)
             if user.department_id:
                 scope |= Q(finding__engagement__department_id=user.department_id)
-            return qs.filter(scope).distinct()
+            return qs.filter(scope).exclude(
+                finding__status__in=AuditFinding.PRE_PUBLICATION_STATUSES,
+            ).distinct()
         return qs
 
     def perform_create(self, serializer):

@@ -17,7 +17,8 @@ from apps.common.permissions import (
     CanWriteAudit, RequiresCapability, InvolvedPartyOrCapability, APPROVE_PLANS,
 )
 from apps.common.audit_utils import log_audit
-from apps.common.scoping import AuditeeScopeMixin
+from apps.common.blockers import BLOCKERS_NAMED, describe_blockers
+from apps.common.scoping import AuditeeScopeMixin, RegionScopeMixin
 from apps.common.reference_numbers import save_with_reference_number
 from apps.common.request_utils import with_parent
 from apps.notifications.services import notify, notify_roles
@@ -39,10 +40,9 @@ from apps.notifications.services import notify, notify_roles
 # forward into CAPA follow-up after the engagement closes, which is how many
 # internal audit functions work in practice.
 BLOCKS_COMPLETION = ('draft', 'open', 'in_progress', 'disputed')
-# How many finding numbers to name in the refusal before eliding the rest: enough
-# to act on, short enough that an engagement with fifty open findings does not
-# return a wall of text.
-BLOCKERS_NAMED = 10
+# The refusal's wording — how many blockers to name, and how to elide the rest — is
+# `BLOCKERS_NAMED` / `describe_blockers` in `apps/common/blockers.py`, shared with
+# the program-completion gate in `audit_execution`, which refuses in the same shape.
 
 
 # ── Audit Universe bulk import/export ────────────────────────────────────────
@@ -291,7 +291,7 @@ def _coerce_universe_row(fields, dept_by_code, dept_by_name, creating):
     return values, errors
 
 
-class AuditUniverseViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
+class AuditUniverseViewSet(RegionScopeMixin, AuditeeScopeMixin, viewsets.ModelViewSet):
     queryset = AuditUniverse.objects.select_related(
         'department', 'region', 'service_center', 'directorate',
     ).all()
@@ -300,11 +300,13 @@ class AuditUniverseViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
 
     # The risk-weighted universe is the audit department's forward plan: sorted by
     # risk score, it effectively announces which entities are audited next. An
-    # auditee sees only the entries for their own department.
+    # auditee sees only the entries for their own department. A regional FPA
+    # auditor sees only entries tagged with their region.
     #
     # `department` is nullable, so an entry with no department matches nobody —
     # the same "missing department means least access" reading the other scoped
     # viewsets use.
+    region_scope_fields = ('region_id',)
     auditee_scope_fields = ('department_id',)
     auditee_scope_personal_fields = ()
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -554,14 +556,16 @@ class AuditUniverseViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
         })
 
 
-class ProjectViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
+class ProjectViewSet(RegionScopeMixin, AuditeeScopeMixin, viewsets.ModelViewSet):
     """PPM project registry feeding the Audit Universe project dropdown."""
     queryset = Project.objects.select_related('department', 'region', 'service_center').all()
     serializer_class = ProjectSerializer
     permission_classes = [CanWriteAudit]
 
     # Same reasoning as the universe it feeds: an auditee sees their own
-    # department's projects and no others.
+    # department's projects and no others. A regional FPA auditor sees only
+    # projects tagged with their region.
+    region_scope_fields = ('region_id',)
     auditee_scope_fields = ('department_id',)
     auditee_scope_personal_fields = ()
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -672,7 +676,7 @@ class AuditPlanViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
 class AuditEngagementViewSet(viewsets.ModelViewSet):
     queryset = AuditEngagement.objects.select_related(
         'plan', 'department', 'region', 'service_center', 'directorate',
-        'lead_auditor', 'supervisor', 'audit_universe',
+        'lead_auditor', 'supervisor', 'auditee', 'audit_universe',
     ).prefetch_related('team_members', 'findings').all()
     serializer_class = AuditEngagementSerializer
     permission_classes = [CanWriteAudit]
@@ -686,19 +690,28 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Auditees see only engagements covering their own department.
+        Regional FPA auditors see only engagements tagged with their region.
 
         Same shape as AuditFindingViewSet.get_queryset. An auditee is a
         department representative, so the EEU-wide engagement calendar — who is
         being audited, when, and by whom — is not theirs to read. A user with no
         department sees only the engagements they are personally named on rather
         than everything, which is the safer reading of a missing department.
+
+        A regional auditor is not an auditee, so the two scopes never interact.
         """
+        from apps.common.scoping import region_for
+        from django.db.models import Q as _Q
         user = self.request.user
         qs = super().get_queryset()
+        # Region scoping (runs before auditee scoping — different roles).
+        region_id = region_for(user)
+        if region_id is not None:
+            return qs.filter(region_id=region_id).distinct()
         if user.is_authenticated and user.role == 'auditee':
-            scope = Q(lead_auditor=user) | Q(supervisor=user) | Q(team_members__user=user)
+            scope = _Q(lead_auditor=user) | _Q(supervisor=user) | _Q(team_members__user=user)
             if user.department_id:
-                scope |= Q(department_id=user.department_id)
+                scope |= _Q(department_id=user.department_id)
             return qs.filter(scope).distinct()
         return qs
 
@@ -776,10 +789,10 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
                     unresolved.order_by('finding_number')
                     .values_list('finding_number', flat=True)[:BLOCKERS_NAMED]
                 )
-                listed = ', '.join(named) + (', …' if total > len(named) else '')
                 return Response(
                     {'detail': f'Cannot complete this engagement: {total} finding(s) are '
-                               f'not yet resolved or closed ({listed}). Resolve or close '
+                               f'not yet resolved or closed '
+                               f'({describe_blockers(named, total)}). Resolve or close '
                                f'them first.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )

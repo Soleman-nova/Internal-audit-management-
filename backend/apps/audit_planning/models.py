@@ -212,11 +212,35 @@ class AuditEngagement(models.Model):
         related_name='directorate_engagements',
         help_text='EEU Internal Audit directorate that owns this engagement.',
     )
-    objectives = models.TextField(blank=True)
-    scope = models.TextField(blank=True)
+    # Objective and scope are mandatory: an engagement spawned from the annual
+    # plan is the point at which the audit is scoped, and a blank scope here
+    # silently degrades into "audit everything", which is not a decision anyone
+    # made. Enforced server-side (blank=False -> required on the serializer) and
+    # mirrored in the engagement form.
+    objectives = models.TextField()
+    scope = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planned')
     lead_auditor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='led_engagements')
     supervisor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='supervised_engagements')
+    # The department representative who answers for this engagement's findings.
+    # Named here rather than per finding because it is a property of the audit,
+    # not of an individual issue: findings raised against one engagement are
+    # addressed to the same person, and asking for them again on every finding
+    # invited the field to simply be left off — which it was, on every finding
+    # raised through the register. A finding with no auditee is readable by the
+    # auditee's department (the read scope falls back to `engagement.department`)
+    # but answers to nobody: the object-level check on respond / comment /
+    # upload-evidence / dispute has no user to match, so every one of them 403s.
+    #
+    # Nullable, not required: rows that predate this field have no honest value
+    # to backfill, and inventing one would attribute a finding to someone who was
+    # never asked to answer for it. See AuditFindingSerializer.validate for how a
+    # finding picks this up.
+    auditee = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='audited_engagements',
+        help_text='Department representative who answers for findings on this engagement.',
+    )
     planned_start = models.DateField(null=True, blank=True)
     planned_end = models.DateField(null=True, blank=True)
     actual_start = models.DateField(null=True, blank=True)

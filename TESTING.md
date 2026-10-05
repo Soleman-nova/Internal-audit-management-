@@ -30,15 +30,15 @@ Tests use SQLite in a throwaway database, so no seed data is needed and nothing 
 
 | App | Tests | What it pins down |
 |---|---|---|
-| `accounts` | 51 | org-unit tree + pagination, service-center seed, directorate-scoped dashboard, `ProfileView` self-service edits |
-| `audit_planning` | 35 | universe CRUD, `due-for-re-audit`, plan submit/approve, engagement numbering, `update-status` back-filling `last_audited`, engagement read scoping |
-| `audit_execution` | 30 | program submit/approve, procedure CRUD audit logging, `complete`, working-paper upload/review/download/delete |
-| `findings` | 32 | `FND-#####`, assignment notifications, the auditee comment/evidence workspace, resolve/close/dispute/reopen, read scoping |
-| `corrective_actions` | 27 | `CAPA-#####`, `add-response`, `schedule-followup` gating, paginated `overdue` and its due-date boundary, `summary`, both scoping branches |
-| `risk_assessment` | 32 | risk-parameter gate, score computation and universe propagation, `heatmap`/`summary`, the self-assessment lock-down |
-| `reports` | 28 | template gate, async generation contract, a real compile of all three formats, the failure path, `export`, six-month `analytics` buckets |
-| `common` | — | the capability matrix itself, plus a cross-app RBAC sweep |
-| `notifications` | — | `notify`/`notify_roles`, unread count, settings gate |
+| `accounts` | 125 | org-unit tree + pagination, service-center seed, directorate-scoped dashboard, `ProfileView` self-service edits |
+| `audit_planning` | 74 | universe CRUD, `due-for-re-audit`, plan submit/approve, engagement numbering, the auditee representative round-tripping, `update-status` back-filling `last_audited`, engagement read scoping, and the lifecycle fields (`status`, `actual_start`/`actual_end`, approver) being read-only so the completion guard is the only way to close an engagement |
+| `audit_execution` | 57 | program submit/approve, `complete` and `reopen` (and the refusal to close a program whose steps have no outcome), procedure CRUD audit logging, the `complete` action, the announcement of a failed step, completion percent that counts every finished outcome, working-paper upload/review/download/delete |
+| `findings` | 101 | `FND-#####`, assignment notifications, the publication gate (`publish`, and the auditee's total exclusion before it), the auditee's inheritance of the engagement's representative and the resulting end-to-end unblock, the reviewer notification on create, the auditee comment/evidence workspace, resolve/close/dispute/reopen, read scoping, the named source procedure, and the derived overdue flag |
+| `corrective_actions` | 100 | `CAPA-#####`, the auditee's proposal and the lead auditor's sign-off, the refusal to link an action to a finding no supervisor has endorsed, the transitions an ordinary edit may **not** make (`pending_approval` in either direction, `overdue`, `not_implemented`, and out of a terminal status), `add-response` and the split between the statuses an owner may report and the ones the audit side records, `verify-and-close` as the auditor's single act of verification and closure, the ownership gate on `schedule-followup`, paginated `overdue` and its due-date boundary, `summary`, both scoping branches |
+| `risk_assessment` | 79 | risk-parameter gate, score computation and universe propagation, `heatmap`/`summary`, the self-assessment lock-down |
+| `reports` | 53 | template gate, async generation contract, a real compile of all three formats, the failure path, `export`, six-month `analytics` buckets, and the disclosure of material held back because its finding is unendorsed |
+| `common` | 47 | the capability matrix itself, a cross-app RBAC sweep, and the `PREFIX-YYYY-NNNN` sequence — including coexistence with the hand-numbered seed rows that are longer than any generated number |
+| `notifications` | 16 | `notify`/`notify_roles`, unread count, settings gate |
 
 Shared fixtures live in [role_fixtures.py](backend/apps/common/role_fixtures.py): `RoleFixtureMixin` builds all five users plus two departments once per class, and `assert_status_by_role` runs one request per role against an expectation table. That table **must** name every role — a partially filled one fails rather than silently skipping a role.
 
@@ -61,7 +61,7 @@ python manage.py reset_business_data              # type `wipe` to confirm
 
 **Kept:** users, roles, departments (the whole org tree), report templates, system settings, projects, and risk parameters.
 
-The command does not reset PK sequences and does not need to: reference numbers come from `Max()` over existing rows in [reference_numbers.py](backend/apps/common/reference_numbers.py), so `FND-<year>-0001` starts at 0001 again once the tables are empty. It leaves `media/` alone by default — files are not rows — and reports how many uploads it orphaned; pass `--purge-files` to remove those four directories as well.
+The command does not reset PK sequences and does not need to: reference numbers come from the highest numeric `PREFIX-YYYY-` row in [reference_numbers.py](backend/apps/common/reference_numbers.py), so `FND-<year>-0001` starts at 0001 again once the tables are empty. It leaves `media/` alone by default — files are not rows — and reports how many uploads it orphaned; pass `--purge-files` to remove those four directories as well.
 
 Every run ends with a verification pass, also available standalone as `--verify`. It asserts the business tables are empty, the kept tables are unchanged, every role still has an active user, an active admin remains, the capability matrix covers every role, and the org tree still has a root. It exits non-zero on failure, so it can gate a script.
 
@@ -91,9 +91,11 @@ The server-side source of truth is `ROLE_CAPABILITIES` in [permissions.py](backe
 | Comment / upload evidence on a finding | ✅ | ✅ | ✅ | ✅ | own finding only |
 | Resolve / close / reopen finding | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Dispute finding | ✅ | ✅ | ✅ | ✅ | own finding only |
-| Create CAPA | ✅ | ✅ | ✅ | ✅ | ❌ |
-| Respond to CAPA | ✅ | ✅ | ✅ | ✅ | own department |
+| Create CAPA | ✅ | ✅ | ✅ | ✅ | own finding only |
+| Approve a CAPA plan | ✅ | ✅ | ✅ | own only | ❌ |
+| Respond to CAPA | ✅ | ✅ | ✅ | ✅ | own department, progress statuses only |
 | Schedule CAPA follow-up | ✅ | ✅ | ✅ | own only | ❌ |
+| Verify & close a CAPA | ✅ | ✅ | ✅ | own only | ❌ |
 | Generate report | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Report templates (write) | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Read analytics | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -105,11 +107,13 @@ The server-side source of truth is `ROLE_CAPABILITIES` in [permissions.py](backe
 
 | Endpoint | An auditee sees |
 |---|---|
-| `/api/findings/findings/` | findings where they are the auditee or assignee, plus every finding on an engagement in their department |
-| `/api/findings/evidence/` | evidence attached to those findings |
+| `/api/findings/findings/` | **only published findings** (never `draft`/`open`), and within those only where they are the auditee or assignee, plus findings on an engagement in their department |
+| `/api/findings/evidence/` | evidence attached to those findings — inherits the publication filter, or the file and its title would disclose the finding |
 | `/api/planning/engagements/` | engagements for their department, plus any they are named on |
-| `/api/corrective/actions/` | every CAPA owned by someone in their department (owner-only if they have no department) |
+| `/api/corrective/actions/` | every CAPA owned by someone in their department (owner-only if they have no department), minus any raised against an unpublished finding |
 | `/api/risk/self-assessments/` | **only their own submission** — so does an auditor, since scoping here is by APPROVE_PLANS, not role |
+
+The publication filter is the other half of the auditee's scope: a finding nobody has endorsed is not theirs to see, and the filter lives on the querysets rather than on each action, so `respond`, `dispute`, `add-comment` and `upload-evidence` all refuse it with a 404 rather than each needing its own status check. `CanProposeCorrectiveAction` is the exception — it reads the finding id out of the request body instead of resolving an object, so it repeats the filter by hand.
 
 A user with no department falls back to records naming them personally. This is asserted in every scoping suite, because it is the branch a demo database never exercises.
 
@@ -230,7 +234,7 @@ Fill in the **Result** column as ✅ / ❌ and note the actual behaviour when it
 | 3.6 | Working Papers → download a paper | Correct file, correct filename, correct content type | |
 | 3.7 | Findings → open a finding → **Close** | Status → `closed` with a resolution date; the auditor who raised it is notified | |
 | 3.8 | Risk → try to add a risk parameter | Blocked — the button is hidden, and a direct POST returns 403 | |
-| 3.9 | CAPA → open an action → **Verify & Schedule Follow-up** | Follow-up created, owner notified | |
+| 3.9 | CAPA → open an action whose evidence has been filed → **Verify & Close CAPA** | 200; a completed follow-up record is written, the action and its finding both go to `closed`, and the owner is notified. Verifying and closing are one route, so there is no way to close one without recording the verification. A PATCH to `closed` by an auditor who is neither this action's nor an approver returns 403 | |
 | 3.10 | Reports → try to create a template | Blocked (403) | |
 
 ---
@@ -248,17 +252,40 @@ Fill in the **Result** column as ✅ / ❌ and note the actual behaviour when it
 | 4.7 | Change a procedure's status to In Progress, then **refresh** | The status persists | |
 | 4.8 | Set a procedure to Completed | `completed_by`/`completed_at` stamped, the conclusion preserved, and the engagement lead notified | |
 | 4.9 | Click **Submit for Review** on the program | 200, status → `submitted`, supervisor notified. **This button used to 404** — it called `submit-for-review/` when the route is `submit/` | |
+| 4.9a | With a step still *Pending*, click **Complete Fieldwork** | Refused, naming the steps with no recorded outcome, and the status does not move. A `PATCH {"status":"completed"}` used to bypass this entirely — and *Completed* is what locks every procedure control | |
+| 4.9b | Give every step an outcome, then **Complete Fieldwork** | → `completed`, engagement lead notified. *Failed* and *Not Applicable* count as outcomes; a step that failed is what raises a finding | |
+| 4.9c | **Reopen Fieldwork** | → `approved`, and the procedure controls come back | |
+| 4.9d | `PATCH /api/execution/programs/{id}/` with `{"status":"approved","approved_by":…}` | 200 and **nothing changes** — those fields are read-only. The only way to approve is `approve/`, which gates on APPROVE_PLANS and stamps the approver | |
 | 4.10 | Upload a working paper with a file | Created with you as preparer; the file is downloadable | |
 | 4.11 | Try to review your own working paper | Blocked — review needs APPROVE_PLANS | |
-| 4.12 | Findings → **Log Finding** (severity, condition, criteria, cause, effect, recommendation, assignee, auditee) | Created. The number is `FND-YYYY-NNNN` **assigned by the server** — the form no longer invents a `FIND-####` the record never gets | |
-| 4.13 | Assignee and auditee check their bell | Both were notified; you were not notified about your own finding | |
+| 4.12 | Findings → **Log Finding** (failed procedure, severity, condition, criteria, cause, effect, recommendation) | Created as **Pending Supervisor Review** (the stored value stays `draft`). The number is `FND-YYYY-NNNN` **assigned by the server** — the form no longer invents a `FIND-####` the record never gets. The form asks for no auditee: the finding is addressed to the **engagement's auditee representative** and inherits it. It is invisible and inert to the auditee until published (see 4.23) | |
+| 4.12a | Log a finding on an engagement whose **auditee representative is blank** | Created with `auditee: null` and no error — there is no honest value to inherit. The engagement row shows `—` for the representative, and the finding will be readable by the department but unanswerable until one is set (see 4.12b for the consequence) | |
+| 4.12b | On the engagement, set the auditee representative, then log a finding | The finding carries that user in its `auditee` field, and the auditee's own actions on it are authorized by that field rather than by the department fallback | |
+| 4.13 | Assignee and auditee check their bell after logging a finding | Only the **audit team** was notified. The auditee was not — a finding nobody has endorsed should not be announced to the party it concerns, and on the common shape where the assigned contact *is* the auditee it went straight to them. The **engagement's supervisor** is told it awaits review (`approval_needed`), and when the engagement names no supervisor every active `APPROVE_PLANS` holder is told instead | |
 | 4.14 | Open the finding's detail page → add a comment | Comment appears in the thread; the rest of the thread is notified | |
 | 4.15 | Detail page → upload evidence | Evidence listed and downloadable | |
 | 4.16 | Detail page → **Resolve** | Status → `resolved` with a resolution date | |
 | 4.17 | With more than 20 findings in the register, deep-link straight to the 25th finding's detail page | It renders. It used to say "Finding not found" — the page fetched page 1 of the list and searched it client-side | |
-| 4.18 | CAPA → create an action from that finding (owner, priority, due date) | Number is `CAPA-YYYY-NNNN` from the server; the owner is notified with the due date in the message | |
+| 4.18 | CAPA → create an action from that finding (owner, priority, due date) | Number is `CAPA-YYYY-NNNN` from the server; the owner is notified with the due date in the message. An audit-raised action starts `open` — it needs no sign-off | |
+| 4.18a | CAPA → **Spawn CAPA Task** → open the finding picker, with a finding of your own still awaiting supervisor review | It is **not listed**, and a hint under the picker says why rather than the list quietly coming up short. Posting the link by hand is a 400 naming the finding and its state. Only a *new* link is refused: an action that already carries an unendorsed finding — one raised while this hole was open — stays editable, so correcting its title does not fail | |
 | 4.19 | Reports → generate a draft report | Generates and downloads | |
+| 4.19a | Generate a report for an engagement holding an action against an unendorsed finding | Section 5 does not print the action — a corrective action is only as distributable as the finding it answers — and **says so**: *"Not included in this report: 1 corrective action whose finding has not yet been endorsed for publication."* Section 4 does the same for the finding itself. *"No corrective actions have been assigned for findings in this engagement"* is now printed only when that is literally true. **4.18a closed the route that used to create this state by hand**, so the walkthrough cannot produce it any more: it is covered by the reports tests, and survives for rows that predate the gate | |
+| 4.19b | Publish that finding (4.24), then generate the report again | The action and the finding both appear, with no withheld note. Words it as *"Not shown above: …"* instead when the section has rows **and** withheld siblings — a half-published engagement is one report, not two | |
 | 4.20 | Try to approve a plan | Blocked (403) | |
+| 4.21 | Given a plan the auditee proposed (step 5.14), open it → **Approve Plan** | Status → `open` with `approved_by`/`approved_at` stamped; the auditee is notified. Re-approving is a 400 — the transition is one-shot | |
+| 4.22 | Given a plan proposed by an auditee but routed to a colleague (the engagement's lead auditor), try to approve it | Blocked (403). The gate is the *raiser-or-approver*, not every auditor — see `schedule-followup` for the same shape | |
+| 4.23 | Take the draft from 4.12, log in as the auditee before publishing | The finding is **absent from their register and 404s on its detail route**, the kanban drops the pre-publication columns, and the list reads *"Nothing has been published to you yet."* Comment, evidence, respond and dispute all 404 too, and proposing a CAPA against it is refused | |
+| 4.24 | You (supervisor) → open the draft → **Publish to Auditee** | Status → `awaiting_auditee_response`; the auditee named on the finding — inherited from the engagement — is notified. Only now do 4.14–4.16 and 5.7+ work for them. Publishing twice is a 400, and a `resolved`/`closed` finding cannot be published at all. On a finding that names nobody (4.12a), the engagement's representative is notified instead, and failing that the department's auditees — publishing can never notify no one | |
+| 4.24a | As the auditee named on the engagement, answer a finding you did **not** have to be named on individually (4.12b) | Comment, evidence, respond and dispute all succeed. This is the regression the inheritance exists for: before it, the same finding was visible to this user (the register falls back to the engagement's department) and 403 on every one of the four, because the object-level check had no auditee to match | |
+| 4.24b | As a **different** auditee in the same department, try the same four actions | Still 403. The department fallback is a *read* convenience — writing stays with the named representative, and the register is what tells you which of the two you are looking at | |
+| 4.25 | Once the auditee has filed evidence (5.13b) → **Verify & Close CAPA** → set the date and findings | 200. A completed follow-up record is written, the action → `closed` with a completion date, and the finding behind it → `closed`. The owner is notified | |
+| 4.26 | Open one of your colleague's CAPAs → **Verify & Close CAPA**, and separately `PATCH` it to `closed` | Both blocked (403). The action is scoped to its own auditor, and the status PATCH — which used to be gated on `WRITE_AUDIT` alone — no longer offers the same decision by a side door |
+| 4.27 | Open a finding → read **Source procedure**, and follow the link | The fieldwork step is **named** (`3.1. Agree disbursements to the ledger`), not an id, and the link lands on the execution board with that step highlighted. Until this existed the link was in the database and nowhere a reader could follow it — a finding was an assertion with nothing behind it |
+| 4.27a | Back on Execution → look at a failed step that already has a finding against it | A badge says how many. Before it, a failed step with a finding looked exactly like one nobody had written up, and **Log Finding** on it opened a form that would accept a duplicate |
+| 4.27b | On a published finding with no action, click **Spawn CAPA Task linked to Finding** | The follow-up form opens by itself, already pointed at *this* finding with its title, description and recommendation carried across. The button is absent while the finding is unendorsed, and the section says why |
+| 4.27c | Create the action, then reopen the finding | It is listed under **Corrective Actions** with its owner, due date and status, and links to the action. The count also shows in the register's split view |
+| 4.27d | Set a finding's target resolution date in the past and reload | An **Overdue** badge, derived live from the date — no scheduled job involved. Not shown once the finding is resolved or closed, and not shown for a finding due *today* |
+| 4.28 | In the register's split view, click **Open full finding record** | Reaches the finding's own page. Previously the only way there was a double-click on a list row, which is not discoverable | |
 
 ---
 
@@ -268,25 +295,37 @@ This is the role most worth walking end to end: it holds no capabilities at all,
 
 | # | Step | Expected | Result |
 |---|---|---|---|
-| 5.1 | Log in | Dashboard shows a **My Work** section: findings assigned to you, CAPAs you own, self-assessments awaiting you | |
+| 5.1 | Log in | Dashboard shows a **My Work** section: findings assigned to you, CAPAs you own, self-assessments awaiting you. Findings nobody has published are **not** on it — this queue is your work, and an unendorsed finding is not yet yours | |
 | 5.2 | Sidebar | No User Management, no Audit Trail | |
 | 5.3 | Risk → Self Assessment → submit one (likelihood, impact, control effectiveness, justification) | 201. The parent assessment is flagged as self-assessed **server-side** — you hold no WRITE_AUDIT, so a client-side PATCH would 403 and make a successful submission look failed | |
 | 5.4 | Risk → Self Assessments list | **Only your own submission.** Another auditee's is not listed | |
 | 5.5 | Try to edit your submission | Allowed while it is `submitted` | |
 | 5.6 | After a manager reviews it (step 2.7), try to edit it again | Blocked (403) — a reviewed submission is closed to edits | |
-| 5.7 | Findings register | Only findings naming you, or on an engagement in your department. Another department's findings are absent | |
+| 5.7 | Findings register | Only **published** findings, and within those only ones naming you or on an engagement in your department. Another department's findings are absent. A finding nobody has endorsed is absent too, and its detail route 404s — see 4.23 | |
+| 5.7a | Findings register on a fresh database | *"Nothing has been published to you yet."* Every finding starts as a draft, so an empty register is the normal state, not a fault |
 | 5.8 | Open a finding assigned to you → add a comment | 201. **This used to be a 403** — the action inherited a WRITE_AUDIT gate, so the person being asked to respond to a finding could not | |
 | 5.9 | Same finding → upload evidence | 201, and the auditor who raised it is notified | |
 | 5.10 | Same finding → **Dispute** | Status → `disputed`; the auditor is notified | |
 | 5.11 | Same finding → look for Resolve / Close / Reopen | Not offered, and a direct POST returns 403 | |
-| 5.12 | CAPA list | Only your department's actions | |
-| 5.13 | Open a CAPA you own → **Respond** with notes, a status update, and an evidence file | 201; the status moves; the auditor who raised it is notified | |
-| 5.14 | Same CAPA → look for Verify & Schedule Follow-up | Not offered — the owner cannot sign off their own remediation | |
-| 5.15 | Anywhere → look for create/edit buttons on universe, plans, engagements, programs, procedures, findings, CAPAs | All hidden | |
-| 5.16 | Direct POST to `/api/findings/findings/` (browser console or curl with your token) | 403 | |
-| 5.17 | `GET /api/risk/self-assessments/<another user's id>/` | 404 — scoping hides the row rather than admitting it exists | |
-| 5.18 | `PATCH /api/risk/self-assessments/<your id>/ {"status": "reviewed"}` | 200, **but the status stays `submitted`** and no reviewer is stamped. This was a privilege-escalation route around the review gate | |
-| 5.19 | Reports → try to generate a report | Blocked (403) | |
+| 5.12 | CAPA list | Only your department's actions — and none raised against a finding you cannot see, or the action's own title would disclose it | |
+| 5.13 | Open a CAPA you own → **Respond** with notes, a status update, and an evidence file | 201; the status moves; the auditor who raised it is notified. The status list offers only *In Progress*, *Partially Resolved* and *Evidence Submitted / Pending Verification* — an owner reports progress, not outcomes | |
+| 5.13a | Same form, but post `status_update: closed` (or `resolved`) directly | **403**, and nothing is written: no action response, no status change, and the finding behind the action is untouched. This route cascades to the finding, so before the status list was narrowed an auditee closed their own remediation *and* settled the finding about them, in a single request | |
+| 5.13b | Set **Evidence Submitted / Pending Verification** with the evidence attached | 201. This is the handoff — the claim is yours to make; the conclusion is the auditor's | |
+| 5.13c | On a plan that is still `pending_approval`, try to respond | **400**, and the form is not offered. Reporting progress would move the action out of `pending_approval`, the only state **Approve Plan** accepts — so the sign-off became unreachable and the plan approved itself. The status posted is a legitimate one for an owner; it is the stage that is wrong | |
+| 5.14 | CAPA → **Formulate Remediation Plan**, pick a finding about you, fill in the plan and a due date | Created as `CAPA-YYYY-NNNN`, owned by you, status `pending_approval`. **This used to be a 403 at creation** — the class-level WRITE_AUDIT gate meant the audit team wrote your plan for you, so the approval step that follows had nothing of yours to approve. There is no owner picker: the server assigns the proposal to its author | |
+| 5.15 | Look at the plan you just proposed | Owned by you and awaiting approval. You cannot PATCH it — status included, which is what stops a proposal being closed, and the finding behind it settled, in one request | |
+| 5.16 | Open your proposal → look for Approve Plan, or POST to its `/approve/` | Not offered, and 403. The plan is routed to the engagement's lead auditor, not back to you | |
+| 5.16a | As an auditor, `PATCH` the action with `{"status":"open"}` while it is `pending_approval` | **400**, and nothing changes. `approve/` is the only route out of that stage: it asks who may sign the plan off and stamps who did and when. Before this the PATCH was accepted, so any auditor could open a plan awaiting their own approval with no approver recorded | |
+| 5.16b | `PATCH` an open action with `{"status":"overdue"}` or `{"status":"not_implemented"}` | **400**. `overdue` is derived from the due date by the nightly job, and `not_implemented` is recorded beside the follow-up visit that justifies calling a remedy a failure — neither is an edit | |
+| 5.16c | `PATCH` a **closed** action back to `in_progress` | **400**. There is no reopen route, and the edit would have carried the reopening back to the finding behind it | |
+| 5.16d | `PATCH` progress statuses (`in_progress`, `partially_resolved`, `evidence_submitted`) as an auditor who is neither the assigner nor an approver | **200** — the guard is about reserved transitions, not about writes in general | |
+| 5.17 | Same CAPA → look for Verify & Close CAPA, or POST to its `/verify-and-close/` | Not offered, and 403 — the owner cannot sign off their own remediation. Verify & close is one action: it records the follow-up that proves the check happened and closes the action and its finding together | |
+| 5.18 | Anywhere → look for create/edit buttons on universe, plans, engagements, programs, procedures, findings | All hidden | |
+| 5.19 | Direct POST to `/api/corrective/actions/` naming a finding from **another directorate**, or one that is still unpublished | 403 — the create gate reads the finding, and mirrors the same scope the register uses, publication included |
+| 5.20 | Direct POST to `/api/findings/findings/` (browser console or curl with your token) | 403 | |
+| 5.21 | `GET /api/risk/self-assessments/<another user's id>/` | 404 — scoping hides the row rather than admitting it exists | |
+| 5.22 | `PATCH /api/risk/self-assessments/<your id>/ {"status": "reviewed"}` | 200, **but the status stays `submitted`** and no reviewer is stamped. This was a privilege-escalation route around the review gate | |
+| 5.23 | Reports → try to generate a report | Blocked (403) | |
 
 ---
 
@@ -345,6 +384,9 @@ These cover the newer organisational-unit work (commit `414a79b`) that the earli
 - **Report generation runs on a raw thread**, not a task queue. It is enough for a single-worker deployment: if the process restarts mid-compile the row stays `generating` with no retry. Swap `enqueue_report_generation` for a Celery task if durability matters.
 - **`departments/tree` is deliberately unpaginated** — the cascading picker needs the whole tree in one response. Every other list endpoint is paginated.
 - **`generate_report_file` has no branch for an unknown format.** The three known formats are covered; an unrecognised one would leave the row on `generating` rather than `failed`.
+- **Nothing asserts PDF *layout*.** The findings table's title column used to paint over the Severity column, because a plain string in a reportlab `Table` is drawn with `canvas.drawString`, which neither wraps nor clips. The fix wraps every cell in a `Paragraph`, and `apps.reports.tests` now asserts the *text* — the table cell is proven to draw a markup-bearing title intact rather than eating it as a tag. What is **not** asserted is where the text lands: no PDF-reading library is installed (`pypdf`/`pdfminer` are absent from `requirements.txt`), so the tests inflate and read the raw content streams and cannot see geometry. Column widths, wrapping and any future layout regression still have to be checked by eye on a generated PDF. Word and Excel are covered properly — those files parse, so their cell wrapping and column widths are asserted.
+- **`login.spec.js` 0.1 is the suite's flakiest test.** It signs five roles in and out in one test, so it holds the most timing surface; it failed once in a full run (a 90s click timeout on a demo button) and did not reproduce in six consecutive repeats or in isolation (10.4s against the 90s limit). Treat a red 0.1 as a flake first — but re-run it rather than assuming, since the same test would also be the first to notice a login regression.
+- **`risk.spec.js` deliberately does not cover the adopt-the-auditee's-figures flow.** Reaching that dialog needs a submitted self-assessment, and its parent accepts only one (a `OneToOne`) — so the test would have to claim the seeded assessment, flip its `is_self_assessment` flag and put it back; creating an assessment instead propagates a score onto an audit-universe row, so tidying up would rewrite seeded risk scores. The semantics are covered by seven backend tests in `AdoptedSourceTest`, and the control's rendering by the i18n bare-key walk.
 - **No frontend *unit* tests.** The project still has no JS unit-test runner. UI behaviour is now covered by the Playwright suite in `frontend/e2e/` (§3), which drives the real browser as each role — the refresh-after-mutation checks are exactly the class of defect backend tests cannot catch.
 - **The in-app Help modal's role checklists still reference email logins** (`admin@eeu.com` and similar). Authentication is by Employee ID; [USER_MANUAL.md](USER_MANUAL.md) is correct and the modal text has not been updated.
 - **Repeated E2E runs against one long-lived backend can trip the authenticated throttle** (1000/hour). A single `npx playwright test` run makes a few hundred requests, so one run is fine; restarting `manage.py runserver` resets the in-memory throttle cache before a re-run. The suite also retries a 429 once with a short backoff.

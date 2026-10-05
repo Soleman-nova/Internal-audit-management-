@@ -28,6 +28,16 @@ PROJECTS_URL = '/api/planning/projects/'
 PLANS_URL = '/api/planning/plans/'
 ENGAGEMENTS_URL = '/api/planning/engagements/'
 
+# An engagement is where the audit gets its bounds, so the API refuses one
+# without both an objective and a scope. Every test that posts an engagement
+# needs the pair; keeping it here means they say so once rather than each
+# restating the same two sentences. Tests that *don't* want them (the
+# requiredness test at the bottom of AuditEngagementTest) omit them explicitly.
+ENGAGEMENT_SCOPE = {
+    'objectives': 'Assess the adequacy and effectiveness of the controls under review.',
+    'scope': 'The processes, systems and records named in the annual audit plan.',
+}
+
 
 class AuditUniverseRoleAccessTest(RoleFixtureMixin, TestCase):
     """WRITE_AUDIT gates the register; reads stay open to every role."""
@@ -554,6 +564,7 @@ class AuditEngagementTest(RoleFixtureMixin, TestCase):
             'department': self.department.id,
             'lead_auditor': self.auditor.id,
             'supervisor': self.supervisor.id,
+            **ENGAGEMENT_SCOPE,
         }, format='json')
         self.assertEqual(response.status_code, 201, response.data)
 
@@ -569,10 +580,41 @@ class AuditEngagementTest(RoleFixtureMixin, TestCase):
         # The creator is not notified of their own assignment.
         self.assertEqual(notification_titles(self.manager), [])
 
+    def test_the_auditee_representative_round_trips(self):
+        """The representative is what a finding inherits its auditee from, so it
+        has to be writable here and readable back — a silent drop would look
+        exactly like a manager who never filled the field in."""
+        response = self.as_user(self.manager).post(ENGAGEMENTS_URL, {
+            'plan': self.plan.id,
+            'title': 'Engagement with a named representative',
+            'engagement_type': 'financial',
+            'department': self.department.id,
+            'auditee': self.auditee.id,
+            **ENGAGEMENT_SCOPE,
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        engagement = AuditEngagement.objects.get(pk=response.data['id'])
+        self.assertEqual(engagement.auditee, self.auditee)
+        self.assertEqual(response.data['auditee'], self.auditee.id)
+        self.assertEqual(response.data['auditee_name'], self.auditee.full_name)
+
+    def test_an_engagement_without_a_representative_reports_none(self):
+        """`None`, not "Unassigned" as the lead auditor and supervisor report.
+        A blank here is the reason this engagement's findings will reach nobody,
+        so the client has to be able to tell the difference and prompt."""
+        response = self.as_user(self.manager).post(ENGAGEMENTS_URL, {
+            'plan': self.plan.id, 'title': 'No representative named',
+            **ENGAGEMENT_SCOPE,
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertIsNone(response.data['auditee'])
+        self.assertIsNone(response.data['auditee_name'])
+
     def test_client_supplied_engagement_number_is_ignored(self):
         response = self.as_user(self.manager).post(ENGAGEMENTS_URL, {
             'plan': self.plan.id, 'title': 'Spoofed Number',
             'engagement_number': 'ENG-HACKED',
+            **ENGAGEMENT_SCOPE,
         }, format='json')
         self.assertEqual(response.status_code, 201)
         self.assertNotEqual(response.data['engagement_number'], 'ENG-HACKED')
@@ -582,6 +624,35 @@ class AuditEngagementTest(RoleFixtureMixin, TestCase):
             'plan': self.plan.id, 'title': 'Blocked Engagement',
         }, format='json')
         self.assertEqual(response.status_code, 403)
+
+    def test_an_engagement_needs_both_an_objective_and_a_scope(self):
+        """An engagement is where the audit is bounded — neither field is optional.
+
+        Blank here does not mean "no constraints", it means an audit with no
+        stated bounds, so the API refuses to create the row at all.
+        """
+        for omitted in ('objectives', 'scope'):
+            with self.subTest(omitted=omitted):
+                payload = {
+                    'plan': self.plan.id,
+                    'title': f'Unbounded Engagement ({omitted})',
+                    **{k: v for k, v in ENGAGEMENT_SCOPE.items() if k != omitted},
+                }
+                response = self.as_user(self.manager).post(
+                    ENGAGEMENTS_URL, payload, format='json',
+                )
+                self.assertEqual(response.status_code, 400, response.data)
+                self.assertIn(omitted, response.data)
+
+    def test_whitespace_only_scope_fields_are_refused(self):
+        """A blank string is not a scope, so it must not slip past the check."""
+        response = self.as_user(self.manager).post(ENGAGEMENTS_URL, {
+            'plan': self.plan.id, 'title': 'Whitespace Engagement',
+            'objectives': '   ', 'scope': '\n\t',
+        }, format='json')
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn('objectives', response.data)
+        self.assertIn('scope', response.data)
 
     def test_add_member_notifies_the_new_member(self):
         engagement = make_engagement(plan=self.plan, lead_auditor=self.auditor)
@@ -784,6 +855,109 @@ class AuditEngagementTest(RoleFixtureMixin, TestCase):
         self.assertIsNone(engagement.actual_end)
 
 
+class LifecycleStatusIsNotEditableTest(RoleFixtureMixin, TestCase):
+    """`status` is the action routes' to move, not a field an edit may set.
+
+    Every gate above lives in an `@action`: the engagement completion refusal, the
+    plan's APPROVE_PLANS check, the stamps each approval writes. A PATCH that could
+    write `status` reached past all of them, so the gates above were only ever
+    enforced on the page that happened to use the action. These tests are the
+    other half of those gates — they assert the side door is shut, which is the
+    failure that leaves no trace (an engagement reads as closed, and nothing says
+    it skipped the check).
+
+    Read-only rather than refused: DRF drops the field and answers 200 with the
+    record unchanged, so the assertion is on the stored row, not the status code.
+    """
+
+    def test_engagement_status_cannot_be_patched(self):
+        """The one that matters: this skipped the open-findings completion guard.
+
+        `update-status` refuses to complete an engagement while findings are
+        unresolved. A PATCH could complete it anyway, and with it come the
+        `actual_end` stamp and the universe's `last_audited` back-fill that tells
+        the re-audit due list the entity has been covered.
+        """
+        engagement = make_engagement(lead_auditor=self.auditor)
+        make_finding(engagement=engagement, identified_by=self.auditor, status='open')
+
+        response = self.as_user(self.supervisor).patch(
+            f'{ENGAGEMENTS_URL}{engagement.id}/',
+            {'status': 'completed'}, format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        engagement.refresh_from_db()
+        self.assertEqual(engagement.status, 'planned')
+        self.assertIsNone(engagement.actual_end)
+
+    def test_engagement_actual_dates_cannot_be_backdated(self):
+        """The stamps belong to `update-status` too, and are evidence of it.
+
+        An auditor who writes `actual_end` by hand has asserted the engagement
+        finished on a date the system never observed anything on.
+        """
+        engagement = make_engagement(lead_auditor=self.auditor)
+
+        response = self.as_user(self.supervisor).patch(
+            f'{ENGAGEMENTS_URL}{engagement.id}/',
+            {
+                'actual_start': (timezone.now().date() - datetime.timedelta(days=40)).isoformat(),
+                'actual_end': (timezone.now().date() - datetime.timedelta(days=40)).isoformat(),
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        engagement.refresh_from_db()
+        self.assertIsNone(engagement.actual_start)
+        self.assertIsNone(engagement.actual_end)
+
+    def test_plan_status_and_approver_cannot_be_patched(self):
+        """A plan's approval is an APPROVE_PLANS sign-off that records who gave it."""
+        plan = make_plan(created_by=self.auditor)
+
+        response = self.as_user(self.auditor).patch(
+            f'{PLANS_URL}{plan.id}/',
+            {'status': 'approved', 'approved_by': self.manager.id}, format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        plan.refresh_from_db()
+        self.assertNotEqual(plan.status, 'approved')
+        self.assertIsNone(plan.approved_by)
+        self.assertIsNone(plan.approved_at)
+
+    def test_plan_edits_still_work(self):
+        """The positive control: only the lifecycle fields were closed off.
+
+        Without this the tests above would also pass on a serializer that had
+        stopped accepting any edits at all, which is not the change being made.
+        """
+        plan = make_plan(created_by=self.auditor)
+
+        response = self.as_user(self.auditor).patch(
+            f'{PLANS_URL}{plan.id}/',
+            {'methodology': 'COSO 2013.'}, format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        plan.refresh_from_db()
+        self.assertEqual(plan.methodology, 'COSO 2013.')
+
+    def test_engagement_edits_still_work(self):
+        engagement = make_engagement(lead_auditor=self.auditor)
+
+        response = self.as_user(self.auditor).patch(
+            f'{ENGAGEMENTS_URL}{engagement.id}/',
+            {'title': 'Renamed engagement'}, format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        engagement.refresh_from_db()
+        self.assertEqual(engagement.title, 'Renamed engagement')
+
+
 class AuditEngagementScopingTest(RoleFixtureMixin, TestCase):
     """Auditees read only the engagements that concern their department."""
 
@@ -878,6 +1052,7 @@ class OrgScopeSplitTest(RoleFixtureMixin, TestCase):
             'department': self.department.id,
             'region': self.region.id,
             'service_center': self.center.id,
+            **ENGAGEMENT_SCOPE,
         }
         payload.update(overrides)
         return self.as_user(self.manager).post(ENGAGEMENTS_URL, payload, format='json')

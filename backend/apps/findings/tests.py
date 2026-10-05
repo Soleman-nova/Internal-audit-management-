@@ -2,10 +2,11 @@
 
 Covers finding-number generation, assignment notifications, the auditee's own
 workflow (comment, evidence, management response, dispute — the actions a plain
-WRITE_AUDIT gate used to lock them out of), the resolve/close/reopen lifecycle,
-the read scoping that keeps one department's findings out of another's register,
-and the slim list payload that reports counts where the detail view nests
-collections.
+WRITE_AUDIT gate used to lock them out of), the publication gate that keeps an
+unendorsed finding away from the auditee entirely, the resolve/close/reopen
+lifecycle, the read scoping that keeps one department's findings out of another's
+register, and the slim list payload that reports counts where the detail view
+nests collections.
 """
 import shutil
 import tempfile
@@ -17,7 +18,8 @@ from django.utils import timezone
 
 from apps.accounts.models import AuditTrail, Role
 from apps.common.role_fixtures import (
-    RoleFixtureMixin, make_engagement, make_finding, notification_titles,
+    RoleFixtureMixin, make_engagement, make_failed_procedure, make_finding,
+    make_procedure, notification_titles,
 )
 from apps.common.validators import MAX_DOCUMENT_SIZE
 from apps.corrective_actions.models import CorrectiveAction
@@ -36,10 +38,14 @@ class FindingCreateTest(RoleFixtureMixin, TestCase):
         self.engagement = make_engagement(
             lead_auditor=self.auditor, department=self.department,
         )
+        # A finding is raised from the procedure that failed, so every create on
+        # this endpoint needs one.
+        self.failed_procedure = make_failed_procedure(engagement=self.engagement)
 
     def payload(self, **kwargs):
         data = {
             'engagement': self.engagement.id,
+            'procedure': self.failed_procedure.id,
             'title': 'Unapproved journal entries',
             'description': 'Twelve journals were posted without review.',
             'severity': 'high',
@@ -108,17 +114,30 @@ class FindingCreateTest(RoleFixtureMixin, TestCase):
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data['finding_number'], f'FND-{year}-0002')
 
-    def test_assignee_and_auditee_are_notified_but_not_the_author(self):
+    def test_only_the_audit_team_hears_about_a_new_finding(self):
+        """Creation notifies the audit side, and stops there.
+
+        The auditee used to be told as well, which announced a finding before
+        anyone had reviewed it — and on the common shape where the assigned
+        contact *is* the auditee, announced it straight to them. A finding is a
+        draft until a supervisor publishes it, and publishing is what brings the
+        auditee in; `test_publishing_notifies_the_auditee` covers that half.
+        """
         self.as_user(self.auditor).post(FINDINGS_URL, self.payload(
             assigned_to=self.supervisor.id, auditee=self.auditee.id,
         ), format='json')
-        for recipient in (self.supervisor, self.auditee):
-            self.assertTrue(
-                Notification.objects.filter(
-                    user=recipient, notification_type='finding',
-                ).exists(),
-                f'{recipient.role} was not notified',
-            )
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.supervisor, notification_type='finding',
+            ).exists(),
+            'the audit team was not told about the finding',
+        )
+        self.assertFalse(
+            Notification.objects.filter(
+                user=self.auditee, notification_type='finding',
+            ).exists(),
+            'the auditee was told about a finding nobody has published',
+        )
         self.assertEqual(notification_titles(self.auditor), [])
 
     def test_creation_is_audit_logged(self):
@@ -133,17 +152,209 @@ class FindingCreateTest(RoleFixtureMixin, TestCase):
         )
 
 
+class FindingProcedureLinkageTest(RoleFixtureMixin, TestCase):
+    """A finding is always raised from the procedure that failed.
+
+    The execution-linkage rule: procedures belong to a program, and a finding
+    belongs to a procedure that actually ran and found the control wanting.
+    Without the parent link a finding is an assertion with no test behind it —
+    nothing on the record says which piece of fieldwork produced it.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.engagement = make_engagement(
+            lead_auditor=self.auditor, department=self.department,
+        )
+        self.failed = make_failed_procedure(engagement=self.engagement)
+
+    def payload(self, **kwargs):
+        data = {
+            'engagement': self.engagement.id,
+            'title': 'Segregation of duties not enforced',
+            'description': 'The same user both raised and approved the payment.',
+            'severity': 'high',
+            'category': 'control_deficiency',
+        }
+        data.update(kwargs)
+        return data
+
+    def test_a_finding_without_a_procedure_is_refused(self):
+        response = self.as_user(self.auditor).post(
+            FINDINGS_URL, self.payload(), format='json',
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn('procedure', response.data)
+
+    def test_only_a_failed_procedure_can_raise_a_finding(self):
+        """A completed step means the control held, so it raises nothing."""
+        for status in ('pending', 'in_progress', 'completed', 'not_applicable'):
+            with self.subTest(status=status):
+                procedure = make_procedure(
+                    program=self.failed.program, status=status,
+                )
+                response = self.as_user(self.auditor).post(
+                    FINDINGS_URL,
+                    self.payload(procedure=procedure.id), format='json',
+                )
+                self.assertEqual(response.status_code, 400, response.data)
+                self.assertIn('procedure', response.data)
+
+    def test_a_procedure_from_another_engagement_is_refused(self):
+        other_engagement = make_engagement(
+            lead_auditor=self.auditor, department=self.department,
+        )
+        foreign = make_failed_procedure(engagement=other_engagement)
+        response = self.as_user(self.auditor).post(
+            FINDINGS_URL, self.payload(procedure=foreign.id), format='json',
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn('procedure', response.data)
+
+    def test_a_failed_procedure_of_this_engagement_is_accepted(self):
+        response = self.as_user(self.auditor).post(
+            FINDINGS_URL, self.payload(procedure=self.failed.id), format='json',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        finding = AuditFinding.objects.get(pk=response.data['id'])
+        self.assertEqual(finding.procedure_id, self.failed.id)
+        self.assertEqual(finding.engagement_id, self.engagement.id)
+
+
+class FindingPublishTest(RoleFixtureMixin, TestCase):
+    """The supervisor endorses a finding before the auditee ever sees it.
+
+    A finding is the audit team's own draft until a reviewer agrees it stands up.
+    Publishing is what starts the auditee's response clock.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.engagement = make_engagement(
+            lead_auditor=self.auditor, department=self.department,
+        )
+        self.finding = make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            auditee=self.auditee, status='draft',
+        )
+
+    def publish(self, user):
+        return self.as_user(user).post(f'{FINDINGS_URL}{self.finding.id}/publish/')
+
+    def test_publish_is_gated_on_approve_plans(self):
+        """The auditor who raised the finding cannot also endorse it."""
+        self.assert_status_by_role({
+            Role.ADMIN: 200,
+            Role.AUDIT_MANAGER: 200,
+            Role.SUPERVISOR: 200,
+            Role.AUDITOR: 403,
+            Role.AUDITEE: 403,
+        }, lambda client, role: client.post(
+            f'{FINDINGS_URL}{make_finding(
+                engagement=self.engagement, identified_by=self.auditor,
+                auditee=self.auditee, status="draft",
+            ).id}/publish/',
+        ))
+
+    def test_publishing_moves_the_finding_to_awaiting_the_auditee(self):
+        response = self.publish(self.supervisor)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.finding.refresh_from_db()
+        self.assertEqual(self.finding.status, AuditFinding.AWAITING_AUDITEE)
+
+    def test_publishing_notifies_the_auditee(self):
+        self.publish(self.supervisor)
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.auditee, notification_type='finding',
+            ).exists(),
+        )
+
+    def test_publishing_does_not_notify_the_publisher(self):
+        self.publish(self.supervisor)
+        self.assertEqual(notification_titles(self.supervisor), [])
+
+    def test_publishing_twice_is_refused(self):
+        self.assertEqual(self.publish(self.supervisor).status_code, 200)
+        self.assertEqual(self.publish(self.supervisor).status_code, 400)
+
+    def test_a_settled_finding_cannot_be_published(self):
+        for status in ('closed', 'resolved'):
+            with self.subTest(status=status):
+                settled = make_finding(
+                    engagement=self.engagement, identified_by=self.auditor,
+                    status=status,
+                )
+                response = self.as_user(self.supervisor).post(
+                    f'{FINDINGS_URL}{settled.id}/publish/',
+                )
+                self.assertEqual(response.status_code, 400, response.data)
+
+    def test_responding_to_a_published_finding_moves_it_on(self):
+        """The auditee's answer is the event that ends "awaiting response"."""
+        self.publish(self.supervisor)
+        response = self.as_user(self.auditee).post(
+            f'{FINDINGS_URL}{self.finding.id}/respond/',
+            {'management_response': 'Accounts were revoked on 12 August.'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.finding.refresh_from_db()
+        self.assertEqual(self.finding.status, 'in_progress')
+
+    def test_a_finding_not_awaiting_a_response_keeps_its_status(self):
+        """Revising a live finding's text is not a lifecycle move.
+
+        Its own finding rather than the shared one: `setUp` now hands out a draft,
+        which the auditee cannot reach at all, and `awaiting_auditee_response`
+        would move on respond by design. `in_progress` is the published state
+        where answering is a revision rather than an event.
+        """
+        live = make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            auditee=self.auditee, status='in_progress',
+        )
+        response = self.as_user(self.auditee).post(
+            f'{FINDINGS_URL}{live.id}/respond/',
+            {'management_response': 'First cut of the response.'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        live.refresh_from_db()
+        self.assertEqual(live.status, 'in_progress')
+
+    def test_an_auditee_can_dispute_a_published_finding(self):
+        self.publish(self.supervisor)
+        response = self.as_user(self.auditee).post(f'{FINDINGS_URL}{self.finding.id}/dispute/')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.finding.refresh_from_db()
+        self.assertEqual(self.finding.status, 'disputed')
+
+    def test_publishing_is_audit_logged(self):
+        self.publish(self.supervisor)
+        self.assertTrue(
+            AuditTrail.objects.filter(
+                model_name='AuditFinding', object_id=str(self.finding.id),
+                action='UPDATE',
+            ).exists(),
+        )
+
+
 class FindingUpdateTest(RoleFixtureMixin, TestCase):
     """Re-assignment notifies only the people who are newly on the hook."""
 
     def setUp(self):
         super().setUp()
+        # `in_progress` rather than the fixture default: these tests edit and
+        # transition the finding, and resolving needs a state the lifecycle
+        # allows out of — `awaiting_auditee_response` only moves on a response.
         self.finding = make_finding(
             engagement=make_engagement(
                 lead_auditor=self.auditor, department=self.department,
             ),
             identified_by=self.auditor,
             assigned_to=self.supervisor,
+            status='in_progress',
         )
         self.url = f'{FINDINGS_URL}{self.finding.id}/'
 
@@ -180,14 +391,14 @@ class FindingUpdateTest(RoleFixtureMixin, TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.finding.refresh_from_db()
-        self.assertEqual(self.finding.status, 'open')
+        self.assertEqual(self.finding.status, 'in_progress')
 
     def test_status_change_is_logged_with_the_transition(self):
         self.as_user(self.auditor).post(f'{self.url}resolve/')
         entry = AuditTrail.objects.filter(
             model_name='AuditFinding', object_id=str(self.finding.id), action='UPDATE',
         ).first()
-        self.assertEqual(entry.changes, {'status': ['open', 'resolved']})
+        self.assertEqual(entry.changes, {'status': ['in_progress', 'resolved']})
 
     def test_auditee_cannot_edit_a_finding_about_them(self):
         response = self.as_user(self.auditee).patch(
@@ -375,10 +586,25 @@ class FindingResponseTest(RoleFixtureMixin, TestCase):
 
     def test_the_response_does_not_move_the_finding_status(self):
         """Responding is not a lifecycle event — `dispute` is the action for
-        disagreement, and status belongs to the audit team's transitions."""
-        self.respond_as(self.auditee)
-        self.finding.refresh_from_db()
-        self.assertEqual(self.finding.status, 'open')
+        disagreement, and status belongs to the audit team's transitions.
+
+        On a finding that is *not* awaiting a response, which is the only case
+        where that holds: answering a published finding is what ends
+        `awaiting_auditee_response`, and that is asserted separately.
+        """
+        live = make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            assigned_to=self.supervisor, auditee=self.auditee,
+            status='in_progress',
+        )
+        response = self.as_user(self.auditee).post(
+            f'{FINDINGS_URL}{live.id}/respond/',
+            {'management_response': 'Management accepts the finding and will act.'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        live.refresh_from_db()
+        self.assertEqual(live.status, 'in_progress')
 
     def test_an_uninvolved_auditee_in_the_same_department_cannot_respond(self):
         response = self.respond_as(self.bystander)
@@ -519,6 +745,9 @@ class FindingLifecycleTest(RoleFixtureMixin, TestCase):
 
     def setUp(self):
         super().setUp()
+        # `in_progress`, because this class is about resolve / close / reopen /
+        # dispute and `awaiting_auditee_response` — the fixture's default, being
+        # the state a freshly published finding sits in — only moves on a response.
         self.finding = make_finding(
             engagement=make_engagement(
                 lead_auditor=self.auditor, department=self.department,
@@ -526,6 +755,7 @@ class FindingLifecycleTest(RoleFixtureMixin, TestCase):
             identified_by=self.auditor,
             assigned_to=self.supervisor,
             auditee=self.auditee,
+            status='in_progress',
         )
         self.base = f'{FINDINGS_URL}{self.finding.id}/'
 
@@ -620,7 +850,7 @@ class FindingLifecycleTest(RoleFixtureMixin, TestCase):
             .values_list('changes', flat=True)
         )
         self.assertEqual(changes, [
-            {'status': ['open', 'resolved']},
+            {'status': ['in_progress', 'resolved']},
             {'status': ['resolved', 'closed']},
             {'status': ['closed', 'in_progress']},
         ])
@@ -722,6 +952,151 @@ class FindingScopingTest(RoleFixtureMixin, TestCase):
         visible = self.visible_ids(self.auditee, EVIDENCE_URL)
         self.assertIn(mine.id, visible)
         self.assertNotIn(theirs.id, visible)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix='eeu-publish-gate-test-'))
+class FindingPublicationGateTest(RoleFixtureMixin, TestCase):
+    """A finding is invisible and inert to its auditee until it is published.
+
+    The supervisor's `publish` action existed and was correctly gated, but the
+    auditee scope had no status filter — so the review it represents was
+    decorative. The auditee could read the finding, comment on it, attach evidence
+    to it, answer it and dispute it from the moment it was typed, and the approval
+    step that was supposed to precede all of that had nothing to gate.
+
+    Every path is asserted twice: refused before publication, and reachable after
+    it. Without the second half these would pass if the endpoints were simply
+    broken for auditees.
+    """
+
+    @classmethod
+    def tearDownClass(cls):
+        from django.conf import settings
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        super().setUp()
+        self.engagement = make_engagement(
+            lead_auditor=self.auditor, department=self.department,
+        )
+        self.draft = make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            assigned_to=self.auditee, auditee=self.auditee, status='draft',
+        )
+
+    def publish(self):
+        response = self.as_user(self.supervisor).post(
+            f'{FINDINGS_URL}{self.draft.id}/publish/',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.draft.refresh_from_db()
+
+    def test_a_draft_is_absent_from_the_list_and_the_detail_route(self):
+        response = self.as_user(self.auditee).get(FINDINGS_URL)
+        self.assertNotIn(self.draft.id, {row['id'] for row in response.data['results']})
+        self.assertEqual(
+            self.as_user(self.auditee).get(f'{FINDINGS_URL}{self.draft.id}/').status_code,
+            404,
+        )
+
+    def test_a_legacy_open_finding_is_hidden_too(self):
+        """`open` is pre-publication as well.
+
+        Nothing creates it any more, but rows raised before this rule did, and
+        the publish action has always accepted it as a thing to publish *from*.
+        Treating it as visible because nothing writes it would leave the gate
+        open to any row an admin or a management command puts there.
+        """
+        legacy = make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            assigned_to=self.auditee, auditee=self.auditee, status='open',
+        )
+        self.assertEqual(
+            self.as_user(self.auditee).get(f'{FINDINGS_URL}{legacy.id}/').status_code,
+            404,
+        )
+
+    def test_the_auditee_actions_are_refused_on_a_draft(self):
+        """404, not 403 — `get_object()` cannot find it, so it is not disclosed
+        that the finding exists at all."""
+        client = self.as_user(self.auditee)
+        evidence = Evidence.objects.create(
+            finding=self.draft, title='Premature',
+            file=SimpleUploadedFile('early.txt', b'x', content_type='text/plain'),
+            uploaded_by=self.auditor,
+        )
+        for label, response in (
+            ('retrieve', client.get(f'{FINDINGS_URL}{self.draft.id}/')),
+            ('respond', client.post(
+                f'{FINDINGS_URL}{self.draft.id}/respond/',
+                {'management_response': 'Answering something unpublished.'},
+                format='json',
+            )),
+            ('dispute', client.post(f'{FINDINGS_URL}{self.draft.id}/dispute/')),
+            ('comment', client.post(
+                f'{FINDINGS_URL}{self.draft.id}/add-comment/',
+                {'comment': 'Commenting on something unpublished.'}, format='json',
+            )),
+            ('evidence', client.get(f'{EVIDENCE_URL}{evidence.id}/download/')),
+        ):
+            with self.subTest(action=label):
+                self.assertEqual(response.status_code, 404, response.data)
+
+        # Nothing landed on the way through.
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.management_response, '')
+        self.assertEqual(self.draft.status, 'draft')
+        self.assertFalse(FindingComment.objects.filter(finding=self.draft).exists())
+
+    def test_a_capa_cannot_be_proposed_for_a_draft(self):
+        """The create gate reads the finding in the payload rather than an object,
+        so it does not inherit the queryset's filter and asserts it separately."""
+        response = self.as_user(self.auditee).post('/api/corrective/actions/', {
+            'finding': self.draft.id,
+            'title': 'Premature remediation plan',
+            'description': 'Answering a finding nobody has published.',
+            'recommendation': 'Wait for the supervisor.',
+            'due_date': timezone.now().date() + timezone.timedelta(days=30),
+        }, format='json')
+        self.assertEqual(response.status_code, 403, response.data)
+        self.assertFalse(
+            CorrectiveAction.objects.filter(finding=self.draft).exists(),
+        )
+
+    def test_publishing_opens_every_one_of_them(self):
+        """The reverse control. Each refusal above has to become reachable, or
+        these tests would be satisfied by an endpoint that is broken outright."""
+        self.publish()
+
+        self.assertEqual(
+            self.as_user(self.auditee).get(f'{FINDINGS_URL}{self.draft.id}/').status_code,
+            200,
+        )
+        listing = self.as_user(self.auditee).get(FINDINGS_URL)
+        self.assertIn(
+            self.draft.id, {row['id'] for row in listing.data['results']},
+        )
+        self.assertEqual(
+            self.as_user(self.auditee).post(
+                f'{FINDINGS_URL}{self.draft.id}/add-comment/',
+                {'comment': 'We have corrected the postings.'}, format='json',
+            ).status_code,
+            201,
+        )
+        response = self.as_user(self.auditee).post(
+            f'{FINDINGS_URL}{self.draft.id}/respond/',
+            {'management_response': 'Management accepts the finding.'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+
+    def test_the_audit_team_still_sees_the_draft(self):
+        """The gate is on the auditee, not on the register."""
+        for user in (self.admin, self.manager, self.supervisor, self.auditor):
+            with self.subTest(role=user.role):
+                response = self.as_user(user).get(f'{FINDINGS_URL}{self.draft.id}/')
+                self.assertEqual(response.status_code, 200, response.data)
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix='eeu-findings-list-test-'))
@@ -826,4 +1201,299 @@ class FindingListPayloadTest(RoleFixtureMixin, TestCase):
         self.assertEqual(
             len(second.captured_queries), len(first.captured_queries),
             'query count grew with the number of findings',
+        )
+
+
+class FindingProvenanceAndOverdueTest(RoleFixtureMixin, TestCase):
+    """The two facts a finding cannot be read without, derived rather than stored.
+
+    `procedure_label` and `is_overdue` both existed as columns on other models and
+    as nothing here: the fieldwork a finding came from, and whether it is past its
+    own target date. Neither was written anywhere a page could show it, so a
+    register row said what had been found and nothing about where it came from or
+    how late it was.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.engagement = make_engagement(lead_auditor=self.auditor)
+        self.procedure = make_failed_procedure(
+            engagement=self.engagement, step_number='3.1',
+            title='Agree disbursements to the ledger',
+        )
+
+    def detail(self, finding):
+        return self.as_user(self.auditor).get(
+            f'{FINDINGS_URL}{finding.id}/'
+        ).data
+
+    # ── Which fieldwork produced this ──────────────────────────────────────
+    def test_the_source_procedure_is_named(self):
+        finding = make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            procedure=self.procedure,
+        )
+        label = self.detail(finding)['procedure_label']
+        self.assertEqual(label, '3.1. Agree disbursements to the ledger')
+
+    def test_a_row_with_no_parent_procedure_says_so_with_a_null(self):
+        """Not a placeholder string: a page can tell "none recorded" from a name,
+        which matters because the linkage rule post-dates these rows."""
+        finding = make_finding(
+            engagement=self.engagement, identified_by=self.auditor, procedure=None,
+        )
+        self.assertIsNone(self.detail(finding)['procedure_label'])
+
+    def test_the_label_is_on_the_list_row_too(self):
+        """The register's split-pane list is where an auditor reads the column."""
+        finding = make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            procedure=self.procedure,
+        )
+        response = self.as_user(self.auditor).get(FINDINGS_URL)
+        row = next(r for r in response.data['results'] if r['id'] == finding.id)
+        self.assertEqual(row['procedure_label'], '3.1. Agree disbursements to the ledger')
+
+    # ── Whether it is late ─────────────────────────────────────────────────
+    def yesterday(self):
+        return timezone.now().date() - timezone.timedelta(days=1)
+
+    def test_a_past_target_date_is_overdue(self):
+        finding = make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            procedure=self.procedure, target_resolution_date=self.yesterday(),
+        )
+        self.assertTrue(self.detail(finding)['is_overdue'])
+
+    def test_due_today_is_not_overdue(self):
+        """Same boundary as the CAPA overdue list: the day itself is still the
+        deadline, and flagging it early teaches people to ignore the flag."""
+        finding = make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            procedure=self.procedure, target_resolution_date=timezone.now().date(),
+        )
+        self.assertFalse(self.detail(finding)['is_overdue'])
+
+    def test_a_settled_finding_is_never_overdue(self):
+        """Resolved late is still late, but it is not *late* — it is done, and
+        flagging it invites someone to chase work that has been closed out."""
+        for status in ('resolved', 'closed'):
+            with self.subTest(status=status):
+                finding = make_finding(
+                    engagement=self.engagement, identified_by=self.auditor,
+                    procedure=self.procedure, status=status,
+                    target_resolution_date=self.yesterday(),
+                )
+                self.assertFalse(self.detail(finding)['is_overdue'])
+
+    def test_no_target_date_is_not_a_deadline(self):
+        finding = make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            procedure=self.procedure, target_resolution_date=None,
+        )
+        self.assertFalse(self.detail(finding)['is_overdue'])
+
+    def test_a_disputed_finding_past_its_date_is_still_overdue(self):
+        """A dispute is not an answer: the finding is unsettled, so it is late."""
+        finding = make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            procedure=self.procedure, status='disputed',
+            target_resolution_date=self.yesterday(),
+        )
+        self.assertTrue(self.detail(finding)['is_overdue'])
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix='eeu-finding-auditee-test-'))
+class FindingAuditeeResolutionTest(RoleFixtureMixin, TestCase):
+    """A finding raised through the register must have someone to answer it.
+
+    The register's create form sends no auditee, `AuditEngagement` had no field to
+    inherit one from, and so every finding raised through the UI landed with
+    `auditee = NULL` and `assigned_to = NULL`. Nothing failed loudly — the auditee
+    scope falls back to `engagement.department`, so the finding still appeared in
+    the right department's register — but the object-level gate on respond /
+    add-comment / upload-evidence / dispute matches against those two fields, so
+    all four 403'd, and `publish` drew its notification recipients from the same
+    two NULLs and told nobody. The finding was visible to exactly the people who
+    could not act on it.
+
+    The E2E fixtures hid this by naming the auditee by hand at the call site;
+    these tests drive the payload shape the *form* actually sends.
+    """
+
+    @classmethod
+    def tearDownClass(cls):
+        from django.conf import settings
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        super().setUp()
+        self.engagement = make_engagement(
+            lead_auditor=self.auditor, department=self.department,
+            supervisor=self.supervisor, auditee=self.auditee,
+        )
+        self.failed_procedure = make_failed_procedure(engagement=self.engagement)
+
+    def payload(self, **kwargs):
+        """What FindingsPage.handleCreateFinding posts: no auditee, no assignee."""
+        data = {
+            'engagement': self.engagement.id,
+            'procedure': self.failed_procedure.id,
+            'title': 'Stock issue vouchers unreconciled',
+            'description': 'No reconciliation for two months.',
+            'severity': 'medium',
+            'category': 'operational',
+            'recommendation': 'Resume the monthly count.',
+        }
+        data.update(kwargs)
+        return data
+
+    def create(self, **kwargs):
+        response = self.as_user(self.auditor).post(
+            FINDINGS_URL, self.payload(**kwargs), format='json',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        return AuditFinding.objects.get(pk=response.data['id'])
+
+    def bare_engagement_finding(self, title):
+        """One created against an engagement that names no representative."""
+        bare = make_engagement(lead_auditor=self.auditor, department=self.department)
+        procedure = make_failed_procedure(engagement=bare)
+        response = self.as_user(self.auditor).post(
+            FINDINGS_URL,
+            {'engagement': bare.id, 'procedure': procedure.id, 'title': title,
+             'description': 'Seeded against an engagement with no representative.',
+             'severity': 'low', 'category': 'other',
+             'recommendation': 'Name a representative.'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        return AuditFinding.objects.get(pk=response.data['id'])
+
+    def test_a_new_finding_inherits_the_engagements_auditee(self):
+        self.assertEqual(self.create().auditee, self.auditee)
+
+    def test_an_explicit_auditee_wins_over_the_engagements(self):
+        other = self.make_user(Role.AUDITEE, department=self.department)
+        self.assertEqual(self.create(auditee=other.id).auditee, other)
+
+    def test_an_engagement_without_an_auditee_does_not_break_creation(self):
+        """No honest value to inherit, so it stays blank rather than failing or
+        inventing an addressee. The engagement form warns about this."""
+        self.assertIsNone(
+            self.bare_engagement_finding('No representative named').auditee,
+        )
+
+    def test_the_inherited_auditee_can_answer_the_finding(self):
+        """The dead end itself, end to end: raise it the way the form does,
+        endorse it, and confirm the auditee can then act on it.
+
+        All four of these 403'd before the engagement named an auditee — the
+        finding was readable and inert.
+        """
+        finding = self.create()
+        published = self.as_user(self.supervisor).post(
+            f'{FINDINGS_URL}{finding.id}/publish/',
+        )
+        self.assertEqual(published.status_code, 200, published.data)
+
+        client = self.as_user(self.auditee)
+        self.assertEqual(
+            client.post(f'{FINDINGS_URL}{finding.id}/add-comment/',
+                        {'comment': 'We have reinstituted the count.'},
+                        format='json').status_code,
+            201,
+        )
+        self.assertEqual(
+            client.post(f'{FINDINGS_URL}{finding.id}/respond/',
+                        {'management_response': 'Count resumed.'},
+                        format='json').status_code,
+            200,
+        )
+        self.assertEqual(
+            client.post(f'{FINDINGS_URL}{finding.id}/upload-evidence/',
+                        {'title': 'Count sheet', 'evidence_type': 'document',
+                         'file': SimpleUploadedFile('count.txt', b'counted',
+                                                    content_type='text/plain')},
+                        format='multipart').status_code,
+            201,
+        )
+        self.assertEqual(
+            client.post(f'{FINDINGS_URL}{finding.id}/dispute/').status_code,
+            200,
+        )
+
+    def test_a_fresh_finding_reads_as_pending_supervisor_review(self):
+        """The value stays `draft`; only the label moved. It names the queue the
+        finding is sitting in — the supervisor's — rather than the raiser's."""
+        finding = self.create()
+        self.assertEqual(finding.status, 'draft')
+        self.assertEqual(finding.get_status_display(), 'Pending Supervisor Review')
+
+    # ── Who is told ──────────────────────────────────────────────────────
+
+    def test_raising_a_finding_asks_the_engagements_supervisor_to_review_it(self):
+        self.create()
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.supervisor, notification_type='approval_needed',
+            ).exists(),
+            f'the reviewer was never told: {notification_titles(self.supervisor)}',
+        )
+
+    def test_the_reviewer_falls_back_to_the_approvers_when_none_is_named(self):
+        """An engagement with no supervisor is an unassigned review, not an
+        unreviewable one — `publish` is gated on the capability, so someone can
+        still act. Leaving them untold would be the same dead end one level up."""
+        self.bare_engagement_finding('Nobody assigned to review')
+        # The fixture's supervisor and manager both hold APPROVE_PLANS; the raiser
+        # is an auditor, who does not.
+        for reviewer in (self.supervisor, self.manager):
+            self.assertTrue(
+                Notification.objects.filter(
+                    user=reviewer, notification_type='approval_needed',
+                ).exists(),
+                f'{reviewer.role} holds APPROVE_PLANS but was not told',
+            )
+
+    def test_the_raiser_is_not_told_to_review_their_own_finding(self):
+        """A supervisor may log a finding themselves; the capability is theirs."""
+        self.as_user(self.supervisor).post(
+            FINDINGS_URL, self.payload(title='Raised by the reviewer'), format='json',
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.supervisor, notification_type='approval_needed',
+            ).count(),
+            0,
+        )
+
+    def test_publishing_notifies_the_inherited_auditee(self):
+        finding = self.create()
+        Notification.objects.all().delete()
+        self.as_user(self.supervisor).post(f'{FINDINGS_URL}{finding.id}/publish/')
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.auditee, notification_type='finding',
+            ).exists(),
+            'the person the finding is addressed to was not told it was published',
+        )
+
+    def test_publishing_still_notifies_an_engagement_level_auditee(self):
+        """Rows stamped before the inheritance existed carry no auditee of their
+        own. The engagement's is the next best addressee, and the department's
+        auditees the last resort — publishing must not be able to mean
+        "published into the void"."""
+        finding = make_finding(
+            engagement=self.engagement, identified_by=self.auditor, status='draft',
+        )
+        self.assertIsNone(finding.auditee)
+        Notification.objects.all().delete()
+        self.as_user(self.supervisor).post(f'{FINDINGS_URL}{finding.id}/publish/')
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.auditee, notification_type='finding',
+            ).exists(),
+            'an unaddressed finding was published and nobody was told',
         )

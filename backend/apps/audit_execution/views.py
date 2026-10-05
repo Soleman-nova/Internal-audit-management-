@@ -15,11 +15,12 @@ from apps.common.permissions import (
     CanWriteAudit, RequiresCapability, InvolvedPartyOrCapability, APPROVE_PLANS,
 )
 from apps.common.audit_utils import log_audit
-from apps.common.scoping import AuditeeScopeMixin
+from apps.common.blockers import BLOCKERS_NAMED, describe_blockers
+from apps.common.scoping import AuditeeScopeMixin, RegionScopeMixin
 from apps.notifications.services import notify, notify_roles
 
 
-class AuditProgramViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
+class AuditProgramViewSet(RegionScopeMixin, AuditeeScopeMixin, viewsets.ModelViewSet):
     queryset = AuditProgram.objects.select_related(
         'engagement', 'engagement__lead_auditor', 'prepared_by', 'approved_by'
     ).prefetch_related('procedures').all()
@@ -28,7 +29,9 @@ class AuditProgramViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
 
     # The program is the audit team's plan of attack for an engagement, so an
     # auditee sees it only where the engagement is in their department, or where
-    # they prepared it.
+    # they prepared it. A regional FPA auditor sees only programs whose engagement
+    # is tagged with their region.
+    region_scope_fields = ('engagement__region_id',)
     auditee_scope_fields = ('engagement__department_id',)
     auditee_scope_personal_fields = ('prepared_by',)
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -110,22 +113,103 @@ class AuditProgramViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
             )
         return Response({'detail': 'Program submitted for review.'})
 
+    @action(detail=True, methods=['post'], url_path='complete')
+    def complete(self, request, pk=None):
+        """Close the program — the only route to `completed`.
 
-class AuditProcedureViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
+        Exists because `status` is read-only (see `AuditProgramSerializer`).
+        Before that, moving a program to `completed` was something a plain PATCH
+        could do, which meant it was also something nothing checked: a program
+        whose steps were still pending could be closed by any auditor, and the
+        execution board — which locks every procedure control on `completed` —
+        then presented fieldwork that had never happened as finished and
+        immutable.
+
+        So this route checks the fieldwork before honouring it. `failed` and
+        `not_applicable` count as finished: a step that found the control wanting
+        is an outcome, not outstanding work, and one of them is what produces the
+        findings this program exists to gather.
+        """
+        program = self.get_object()
+        unfinished = program.procedures.exclude(
+            status__in=AuditProcedure.TESTED_STATUSES
+        )
+        remaining = unfinished.count()
+        if remaining:
+            named = list(
+                unfinished.order_by('order', 'step_number')
+                .values_list('step_number', flat=True)[:BLOCKERS_NAMED]
+            )
+            return Response(
+                {'detail': f'Cannot complete this program: {remaining} procedure(s) '
+                           f'have no recorded outcome '
+                           f'({describe_blockers(named, remaining)}). Mark each one '
+                           f'completed, failed or not applicable first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        prev_status = program.status
+        with transaction.atomic():
+            program.status = 'completed'
+            program.save()
+            log_audit(request, 'UPDATE', program, changes={'status': [prev_status, 'completed']})
+            lead = program.engagement.lead_auditor if program.engagement else None
+            if lead and lead != request.user:
+                notify(
+                    lead,
+                    'system',
+                    f'Fieldwork program completed: {program.title}',
+                    f'The audit program "{program.title}" was marked completed by '
+                    f'{request.user.get_full_name() or request.user.username}.',
+                    f'/execution?program={program.id}',
+                )
+        return Response(self.get_serializer(program).data)
+
+    @action(detail=True, methods=['post'], url_path='reopen')
+    def reopen(self, request, pk=None):
+        """Return a completed program to `approved` so its steps can be revisited.
+
+        The inverse of `complete`, and deliberately a separate action rather than
+        an editable status: `completed` is what locks every procedure control on
+        the execution board, so undoing it is a decision somebody makes, not a
+        field somebody edits.
+        """
+        program = self.get_object()
+        if program.status != 'completed':
+            return Response(
+                {'detail': f'Only a completed program can be reopened; this one '
+                           f'is "{program.get_status_display()}".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        prev_status = program.status
+        with transaction.atomic():
+            program.status = 'approved'
+            program.save()
+            log_audit(request, 'UPDATE', program, changes={'status': [prev_status, 'approved']})
+        return Response(self.get_serializer(program).data)
+
+
+class AuditProcedureViewSet(RegionScopeMixin, AuditeeScopeMixin, viewsets.ModelViewSet):
     queryset = AuditProcedure.objects.select_related(
         'program', 'program__engagement', 'program__engagement__lead_auditor',
         'assigned_to', 'completed_by'
-    ).all()
+    ).prefetch_related('findings').all()
     serializer_class = AuditProcedureSerializer
     permission_classes = [CanWriteAudit]
 
     # Two hops to the department: a procedure belongs to a program, which belongs
     # to an engagement. An auditee also keeps sight of any step assigned to them,
     # so a checklist item they own stays workable even if it is filed elsewhere.
+    # A regional FPA auditor sees only procedures from engagements in their region.
+    region_scope_fields = ('program__engagement__region_id',)
     auditee_scope_fields = ('program__engagement__department_id',)
     auditee_scope_personal_fields = ('assigned_to',)
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['status', 'program', 'procedure_type', 'assigned_to']
+    # `program__engagement` is the hop the findings form needs: a finding is
+    # raised from a *failed* procedure of the engagement it belongs to, and the
+    # form has the engagement id, not the program id.
+    filterset_fields = [
+        'status', 'program', 'program__engagement', 'procedure_type', 'assigned_to',
+    ]
     search_fields = ['title', 'description', 'risk_area']
     ordering = ['order', 'step_number']
 
@@ -142,6 +226,37 @@ class AuditProcedureViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
             if procedure.status != prev_status:
                 changes = {'status': [prev_status, procedure.status]}
             log_audit(self.request, 'UPDATE', procedure, changes=changes)
+            # A step that failed — or that was ruled inapplicable, which removes it
+            # from the fieldwork without answering it — is the trigger event for
+            # the whole findings flow, so it is announced on the same terms
+            # `complete` announces its own outcome. Without this the engagement
+            # lead heard about steps that passed and nothing about the ones that
+            # need a finding raised against them, which is the one they have to
+            # act on.
+            if procedure.status in AuditProcedure.OUTCOME_LABELS:
+                self._announce_outcome(
+                    procedure, AuditProcedure.OUTCOME_LABELS[procedure.status],
+                )
+
+    def _announce_outcome(self, procedure, label):
+        """Tell the engagement's lead auditor how one of their steps ended.
+
+        One place for both routes that finish a step — `complete` and a status
+        edit — so the two cannot drift apart in who they tell or how. Skipped
+        when the lead is the one doing it: they are already looking at it.
+        """
+        engagement = procedure.program.engagement if procedure.program else None
+        lead = engagement.lead_auditor if engagement else None
+        if not lead or lead == self.request.user:
+            return
+        actor = self.request.user.get_full_name() or self.request.user.username
+        notify(
+            lead,
+            'system',
+            f'Procedure {label}: {procedure.title}',
+            f'Procedure "{procedure.title}" was marked {label} by {actor}.',
+            f'/execution?program={procedure.program_id}',
+        )
 
     def perform_destroy(self, instance):
         with transaction.atomic():
@@ -164,23 +279,13 @@ class AuditProcedureViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
             procedure.save()
             log_audit(request, 'UPDATE', procedure, changes={'status': [prev_status, 'completed']})
             # Notify the engagement lead that a procedure was completed.
-            engagement = procedure.program.engagement if procedure.program else None
-            lead = engagement.lead_auditor if engagement else None
-            if lead and lead != request.user:
-                notify(
-                    lead,
-                    'system',
-                    f'Procedure completed: {procedure.title}',
-                    f'Procedure "{procedure.title}" was marked completed by '
-                    f'{request.user.get_full_name() or request.user.username}.',
-                    f'/execution?program={procedure.program_id}',
-                )
+            self._announce_outcome(procedure, 'completed')
         # Return the updated record, not just a message, so the client can merge
         # completed_by/completed_at into its row without a second round trip.
         return Response(self.get_serializer(procedure).data)
 
 
-class WorkingPaperViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
+class WorkingPaperViewSet(RegionScopeMixin, AuditeeScopeMixin, viewsets.ModelViewSet):
     queryset = WorkingPaper.objects.select_related(
         'engagement', 'procedure', 'prepared_by', 'reviewed_by'
     ).all()
@@ -190,6 +295,8 @@ class WorkingPaperViewSet(AuditeeScopeMixin, viewsets.ModelViewSet):
     # Working papers are the audit team's own evidence — the most sensitive thing
     # an auditee could be handed, since it is the documented basis for the
     # findings against them and may cover engagements they are not part of.
+    # A regional FPA auditor sees only papers from engagements in their region.
+    region_scope_fields = ('engagement__region_id',)
     auditee_scope_fields = ('engagement__department_id',)
     auditee_scope_personal_fields = ('prepared_by',)
     filter_backends = [DjangoFilterBackend, SearchFilter]
