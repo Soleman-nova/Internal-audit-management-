@@ -2,10 +2,13 @@
 Seed demo OPEN findings across the in-flight 2026 engagements.
 
 Why this exists: the dashboard's "Findings by Severity" donut and the "Open
-Findings" KPI plot only findings with status ``open``. The live demo dataset had
-advanced every finding to closed/draft, so those open-only panels rendered empty
-for every role. Findings here default to ``open`` (see AuditFinding.status), so
-a few realistic open rows bring the dashboard back to life.
+Findings" KPI plot only findings that are not yet settled. The live demo dataset
+had advanced every finding to closed, so those panels rendered empty for every
+role. A few realistic unresolved rows bring the dashboard back to life.
+
+These are seeded ``awaiting_auditee_response`` rather than ``draft``: they are
+assigned to the auditee, so the point is that the auditee can open them and
+respond. ``draft`` is pre-publication and stays out of the auditee's reach.
 
 Rerunnable: an engagement already carrying a finding with the same title is
 skipped, and reference numbers come from the shared ``FND-YYYY-NNNN`` allocator
@@ -169,7 +172,7 @@ class Command(BaseCommand):
                 description=f'{condition} {recommendation}',
                 severity=severity,
                 category=category,
-                status='open',
+                status=AuditFinding.AWAITING_AUDITEE,
                 condition=condition,
                 criteria=criteria,
                 cause=cause,

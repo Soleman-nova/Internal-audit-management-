@@ -5,22 +5,39 @@ core directorates, each with a Head account, directorate-specific audit
 universe items, risk assessments, audit plans, and engagements (including
 specialized Technical Audit parameters and the Planning & Performance
 consolidated master plan).
+
+The FPA directorate is subdivided into two branches:
+
+  FPA-STAFF   Financial & Performance Audit Staff (HQ auditors)
+  FPA-RAC     Regional Audit Coordination
+    FPA-RGN-<XX>  one per EEU region, carrying ``region`` pointing at the
+                  matching corporate REGION department and
+                  ``head_title='Regional Financial & Performance Auditor'``
+
+This command must be run after ``seed_org_structure`` for the per-region units
+to be created; if the RGN-* departments are absent it skips them with a
+warning.
 """
 import datetime
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from apps.accounts.models import User, Department, Role
 from apps.audit_planning.models import AuditUniverse, AuditPlan, AuditEngagement, AuditTeamMember
-from apps.risk_assessment.models import RiskParameter, RiskAssessment
+from apps.risk_assessment.models import RiskAssessment
+from apps.risk_assessment.seed import ensure_risk_parameters
+from .seed_org_structure import REGIONS, REGION_CODE_PREFIX
 
 
-def backfill_audit_fields(dept, name_am='', head_title='', head_title_am=''):
+def backfill_audit_fields(dept, name_am='', head_title='', head_title_am='', region=None):
     """Fill in fields added after this command first ran.
 
     ``get_or_create`` defaults are ignored for rows that already exist, so a
     database seeded before ``unit_type``/``name_am``/``head_title`` existed would
     keep the model defaults forever. Only blank fields are written, so manual
     edits made through the admin or API are preserved.
+
+    ``region`` is only written when explicitly passed and the column is currently
+    null — same blank-only rule, so an admin correction is preserved.
     """
     updates = {}
     if dept.unit_type != Department.AUDIT:
@@ -31,6 +48,8 @@ def backfill_audit_fields(dept, name_am='', head_title='', head_title_am=''):
         updates['head_title'] = head_title
     if head_title_am and not dept.head_title_am:
         updates['head_title_am'] = head_title_am
+    if region is not None and dept.region_id is None:
+        updates['region'] = region
     if updates:
         for field, value in updates.items():
             setattr(dept, field, value)
@@ -139,6 +158,111 @@ class Command(BaseCommand):
             else:
                 backfill_audit_fields(dept, name_am=d['name_am'])
 
+        # ── 1b. FPA subdivision — HQ staff branch + Regional Audit Coordination ─
+        fpa = dept_map['FPA']
+
+        fpa_staff, created = Department.objects.get_or_create(
+            code='FPA-STAFF',
+            defaults={
+                'name': 'Financial & Performance Audit Staff',
+                'name_am': 'የፋይናንስና የአፈጻጸም ኦዲት ሠራተኞች',
+                'directorate_type': 'FPA',
+                'unit_type': Department.AUDIT,
+                'head_title': 'Financial & Performance Auditor',
+                'head_title_am': 'የፋይናንስና የአፈጻጸም ኦዲተር',
+                'staff_count': 8,
+                'description': 'HQ auditor staff of the Financial & Performance Audit Directorate.',
+                'parent': fpa,
+            },
+        )
+        if created:
+            self.stdout.write(f'  Created FPA branch: {fpa_staff.name}')
+        else:
+            backfill_audit_fields(
+                fpa_staff,
+                name_am='የፋይናንስና የአፈጻጸም ኦዲት ሠራተኞች',
+                head_title='Financial & Performance Auditor',
+                head_title_am='የፋይናንስና የአፈጻጸም ኦዲተር',
+            )
+
+        fpa_rac, created = Department.objects.get_or_create(
+            code='FPA-RAC',
+            defaults={
+                'name': 'Regional Audit Coordination',
+                'name_am': 'ሪጅን ኦዲት ቅንጅት',
+                'directorate_type': 'FPA',
+                'unit_type': Department.AUDIT,
+                'head_title': 'Regional Coordination Audit Manager',
+                'head_title_am': 'የሪጅን ቅንጅት ኦዲት ሥራ አስኪያጅ',
+                'staff_count': 4,
+                'description': 'Coordinates and oversees the 32 regional FPA audit units.',
+                'parent': fpa,
+            },
+        )
+        if created:
+            self.stdout.write(f'  Created FPA branch: {fpa_rac.name}')
+        else:
+            backfill_audit_fields(
+                fpa_rac,
+                name_am='ሪጅን ኦዲት ቅንጅት',
+                head_title='Regional Coordination Audit Manager',
+                head_title_am='የሪጅን ቅንጅት ኦዲት ሥራ አስኪያጅ',
+            )
+
+        # Per-region FPA audit units — one per EEU operating region.
+        # Requires seed_org_structure to have run first (RGN-* departments must exist).
+        # If they are absent, skip with a warning rather than aborting — this mirrors
+        # how the command already tolerates a missing corporate tree by letting IAEO
+        # be a root.
+        region_units_skipped = False
+        for region_code, region_name, region_name_am in REGIONS:
+            rgn_dept_code = f'{REGION_CODE_PREFIX}{region_code}'
+            rgn_dept = Department.objects.filter(code=rgn_dept_code).first()
+            if rgn_dept is None:
+                if not region_units_skipped:
+                    self.stdout.write(self.style.WARNING(
+                        f'  Warning: corporate region {rgn_dept_code} not found. '
+                        f'Run seed_org_structure first, then re-run this command '
+                        f'to create the per-region FPA audit units.'
+                    ))
+                    region_units_skipped = True
+                continue
+
+            unit_code = f'FPA-RGN-{region_code}'
+            # Composed Amharic: e.g. "የአዳማ ሪጅን ፋይናንስና አፈጻጸም ኦዲት"
+            # Note: these composed strings should be eyeballed by an Amharic reader
+            # before shipping — they follow the pattern established in seed_org_structure
+            # for region names but apply it to the audit domain.
+            name_am_unit = f'የ{region_name_am} ሪጅን ፋይናንስና አፈጻጸም ኦዲት'
+            unit, created = Department.objects.get_or_create(
+                code=unit_code,
+                defaults={
+                    'name': f'{region_name} Region Financial & Performance Audit',
+                    'name_am': name_am_unit,
+                    'directorate_type': 'FPA',
+                    'unit_type': Department.AUDIT,
+                    'head_title': 'Regional Financial & Performance Auditor',
+                    'head_title_am': f'የ{region_name_am} ሪጅን ፋይናንስና አፈጻጸም ኦዲተር',
+                    'staff_count': 1,
+                    'description': (
+                        f'FPA regional audit unit covering {region_name} Region '
+                        f'(corporate code {rgn_dept_code}).'
+                    ),
+                    'parent': fpa_rac,
+                    'region': rgn_dept,
+                },
+            )
+            if created:
+                self.stdout.write(f'  Created FPA regional unit: {unit.name}')
+            else:
+                backfill_audit_fields(
+                    unit,
+                    name_am=name_am_unit,
+                    head_title='Regional Financial & Performance Auditor',
+                    head_title_am=f'የ{region_name_am} ሪጅን ፋይናንስና አፈጻጸም ኦዲተር',
+                    region=rgn_dept,
+                )
+
         # ── 2. Create Directorate Head user accounts ─────────────────────────
         head_accounts = [
             {
@@ -198,20 +322,10 @@ class Command(BaseCommand):
             heads[h['department'].code] = user
 
         # ── 3. Ensure Risk Parameters exist ──────────────────────────────────
-        risk_params = [
-            {'name': 'Financial Impact', 'description': 'Potential direct or indirect monetary loss to EEU', 'weight': 0.3, 'category': 'financial'},
-            {'name': 'Operational Disruption', 'description': 'Degree of interruption to power supply or utility services', 'weight': 0.25, 'category': 'operational'},
-            {'name': 'Compliance Violations', 'description': 'Exposure to regulatory penalties or audits exceptions', 'weight': 0.2, 'category': 'compliance'},
-            {'name': 'Process Complexity', 'description': 'Internal controls complexity and number of actors', 'weight': 0.15, 'category': 'operational'},
-            {'name': 'System Automation', 'description': 'Lack of automated reconciliation or reliance on manual work', 'weight': 0.1, 'category': 'it'},
-            {'name': 'Technical Asset Criticality', 'description': 'Criticality of substations, feeders, and transmission assets', 'weight': 0.2, 'category': 'operational'},
-            {'name': 'Energy Loss Exposure', 'description': 'Exposure to technical and commercial energy losses', 'weight': 0.15, 'category': 'operational'},
-        ]
-        for rp in risk_params:
-            RiskParameter.objects.get_or_create(
-                name=rp['name'],
-                defaults={'description': rp['description'], 'weight': rp['weight'], 'category': rp['category']},
-            )
+        # The canonical list lives in apps.risk_assessment.seed, so this command
+        # and ``seed_data`` install the same policy rather than two overlapping
+        # variants of it (+27% vs +20% uplift on identical scores).
+        ensure_risk_parameters()
 
         # ── 4. Directorate-specific Audit Universe items ─────────────────────
         universe_data = [

@@ -9,6 +9,7 @@ matrix for UI gating but never replaces this enforcement.
 Roles (from apps.accounts.models.Role):
     admin, audit_manager, supervisor, auditor, auditee
 """
+from django.db.models import Q
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 
@@ -166,3 +167,57 @@ class InvolvedPartyOrCapability(BasePermission):
             (cls,),
             {'capability': capability, 'object_fields': tuple(object_fields)},
         )
+
+
+class CanProposeCorrectiveAction(BasePermission):
+    """WRITE_AUDIT holders, or the auditee a finding is addressed to.
+
+    Creation is the one write with no object to check against, so this reads the
+    finding named in the payload instead and applies the same scope the findings
+    register uses to decide what an auditee may see. An auditee holds no
+    capabilities, so the class-level ``CanWriteAudit`` gate meant the audit team
+    wrote the auditee's own remediation plan on their behalf — the same
+    inversion ``respond``, ``dispute`` and ``add-comment`` exist to undo, except
+    that those three have an object to hang the check on and this one does not.
+
+    Kept deliberately in step with
+    ``AuditFindingViewSet.get_queryset``: an auditee who can *read* a finding is
+    exactly the set who may answer for it — including the publication rule, so an
+    unpublished finding is not answerable either.
+    """
+
+    message = ('You can only propose a corrective action for a finding that '
+               'concerns you.')
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if has_capability(user, WRITE_AUDIT):
+            return True
+        if getattr(user, 'role', None) != 'auditee':
+            return False
+        finding_id = request.data.get('finding')
+        return bool(finding_id) and self._finding_concerns(user, finding_id)
+
+    @staticmethod
+    def _finding_concerns(user, finding_id):
+        # Local import: this module is imported by every app's views, and
+        # findings sits at the bottom of the model dependency chain.
+        from apps.findings.models import AuditFinding
+
+        scope = Q(auditee=user) | Q(assigned_to=user)
+        if user.department_id:
+            scope |= Q(engagement__department_id=user.department_id)
+        try:
+            # This does not go through the viewset's queryset the way `respond`
+            # and `dispute` do, so the publication filter has to be repeated here
+            # rather than inherited — an auditee could otherwise formulate a plan
+            # for a finding still sitting unreviewed in the supervisor's queue.
+            return AuditFinding.objects.filter(scope, pk=finding_id).exclude(
+                status__in=AuditFinding.PRE_PUBLICATION_STATUSES,
+            ).exists()
+        except (TypeError, ValueError):
+            # A non-numeric id from the client. "Not yours" rather than a 500;
+            # the serializer is the layer that should reject the value.
+            return False

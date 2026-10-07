@@ -6,10 +6,18 @@ job), the ``fail_stuck_reports`` sweep that closes out compiles a restart
 abandoned, a real compile of each of the three formats, the authenticated
 ``export`` download, and the ``analytics`` month buckets — including the
 February and year-boundary cases the old ``30 * i`` day arithmetic got wrong.
+
+The compile tests also read the generated files back: the objectives/scope
+resolution (engagement, else the program, else a written placeholder) is asserted
+through the Word and Excel output, the PDF's cover text is recovered by inflating
+its FlateDecode streams, and the table formatting the overflow fix introduced
+(wrapped Excel cells, pinned Word columns) is asserted on the files themselves.
 """
 import datetime
+import re
 import shutil
 import tempfile
+import zlib
 from io import StringIO
 from unittest import mock
 
@@ -23,7 +31,7 @@ from django.utils import timezone
 from apps.accounts.models import AuditTrail, Role
 from apps.common.role_fixtures import (
     RoleFixtureMixin, make_action, make_engagement, make_finding,
-    make_risk_assessment,
+    make_program, make_risk_assessment,
 )
 from apps.findings.models import AuditFinding
 from apps.notifications.models import Notification
@@ -205,13 +213,13 @@ class ReportGenerationTest(RoleFixtureMixin, TestCase):
         make_action(finding=finding, owner=self.auditee, assigned_by=self.auditor)
         make_risk_assessment(department=self.department, assessed_by=self.auditor)
 
-    def generate(self, report_format):
+    def generate(self, report_format, engagement=None):
         from apps.reports.views import GeneratedReportViewSet
 
         report = GeneratedReport.objects.create(
             title=f'Engagement Report {report_format}',
             format=report_format,
-            engagement=self.engagement,
+            engagement=engagement or self.engagement,
             generated_by=self.auditor,
         )
         GeneratedReportViewSet().generate_report_file(report)
@@ -228,6 +236,84 @@ class ReportGenerationTest(RoleFixtureMixin, TestCase):
                 model_name='GeneratedReport', object_id=str(report.id), action='EXPORT',
             ).exists()
         )
+
+    # ── Reading the generated files back ────────────────────────────
+    # Both defects these cover shipped because the old fixture asserted only that
+    # each format *compiled* — a report with a blank objectives section and a
+    # title painting over the next column compiles perfectly well.
+
+    def word_text(self, report):
+        """Every paragraph in the .docx, as one string."""
+        from docx import Document
+
+        return '\n'.join(p.text for p in Document(report.file.path).paragraphs)
+
+    def excel_values(self, report):
+        """Every string cell in the .xlsx, across all sheets."""
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(report.file.path)
+        return [
+            cell.value
+            for sheet in workbook.worksheets
+            for row in sheet.iter_rows()
+            for cell in row
+            if isinstance(cell.value, str)
+        ]
+
+    def content_text(self, report):
+        """The readable text of the Word or Excel report."""
+        if report.format == 'word':
+            return self.word_text(report)
+        return '\n'.join(self.excel_values(report))
+
+    def pdf_text(self, report):
+        """The page content of a reportlab PDF, decoded.
+
+        reportlab writes each page's content stream as ``[/ASCII85Decode
+        /FlateDecode]``, so the drawn text is only visible after taking both
+        layers off. No PDF-reading library is installed (pypdf/pdfminer are absent
+        from requirements.txt), so this unwraps the streams by hand — enough to
+        prove a string was drawn, and no more: it says nothing about *where* on the
+        page it landed, so PDF layout is still checked by eye (see TESTING.md).
+        """
+        import base64
+
+        raw = report.file.read()
+        chunks = []
+        for match in re.finditer(rb'stream\r?\n(.*?)endstream', raw, re.S):
+            data = match.group(1).rstrip(b'\r\n')
+            # The base85 terminator sits flush against `endstream`.
+            data = data.removesuffix(b'~>')
+            try:
+                chunks.append(zlib.decompress(base64.a85decode(data)).decode('latin-1'))
+            except (zlib.error, ValueError):
+                continue  # another filter's stream — fonts and images land here
+        return ''.join(chunks)
+
+    def pdf_drawn_text(self, report):
+        """Every string a reportlab PDF actually draws, concatenated.
+
+        The content stream is a sequence of operators, so the words have to be
+        lifted out of their `(...) Tj` operands — the rest is positioning and
+        colour, and it is full of letters (`Tj`, `Tm`, `BT`) that would otherwise
+        land in the middle of the text being searched for. Parenthesized literals
+        are the only strings in a content stream, and the backslash escapes in them
+        are PDF string syntax rather than content.
+        """
+        literals = re.findall(r'\((?:\\.|[^\\()])*\)', self.pdf_text(report), re.S)
+        return ''.join(
+            re.sub(r'\\(?=[()\\])', '', literal[1:-1]) for literal in literals
+        )
+
+    @staticmethod
+    def comparable(text):
+        """Letters and digits only.
+
+        reportlab breaks a line into several `Tj` fragments, so the drawn strings
+        are compared stripped of everything that is not a letter or a digit.
+        """
+        return re.sub(r'[^A-Za-z0-9]', '', text)
 
     def test_a_pdf_report_compiles_and_flips_to_ready(self):
         self.assert_compiled(self.generate('pdf'), '.pdf')
@@ -279,6 +365,364 @@ class ReportGenerationTest(RoleFixtureMixin, TestCase):
         report.refresh_from_db()
         self.assertEqual(report.status, 'ready', report.error_message)
         self.assertTrue(report.file)
+
+    # ── Audit Objectives / Audit Scope (reported blank in every report) ──
+
+    def test_the_report_prints_the_engagement_objectives(self):
+        """The engagement is the record the report documents, so its copy wins."""
+        self.engagement.objectives = 'Confirm metering revenue is complete.'
+        self.engagement.scope = 'Every metering installation in the region.'
+        self.engagement.save(update_fields=['objectives', 'scope'])
+
+        for report_format in ('word', 'excel'):
+            with self.subTest(format=report_format):
+                text = self.content_text(self.generate(report_format))
+                self.assertIn('Confirm metering revenue is complete.', text)
+                self.assertIn('Every metering installation in the region.', text)
+
+    def test_the_objectives_fall_back_to_the_audit_program(self):
+        """Engagements were never the only place these live: an auditor writes them
+        on the program, which is the plan of attack for the same engagement."""
+        make_program(
+            engagement=self.engagement,
+            objectives='Program: test the revenue cycle end to end.',
+            scope='Program: head office and every branch counter.',
+        )
+
+        for report_format in ('word', 'excel'):
+            with self.subTest(format=report_format):
+                text = self.content_text(self.generate(report_format))
+                self.assertIn('Program: test the revenue cycle end to end.', text)
+                self.assertIn('Program: head office and every branch counter.', text)
+
+    def test_the_engagement_objectives_win_over_the_programs(self):
+        self.engagement.objectives = 'Engagement objective'
+        self.engagement.save(update_fields=['objectives'])
+        make_program(engagement=self.engagement, objectives='Program objective')
+
+        text = self.content_text(self.generate('word'))
+        self.assertIn('Engagement objective', text)
+        self.assertNotIn('Program objective', text)
+
+    def test_a_report_with_no_objectives_says_so_rather_than_showing_nothing(self):
+        """The old default could never fire. `engagement_info.get('objectives',
+        default)` returns '' for a key that is present with an empty value, so the
+        section rendered an empty paragraph and the report read as broken rather
+        than as missing input.
+        """
+        for report_format in ('word', 'excel'):
+            with self.subTest(format=report_format):
+                text = self.content_text(self.generate(report_format))
+                self.assertIn('No specific objectives have been recorded', text)
+                self.assertIn('No scope has been recorded', text)
+
+    def test_the_pdf_carries_its_objectives_too(self):
+        """All three formats read the same two resolved variables, but only Word and
+        Excel can be read back conveniently — so the PDF gets its own check."""
+        self.engagement.objectives = 'Verify metering revenue cycle controls'
+        self.engagement.save(update_fields=['objectives'])
+
+        report = self.generate('pdf')
+        self.assert_compiled(report, '.pdf')
+        self.assertIn(
+            self.comparable('Verify metering revenue cycle controls'),
+            self.comparable(self.pdf_drawn_text(report)),
+        )
+
+    # ── Table formatting ────────────────────────────────────────────
+
+    def test_pdf_cells_escape_their_text(self):
+        """The direct statement of the rule the two tests below depend on.
+
+        Asserted on the cell rather than on a compiled document because a
+        `Paragraph` is the only place the escaping is visible: `_pdf_cell` returns
+        a Paragraph holding the escaped source, and reportlab then renders `&lt;`
+        as `<`. Passing the text through raw compiles just as happily and quietly
+        draws the wrong words.
+        """
+        from reportlab.lib.styles import getSampleStyleSheet
+
+        from apps.reports.views import _pdf_cell
+
+        cell = _pdf_cell('R&D <legacy> upgrade', getSampleStyleSheet()['Normal'])
+        self.assertEqual(cell.text, 'R&amp;D &lt;legacy&gt; upgrade')
+
+    def test_a_finding_title_with_markup_is_not_mangled_in_the_pdf(self):
+        """A tag-looking title must reach the page intact.
+
+        Measured on reportlab 4.5.1: handed `R&D <legacy> upgrade` unescaped, the
+        Paragraph reads `<legacy>` as an unknown tag and draws `R&D; upgrade` — no
+        exception, so the report is ``ready`` and quietly wrong. The title is drawn
+        twice (once in the findings table cell, once in the detailed description
+        below it), so the intact text appearing only once is what says a cell let
+        the markup through.
+        """
+        make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            title='R&D <legacy> upgrade',
+            recommendation='Replace the A&B feed before <Q4>.',
+            condition='The A&B feed was patched without a change record.',
+        )
+
+        report = self.generate('pdf')
+        self.assert_compiled(report, '.pdf')
+        drawn = self.comparable(self.pdf_drawn_text(report))
+        title = self.comparable('R&D <legacy> upgrade')
+        self.assertIn(title, drawn)
+        self.assertEqual(
+            drawn.count(title), 2,
+            'the table cell did not draw the title intact — expected it in both the '
+            'findings table and the detailed description',
+        )
+
+    def test_a_capa_title_with_markup_is_not_mangled_in_the_pdf(self):
+        """The CAPA table interpolates the same kind of free text, and its detail
+        block below it prints the action's own description and recommendation."""
+        finding = make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            title='Metering & billing controls',
+        )
+        action_title = 'Reconcile <metering> & billing'
+        make_action(
+            finding=finding, owner=self.auditee, assigned_by=self.auditor,
+            title=action_title,
+            description='Rebuild the A&B reconciliation <monthly>.',
+        )
+
+        report = self.generate('pdf')
+        self.assert_compiled(report, '.pdf')
+        drawn = self.comparable(self.pdf_drawn_text(report))
+        title = self.comparable(action_title)
+        self.assertIn(title, drawn)
+        self.assertEqual(
+            drawn.count(title), 2,
+            'the CAPA table cell did not draw the title intact — expected it in both '
+            'the CAPA table and the detailed description',
+        )
+
+    def test_the_excel_tables_wrap_their_long_columns(self):
+        """Excel clips text against a non-empty neighbour rather than overflowing,
+        so an unwrapped title is cut off at the column edge."""
+        from openpyxl import load_workbook
+
+        long_title = ('Metering revenue reconciliation is performed monthly without '
+                      'independent review or supporting evidence')
+        finding = make_finding(
+            engagement=self.engagement, identified_by=self.auditor, title=long_title,
+        )
+        make_action(
+            finding=finding, owner=self.auditee, assigned_by=self.auditor,
+            title=long_title,
+        )
+
+        report = self.generate('excel')
+        workbook = load_workbook(report.file.path)
+
+        for sheet_name in ('Findings', 'CAPA'):
+            with self.subTest(sheet=sheet_name):
+                wrapped = [
+                    cell for row in workbook[sheet_name].iter_rows()
+                    for cell in row if cell.value == long_title
+                ]
+                self.assertTrue(wrapped, f'{sheet_name} does not carry the title')
+                for cell in wrapped:
+                    self.assertTrue(
+                        cell.alignment.wrap_text,
+                        f'{sheet_name}!{cell.coordinate} is not wrapped',
+                    )
+                    self.assertEqual(cell.alignment.vertical, 'top')
+
+    def test_the_excel_detail_blocks_style_the_cells_they_write(self):
+        """These six lines wrote the detail text to column C and then set the font on
+        column A, so the text was left unstyled."""
+        from openpyxl import load_workbook
+
+        make_finding(
+            engagement=self.engagement, identified_by=self.auditor,
+            condition='No independent review was performed.',
+        )
+
+        report = self.generate('excel')
+        sheet = load_workbook(report.file.path)['Findings']
+        detail = [
+            cell for row in sheet.iter_rows() for cell in row
+            if isinstance(cell.value, str) and cell.value.startswith('Condition: ')
+        ]
+        self.assertTrue(detail, 'the detail block was not written')
+        for cell in detail:
+            with self.subTest(cell=cell.coordinate):
+                self.assertEqual(cell.column_letter, 'C')
+                # The default openpyxl font carries no explicit size; the report's
+                # normal_font is 10pt.
+                self.assertEqual(cell.font.size, 10)
+
+    def test_the_word_tables_pin_their_column_widths(self):
+        """Word auto-fits by default, which sizes a 7- or 8-column table to its
+        content — i.e. wider than the page. The findings and CAPA tables are pinned
+        to the width the page actually has.
+        """
+        from docx import Document
+
+        report = self.generate('word')
+        document = Document(report.file.path)
+        # Identified by their header row, not by column count: the risk table also
+        # has 8 columns and is deliberately left to auto-fit (short values only).
+        wide = [
+            table for table in document.tables
+            if 'Title' in [cell.text for cell in table.rows[0].cells]
+        ]
+        self.assertEqual(len(wide), 2, 'expected the findings and CAPA tables')
+
+        section = document.sections[0]
+        usable = section.page_width - section.left_margin - section.right_margin
+        for table in wide:
+            with self.subTest(columns=len(table.columns)):
+                self.assertFalse(table.autofit)
+                for row in table.rows:
+                    self.assertTrue(
+                        all(cell.width for cell in row.cells),
+                        'a column has no explicit width',
+                    )
+                    self.assertLessEqual(sum(cell.width for cell in row.cells), usable)
+
+    # ── Material the report left out ────────────────────────────────
+    # A corrective action is only as distributable as the finding it answers, so
+    # one whose finding is still Pending Supervisor Review is kept out of the
+    # report. What the report also used to do was *deny* it: the section printed
+    # "No corrective actions have been assigned", which the lead auditor knew to
+    # be false, because the register applies that same exclusion to auditees only
+    # and had just shown them the action.
+
+    def unendorsed_case(self):
+        """An engagement whose only finding is unendorsed, with an action against
+        it. A second engagement rather than another finding on the fixture's, so
+        the withheld row is the only row and the count is unambiguous."""
+        engagement = make_engagement(
+            lead_auditor=self.auditor, department=self.department,
+        )
+        finding = make_finding(
+            engagement=engagement, identified_by=self.auditor, auditee=self.auditee,
+            status='draft',
+        )
+        action = make_action(
+            finding=finding, owner=self.auditee, assigned_by=self.auditor,
+            action_number='CAPA-90001', title='Reinstate the unendorsed control',
+        )
+        return engagement, action
+
+    def test_an_unendorsed_actions_finding_is_named_as_the_reason(self):
+        """Both the disclosure and the reason, in the two formats whose text is
+        exact. The reason matters: the action's own status is what a reader would
+        guess at, and it is the finding that is unendorsed."""
+        engagement, action = self.unendorsed_case()
+
+        for report_format in ('word', 'excel'):
+            with self.subTest(format=report_format):
+                text = self.content_text(self.generate(report_format, engagement=engagement))
+                self.assertNotIn(
+                    action.action_number, text,
+                    'an unendorsed finding\'s remedy reached a downloadable report',
+                )
+                self.assertIn('Not included in this report', text)
+                self.assertIn(
+                    '1 corrective action whose finding has not yet been endorsed',
+                    text,
+                )
+                self.assertNotIn(
+                    'No corrective actions have been assigned', text,
+                    'the report denied an action that exists',
+                )
+
+    def test_the_pdf_carries_the_disclosure_too(self):
+        """All three formats read the same two statements, but only Word and Excel
+        can be read back conveniently — so the PDF gets its own check."""
+        engagement, action = self.unendorsed_case()
+
+        report = self.generate('pdf', engagement=engagement)
+        self.assert_compiled(report, '.pdf')
+        drawn = self.comparable(self.pdf_drawn_text(report))
+        self.assertIn(self.comparable('Not included in this report'), drawn)
+        self.assertNotIn(
+            self.comparable(action.action_number), drawn,
+            'an unendorsed finding\'s remedy reached a downloadable report',
+        )
+
+    def test_an_endorsed_action_is_listed_with_nothing_said_about_withholding(self):
+        """The regression guard. The fixture's engagement holds one endorsed
+        finding and one action against it, which is the ordinary report."""
+        for report_format in ('word', 'excel'):
+            with self.subTest(format=report_format):
+                text = self.content_text(self.generate(report_format))
+                self.assertIn('Corrective Action', text)
+                self.assertNotIn('Not shown above', text)
+                self.assertNotIn('Not included in this report', text)
+
+    def test_a_half_endorsed_engagement_lists_one_and_counts_the_other(self):
+        """Both halves at once: the section has rows to draw *and* a sibling it
+        cannot, which is the case the fallback message was never reached for."""
+        make_action(
+            finding=make_finding(
+                engagement=self.engagement, identified_by=self.auditor,
+                auditee=self.auditee, status='draft',
+            ),
+            owner=self.auditee, assigned_by=self.auditor,
+            action_number='CAPA-90002', title='Withheld control',
+        )
+
+        for report_format in ('word', 'excel'):
+            with self.subTest(format=report_format):
+                text = self.content_text(self.generate(report_format))
+                self.assertIn('Corrective Action', text)
+                self.assertIn('Not shown above', text)
+                self.assertIn(
+                    '1 corrective action whose finding has not yet been endorsed',
+                    text,
+                )
+
+    def test_a_finding_awaiting_endorsement_is_disclosed_as_well(self):
+        """The same defect one section up. A finding that is not endorsed is left
+        out of the findings table, and "No findings were registered" said there
+        were none."""
+        engagement = make_engagement(
+            lead_auditor=self.auditor, department=self.department,
+        )
+        make_finding(
+            engagement=engagement, identified_by=self.auditor, auditee=self.auditee,
+            status='draft',
+        )
+
+        for report_format in ('word', 'excel'):
+            with self.subTest(format=report_format):
+                text = self.content_text(self.generate(report_format, engagement=engagement))
+                self.assertIn(
+                    '1 finding that has not yet been endorsed for publication', text,
+                )
+                self.assertNotIn('No findings were registered', text)
+
+    def test_an_engagement_with_nothing_at_all_keeps_the_plain_messages(self):
+        """The guard against the disclosure firing on every report: with no rows
+        and nothing withheld, the original sentences are still the true ones."""
+        engagement = make_engagement(
+            lead_auditor=self.auditor, department=self.department,
+        )
+        # The two formats have always worded the findings fallback differently —
+        # Excel's sheet drops the auxiliary verb — and this change does not
+        # silently unify prose they disagree on.
+        empty_findings = {
+            'word': 'No findings were registered for this engagement.',
+            'excel': 'No findings registered for this engagement.',
+        }
+
+        for report_format in ('word', 'excel'):
+            with self.subTest(format=report_format):
+                text = self.content_text(self.generate(report_format, engagement=engagement))
+                self.assertIn(empty_findings[report_format], text)
+                self.assertIn(
+                    'No corrective actions have been assigned for findings in this engagement.',
+                    text,
+                )
+                self.assertNotIn('Not included in this report', text)
+                self.assertNotIn('Not shown above', text)
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix='eeu-report-job-test-'))

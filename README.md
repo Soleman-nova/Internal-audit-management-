@@ -39,7 +39,7 @@ Risk assessment → Annual plan → Engagement → Program & procedures
 | **Audit Planning** | The audit universe (departments, processes, IT systems, projects, subsidiaries, regulatory areas) with re-audit frequency tracking; annual plans that submit and approve through a status workflow, including directorate plans rolling into an EEU consolidated master plan; engagements with server-assigned numbers and audit teams. |
 | **Audit Execution** | Audit programs with a prepare → submit → approve cycle; procedures across six procedure types with assignment and completion sign-off; working papers with upload, supervisory review and permission-gated download. |
 | **Findings Registry** | Findings recorded in the standard condition / criteria / cause / effect / recommendation structure, across five severities and eight categories, with evidence attachments, a comment thread, management responses, repeat-finding linkage, and a resolve / close / dispute / reopen lifecycle. |
-| **Risk Assessment** | A 5×5 likelihood × impact matrix with weighted risk parameters, scores and ratings computed server-side and propagated back onto the audit universe; auditee self-assessments with a manager review step. |
+| **Risk Assessment** | A 5×5 likelihood × impact matrix with weighted risk parameters, scores and ratings computed server-side and propagated back onto the audit universe; auditee self-assessments with a manager review step that can adopt the auditee's figures. The weights act as a **versioned policy**: their sum drives a capped uplift on every score, and the policy in force is frozen onto each assessment, so a stored rating stays interpretable and a register scored under an older policy is detectable and recomputable. |
 | **Corrective Actions (CAPA)** | Actions raised from findings with owners, priorities and due dates; owner responses with evidence; supervisory verification and scheduled follow-ups; automatic overdue flagging and due-soon reminders. |
 | **Reports & Analytics** | Report templates plus asynchronous generation to **PDF, Excel and Word**; generated reports move from `generating` to `ready` without a page refresh; analytics endpoint with six-month rolling buckets. |
 | **User Management** | Administrator-only user provisioning, activation/deactivation and password resets. |
@@ -248,7 +248,7 @@ All endpoints live under `/api/`. Authenticate with `Authorization: Bearer <acce
 - **Filtering** — `DjangoFilterBackend`, `SearchFilter` (`?search=`) and `OrderingFilter` (`?ordering=`) are enabled globally; each viewset declares its own `filterset_fields`.
 - **Throttling** — anonymous 60/min, authenticated 1000/hour, login 30/min.
 - **Files** — uploads are validated by extension allowlist and size cap (documents 10 MB, images 2 MB) in [apps/common/validators.py](backend/apps/common/validators.py). Media is not served directly in production; evidence, working papers and reports are fetched through their permission-gated `download` / `export` actions.
-- **Reference numbers** — `finding_number`, `engagement_number` and `action_number` are assigned by the server as `FND-YYYY-NNNN`, `ENG-YYYY-NNNN` and `CAPA-YYYY-NNNN`. A client-supplied value is ignored ([apps/common/reference_numbers.py](backend/apps/common/reference_numbers.py)).
+- **Reference numbers** — `finding_number`, `engagement_number` and `action_number` are assigned by the server as `FND-YYYY-NNNN`, `ENG-YYYY-NNNN` and `CAPA-YYYY-NNNN`. A client-supplied value is ignored ([apps/common/reference_numbers.py](backend/apps/common/reference_numbers.py)). The next number is read from the highest **numeric** `PREFIX-YYYY-` suffix in use — the hand-numbered seeded rows (`ENG-2026-PP-001` and friends) are longer strings than any generated number and are excluded from that arithmetic, so they cannot knock the sequence out of step and hand out a number already taken.
 - **403 vs 404** — a `403` means the record is visible but you are not named on it; a `404` means read scoping hid the row entirely. The distinction is deliberate and asserted by tests.
 
 ### Mount points
@@ -305,12 +305,15 @@ All endpoints live under `/api/`. Authenticate with `Authorization: Bearer <acce
 | Method | Path | Required | Notes |
 |---|---|---|---|
 | `GET` | `programs/` | authenticated | Filter `status`, `engagement`. |
-| `POST` `PATCH` `DELETE` | `programs/` | `write_audit` | Created as `draft`, preparer recorded. |
+| `POST` `PATCH` `DELETE` | `programs/` | `write_audit` | Created as `draft`, preparer recorded. `status` and the approver fields are **read-only** — they move only through the routes below. |
 | `POST` | `programs/{id}/submit/` | `write_audit`, or the preparer / engagement lead | → `submitted`; notifies the supervisor. |
 | `POST` | `programs/{id}/approve/` | `approve_plans` | → `approved`; notifies the preparer. |
-| `GET` | `procedures/` | authenticated | Filter `status`, `program`, `procedure_type`, `assigned_to`. |
+| `POST` | `programs/{id}/complete/` | `write_audit` | → `completed`; **400** while any step is still `pending`/`in_progress`, naming the steps. `failed` and `not_applicable` count as finished. Notifies the engagement lead. |
+| `POST` | `programs/{id}/reopen/` | `write_audit` | `completed` → `approved`, so the locked procedure controls come back. |
+| `GET` | `procedures/` | authenticated | Filter `status`, `program`, `procedure_type`, `assigned_to`. Each row carries `findings_count`. |
 | `POST` `PATCH` `DELETE` | `procedures/` | `write_audit` | |
 | `POST` | `procedures/{id}/complete/` | `write_audit` | Stamps `completed_by`/`completed_at`, notifies the engagement lead. |
+| `POST` | `procedures/{id}/` (status → `failed`/`not_applicable`) | `write_audit` | Announced to the engagement lead on the same terms as `complete`. |
 | `GET` | `working-papers/` | authenticated | Filter `engagement`, `paper_type`, `is_reviewed`, `procedure`. |
 | `POST` `PATCH` `DELETE` | `working-papers/` | `write_audit` | File validated on upload. |
 | `POST` | `working-papers/{id}/review/` | `approve_plans` | Sets `is_reviewed`, notifies the preparer. |
@@ -320,7 +323,7 @@ All endpoints live under `/api/`. Authenticate with `Authorization: Bearer <acce
 
 | Method | Path | Required | Notes |
 |---|---|---|---|
-| `GET` | `findings/` | authenticated | Filter `severity`, `status`, `category`, `engagement`, `is_repeat`. Read-scoped for auditees. |
+| `GET` | `findings/` | authenticated | Filter `severity`, `status`, `category`, `engagement`, `is_repeat`. Read-scoped for auditees. Every row carries `procedure_label` (the fieldwork step, named) and `is_overdue` (derived from `target_resolution_date`, so no scheduled job is involved). |
 | `POST` `PATCH` `DELETE` | `findings/` | `write_audit` | Number assigned server-side as `FND-YYYY-NNNN`; `identified_by` is read-only. |
 | `POST` | `findings/{id}/add-comment/` | the finding's auditee or assignee, or `write_audit` | Notifies the rest of the thread. |
 | `POST` | `findings/{id}/upload-evidence/` | the finding's auditee or assignee, or `write_audit` | |
@@ -338,14 +341,16 @@ All endpoints live under `/api/`. Authenticate with `Authorization: Bearer <acce
 | Method | Path | Required | Notes |
 |---|---|---|---|
 | `GET` | `parameters/` | authenticated | Filter `category`, `is_active`. |
-| `POST` `PATCH` `DELETE` | `parameters/` | `manage_settings` | Weights feed the score uplift. |
+| `POST` `PATCH` `DELETE` | `parameters/` | `manage_settings` | Weights feed the score uplift, and each write **recomputes the register** so the new policy reaches stored scores. |
+| `GET` | `parameters/policy/` | authenticated | The policy in force — digest, weight sum, uplift — plus how many assessments were scored under a different one. |
 | `GET` | `assessments/` | authenticated | Ordered by descending risk score. |
 | `POST` `PATCH` `DELETE` | `assessments/` | `write_audit` | Score, rating and residual risk are computed server-side and propagated to the linked universe entry. |
 | `GET` | `assessments/heatmap/` | authenticated | 5×5 grid; year filter. |
 | `GET` | `assessments/summary/` | authenticated | |
+| `POST` | `assessments/recompute/` | `manage_settings` | Re-freezes every assessment against the active policy. Idempotent; returns `{updated, total}`. Also available as `manage.py recompute_risk_scores` (`--dry-run`). |
 | `GET` | `self-assessments/` | authenticated | Filter `status`, `submitted_by`. Everyone without `approve_plans` sees **only their own** — auditors included. |
 | `POST` `PATCH` | `self-assessments/` | authenticated | Editable while `submitted`; a reviewed submission is closed to edits. `status` cannot be self-set to `reviewed`. |
-| `POST` | `self-assessments/{id}/review/` | `approve_plans` | → `reviewed`; stamps the reviewer and notifies the submitter. |
+| `POST` | `self-assessments/{id}/review/` | `approve_plans` | → `reviewed`; stamps the reviewer and notifies the submitter. Accepts `adopt_self_values` to re-score the parent from the auditee's figures, and `note` to record why — the assessment then reports `adopted_source`. |
 
 ### Corrective actions — `/api/corrective/`
 
@@ -416,7 +421,7 @@ Run from `backend/` with the virtualenv active.
 | Command | Purpose | When |
 |---|---|---|
 | `seed_org_structure` | Executive and corporate organizational units | Once, first |
-| `seed_eeu_audit_structure` | IAEO plus the FPA, TA, ITA and PP directorates | Once, after the above |
+| `seed_eeu_audit_structure` | IAEO plus the four directorates, including FPA subdivision (HQ staff, Regional Audit Coordination manager, and 32 per-region audit units) | Once, after the above |
 | `seed_service_centers` | EEU regions and their customer service centers. Amharic names are applied from `data/service_centers_am.json` (`--amharic-file` to override; that export covers 445 of the 582 centers) | Once, after the above |
 | `seed_hq_org_units` | The detailed head-office units (CO Treasury, CO Budget, SCADA/DMS, …) under the existing chief offices; merges onto, never duplicates, the seeded units. Amharic names are applied from `data/org_units_am.json` (`--amharic-file` to override) | Once, after the above |
 | `seed_data` | Demo users (`EEU-10001`–`EEU-10005`), risk parameters, universe entries, an approved annual plan, engagements, a program with procedures, one finding and one CAPA, a report template | Development only |
@@ -435,7 +440,7 @@ Scheduling examples are in the [administrator runbook](USER_MANUAL.md#scheduled-
 
 ```bash
 cd backend
-python manage.py test                              # ~376 tests, ~18 min
+python manage.py test                              # ~590 tests, ~16 min
 python manage.py test apps.findings -v 2           # one app
 python manage.py test apps.common.test_e2e_lifecycle -v 2   # the cross-app walk
 python manage.py check

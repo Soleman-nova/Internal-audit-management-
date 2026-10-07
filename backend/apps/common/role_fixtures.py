@@ -213,6 +213,23 @@ def make_procedure(program=None, **kwargs):
     return AuditProcedure.objects.create(**defaults)
 
 
+def make_failed_procedure(engagement=None, **kwargs):
+    """A procedure that ran and found the control wanting.
+
+    Only a failed procedure can raise a finding, so this is the parent every
+    API-level finding create needs. The program is *reused* when the engagement
+    already has one: ``AuditProgram.engagement`` is a OneToOne, so a second
+    create would violate it rather than add a sibling.
+    """
+    from apps.audit_execution.models import AuditProgram
+
+    engagement = engagement or make_engagement()
+    program = AuditProgram.objects.filter(engagement=engagement).first()
+    if program is None:
+        program = make_program(engagement=engagement)
+    return make_procedure(program=program, status='failed', **kwargs)
+
+
 def make_finding(engagement=None, identified_by=None, **kwargs):
     from apps.findings.models import AuditFinding
 
@@ -224,7 +241,11 @@ def make_finding(engagement=None, identified_by=None, **kwargs):
         'description': 'Controls over the process were not operating.',
         'severity': 'high',
         'category': 'control_deficiency',
-        'status': 'open',
+        # Published, not `draft`. The fixture's job is to produce a finding the
+        # auditee can act on, and since publication became a gate that means one a
+        # supervisor has already endorsed. A test that wants the pre-publication
+        # case asks for it — `make_finding(status='draft')`.
+        'status': AuditFinding.AWAITING_AUDITEE,
         'identified_by': identified_by,
     }
     defaults.update(kwargs)

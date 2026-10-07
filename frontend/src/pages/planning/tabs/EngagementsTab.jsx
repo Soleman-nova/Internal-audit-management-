@@ -2,7 +2,7 @@ import { usePermissions } from '../../../hooks/usePermissions';
 import { useI18n } from '../../../context/I18nContext';
 import { orgScopeLabel } from '../../../utils/localizedName';
 import Pagination from '../../../components/ui/Pagination';
-import { Plus, Users, Shield, Clock, Pencil } from 'lucide-react';
+import { Plus, Users, Shield, Clock, Pencil, UserCheck } from 'lucide-react';
 
 // Mirrors AuditEngagement.STATUS_CHOICES. The server rejects anything else, and
 // refuses `completed` outright while the engagement still holds a finding that
@@ -69,6 +69,7 @@ function EngagementsTab({
               <th>{t('orgUnit')}</th>
               <th>{t('leadAuditor')}</th>
               <th>{t('supervisor')}</th>
+              <th>{t('auditeeRepresentative')}</th>
               <th>{t('days')}</th>
               <th>{t('timeline')}</th>
               <th>{t('riskLevel')}</th>
@@ -102,6 +103,18 @@ function EngagementsTab({
                       {eng.supervisor_name}
                     </span>
                   ) : <span className="text-muted">—</span>}
+                </td>
+                <td>
+                  {/* Deliberately `—` rather than "Unassigned": a blank here is
+                      not a staffing gap on the audit side, it is the reason this
+                      engagement's findings will reach the department and answer
+                      to no one. The warning tone is the point. */}
+                  {eng.auditee_name ? (
+                    <span className="flex items-center gap-1">
+                      <UserCheck size={13} className="text-success" />
+                      {eng.auditee_name}
+                    </span>
+                  ) : <span className="text-muted" title={t('auditeeRepresentativeHint')}>—</span>}
                 </td>
                 <td>
                   <span className="flex items-center gap-1">

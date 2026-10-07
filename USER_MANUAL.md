@@ -292,9 +292,12 @@ An individual audit, scheduled under a plan.
 | Plan, Audit universe entry | Which plan it belongs to and which entity it covers. |
 | Department, Directorate | |
 | Lead auditor, Supervisor | Both are notified when the engagement is created. |
+| Auditee representative | The person in the audited department who answers for this engagement's findings. **Not optional in practice** — see below. |
 | Risk level, dates, budgeted hours | |
 
 **Status flow:** `Planned → In Progress → Fieldwork → Reporting → Completed`, with `Cancelled` available. Use **Update Status** rather than editing the field directly — completing an engagement this way also back-fills the *Last audited* date on the linked audit universe entry, which is what keeps re-audit reminders honest.
+
+**Name the auditee representative.** Findings raised against this engagement are addressed to whoever is picked here — the Log Finding form does not ask for an auditee, it inherits this one. Leaving it blank is not a harmless omission: the finding still appears in the audited department's register, because that register falls back to the engagement's department, but nobody can act on it. Responding, commenting, attaching evidence and disputing all match against the finding's own auditee, so all four are refused, and publishing the finding notifies no one in particular. Name the representative when you schedule the engagement, and the whole downstream flow works without a second thought.
 
 **Audit team.** Use **Add Member** to add people as Lead Auditor, Team Member, Supervisor or Subject Matter Expert, with allocated and actual days.
 
@@ -316,6 +319,12 @@ One program per engagement, setting out objectives and scope.
 3. The auditor selects **Submit for Review**. Status becomes *Submitted* and the supervisor is notified.
    - Without approval rights, you may submit only a program you prepared, or one whose engagement you lead.
 4. The supervisor selects **Approve Fieldwork**. Status becomes *Approved*, the reviewer is stamped, and the preparer is notified.
+5. When the fieldwork is done — **every** step carrying an outcome — the auditor selects **Complete Fieldwork**. Status becomes *Completed*, and the engagement's lead auditor is notified.
+   - The button is refused while any step is still *Pending* or *In Progress*, and the refusal names the steps that are in the way.
+   - *Failed / Non-Compliant* and *Not Applicable* both count as outcomes. A step that failed is the one that raises a finding, so it is finished work, not outstanding work.
+6. **Reopen Fieldwork** returns a completed program to *Approved*, restoring the procedure controls that *Completed* locks.
+
+> Status is not an editable field on a program, an engagement, a finding or a corrective action. Each moves through its own route, because each of those routes checks something a field write cannot: who may approve, what must be resolved first, whether the fieldwork is finished.
 
 ### Procedures
 
@@ -327,12 +336,14 @@ The individual test steps.
 | Procedure type | Test of Controls · Substantive Testing · Analytical Procedures · Inquiry · Observation · Inspection & Re-performance. |
 | Risk area | |
 | Assigned to | |
-| Status | Pending · In Progress · Completed · Not Applicable. |
+| Status | Pending · In Progress · Completed · Failed / Non-Compliant · Not Applicable. |
 | Conclusion | Recorded when you complete the step. |
 
 Procedures are listed in step order. Editing a procedure updates it in place; deleting removes it permanently — both are saved to the server immediately, so a page refresh will show exactly what you left.
 
 **To complete a procedure:** open it → **Complete** → record your conclusion. Your name and the time are stamped on the record and the engagement's lead auditor is notified.
+
+**When a step fails**, the lead auditor is notified on the same terms — that outcome is what raises a finding, so it is the one they need to hear about. A step that already has findings against it carries a badge saying how many, which is how you avoid raising the same finding twice.
 
 ### Working Papers
 
@@ -356,7 +367,7 @@ The evidence file for the engagement.
 ## 8. Findings Registry
 
 **Purpose:** record deficiencies, get them remediated, and prove it happened.
-**Who can use it:** everyone can read what they are entitled to see. Logging and editing findings requires an audit role. Resolving, closing and reopening require the close-findings capability (auditor and above). Auditees can comment, attach evidence, respond and dispute — but only on findings that name them.
+**Who can use it:** everyone can read what they are entitled to see. Logging and editing findings requires an audit role. Resolving, closing and reopening require the close-findings capability (auditor and above). Auditees can comment, attach evidence, respond and dispute — but only on findings that name them **and that a supervisor has published**.
 
 ### The finding structure
 
@@ -385,7 +396,15 @@ Findings use the standard internal-audit form:
 
 ### Logging a finding
 
-Findings Registry → **Log Finding** → complete the fields → save. The assignee and the auditee are both notified; you are not notified about your own finding.
+Findings Registry → **Log Finding** → complete the fields → save. It is saved as **Pending Supervisor Review**: the audit team can see it, the auditee cannot, and nothing is sent to them. You are not notified about your own finding.
+
+The form does not ask for an auditee. The finding is addressed to the **auditee representative named on the engagement**, and that is the field the auditee's own actions are checked against — so the engagement has to name one (see [Engagements](#engagements)).
+
+### Publishing a finding
+
+A finding is the audit team's own work until a supervisor endorses it. From the moment you raise it, the engagement's supervisor is notified that it is **awaiting their review**; that notification is the only prompt they get, so a finding is never silently waiting. Open it and choose **Publish to Auditee** — that is what puts it in front of the auditee, moves it to *Awaiting Auditee Response* and notifies them. Until then the auditee cannot see it, comment on it, attach evidence to it, answer it or dispute it, and a corrective action cannot be raised against it on their behalf.
+
+Publishing is a one-way step and is not repeatable: a second attempt is refused, and a finding that is already *Resolved* or *Closed* cannot be published at all. It requires the approve-plans capability, so whoever logged a finding is never the one who signs it off. Before the inheritance above existed, a finding raised through the register carried no auditee at all, so publishing it notified nobody — see [Engagements](#engagements) for why the representative matters.
 
 ### The finding detail page
 
@@ -395,22 +414,47 @@ Open any finding to reach its workspace: the full 4C record, the comment thread,
 - **Upload evidence** — same limits as working papers. Evidence is typed as Document, Screenshot, Spreadsheet, Photo, Video or Other, and is downloadable through a permission-checked action.
 - **Respond** — the auditee's management response.
 
+Two facts travel with every finding, so it can be read rather than merely listed:
+
+| | |
+|---|---|
+| **Source procedure** | The fieldwork step the finding was raised from, named and linked back to the execution board — which highlights that step. A finding is evidence only if you can see which test produced it. |
+| **Overdue** | Shown when the finding is past its own target resolution date and is not yet resolved or closed. Derived live from the date, so it needs no scheduled job. |
+
+### From a finding to a corrective action
+
+The detail page also carries a **Corrective Actions** section: every action raised against the finding, with its owner, due date and status, each linking to the action.
+
+- With no action yet, **Spawn CAPA Task linked to Finding** (audit team) or **Formulate Remediation Plan** (auditee) opens the follow-up form already pointed at *this* finding, with its title, description and recommendation carried across — so the action cannot end up attached to the wrong record.
+- The button is withheld while the finding is still awaiting supervisor review, and the section says why: no action can be raised against a finding no supervisor has endorsed.
+- The register's split view shows the same two facts — source procedure, and how many actions exist — and **Open full finding record** reaches this page.
+
 ### Status lifecycle
 
 ```
-Draft → Open → In Progress → Resolved → Closed
-                    ↕                      │
-                Disputed  ←────────────────┘  (Reopen)
+Pending Supervisor Review ──(Publish)──> Awaiting Auditee Response ──(Respond)──> In Progress
+                                                                  │
+                                                        ┌─────────┴─────────┐
+                                                        ↓                   ↓
+                                                    Resolved            Disputed
+                                                        │                   │
+                                                        ↓                   │
+                                                     Closed  ←──────────────┘
+                                                        │
+                                                    (Reopen) → In Progress
 ```
+
+*Open* is a legacy status from before publishing existed; findings are no longer created in it, and it is treated as unpublished wherever it still appears.
 
 | Action | Who | Effect |
 |---|---|---|
+| **Publish to Auditee** | Supervisor and above | → *Awaiting Auditee Response*. The auditee is notified, and only now can they see and act on it. Refused if the finding is already published, or settled. |
 | **Resolve** | Auditor and above | → *Resolved*, with a resolution date. Records that remediation is claimed. |
 | **Close** | Auditor and above | → *Closed*. This is the verified state, and the **only** one that counts towards the compliance score. |
 | **Dispute** | The named auditee or assignee, or an auditor and above | → *Disputed*. The auditor who raised the finding is notified. |
 | **Reopen** | Auditor and above | Returns a closed or resolved finding to an active state. |
 
-An auditee is not offered Resolve, Close or Reopen, and a direct request to those endpoints is refused.
+An auditee is not offered Publish, Resolve, Close or Reopen, and a direct request to those endpoints is refused.
 
 ### Filtering and searching
 
@@ -498,21 +542,37 @@ How an audited department states its own view of its risk.
 | Priority | Immediate · High · Medium · Low. |
 | Due date | |
 | Extended due date | Set this to grant an extension. Overdue checks use it in place of the original date — so extending a deadline stops the reminders, and the original date is still on the record. |
-| Status | Open · In Progress · Partially Resolved · Resolved · Overdue · Not Implemented · Closed. |
+| Status | Open · In Progress · Partially Resolved · Evidence Submitted / Pending Verification · Resolved · Overdue · Not Implemented · Closed. Which of these you may set depends on your side of the action — see below. |
 
 ### Raising an action
 
-From the finding, or from Corrective Actions → **New Action**. Choose the owner, priority and due date. The owner is notified immediately.
+From the finding, or from Corrective Actions → **Spawn CAPA Task**. Choose the owner, priority and due date. The owner is notified immediately.
+
+The **finding must have been endorsed for publication**. A finding still on *Pending Supervisor Review* is not offered in the finding picker — a hint under it says so — and linking one by hand is refused, because everything downstream already treats such an action as not existing: the register hides it from the auditee, and a report will not print it while its finding is unpublished. Endorse the finding first, then raise the action.
 
 ### Responding as the owner
 
 Open the action → **Respond** → add progress notes, set a new status, and attach evidence if you have it. The status moves, and the auditor who raised the action is notified.
 
-Owners are **not** offered *Verify & Schedule Follow-up* — you cannot sign off your own remediation.
+An owner reports **progress**, not outcomes. The statuses offered are *In Progress*, *Partially Resolved* and *Evidence Submitted / Pending Verification*; the server refuses anything else, so a status posted by hand is rejected too.
 
-### Verifying as a supervisor
+When the corrective steps are complete, choose **Evidence Submitted / Pending Verification** and attach the proof. That is the handoff: the work is done and the claim is yours to make, but the conclusion is the auditor's.
 
-Open the action → **Verify & Schedule Follow-up** → set the follow-up date and notes. A follow-up record is created (Scheduled → Completed / Cancelled) and the owner is notified.
+*Resolved* and *Closed* are deliberately withheld from owners. Settling a corrective action settles the finding behind it, and the verification that justifies that is not the audited party's to record — recording it themselves is the one thing the sign-off exists to prevent.
+
+A plan you have proposed but nobody has accepted yet cannot be responded to at all. Wait for the auditor's **Approve Plan**; the response form appears once the plan is agreed.
+
+Owners are also **not** offered *Verify & Close CAPA*.
+
+### Verifying and closing
+
+Open the action → **Verify & Close CAPA** → set the verification date, record what you checked, and submit.
+
+This is a single action because it is a single act. The follow-up record it writes is the evidence that the verification happened, and the action and its finding are closed in the same step. There is no route that closes a corrective action without recording who verified it.
+
+Opening the action → **Schedule Follow-up** instead records a *scheduled* future visit. It notifies the owner but does not settle anything, and a verified follow-up is no longer how you close an action.
+
+Verifying is limited to the auditor the action is assigned to, plus approvers — supervisor, audit manager and administrator — who verify across engagements. An unrelated auditor is refused, and so is a status change to *Resolved* or *Closed*, which is the same decision reached by a different route. The owner cannot verify their own remedy.
 
 ### Overdue handling
 
@@ -541,6 +601,17 @@ Seven template types: Engagement Report · Findings Summary · Management Report
 ### Downloading
 
 Use the download action on a *Ready* row. You get the file named from the report title. Attempting to download a row that is still generating returns an error rather than an empty file — wait for *Ready*.
+
+### What a report leaves out
+
+A report is a distributable document: it is stored as a file, and the auditee can reach the ones about their own engagement. Material that has not been endorsed for publication therefore stays out of it — a finding still on **Pending Supervisor Review**, and any corrective action raised against one, because an action's title and management response restate its finding.
+
+The report **says so** rather than passing over it. A section with nothing to show names the count it withheld — *"Not included in this report: 1 corrective action whose finding has not yet been endorsed for publication."* — and a section that does have rows prints them and adds a closing note counting the ones it could not, *"Not shown above: …"*. So the sentence *"No corrective actions have been assigned for findings in this engagement"* appears only when that is literally true.
+
+Two consequences worth knowing:
+
+- New corrective actions can no longer be raised against an unendorsed finding at all — the picker does not offer it and the server refuses the link. On an action that already carries one (raised before that rule, or seeded directly), the **Corrective Actions** register shows you the row while the report withholds it: that exclusion applies to auditees only.
+- The remedy is to **publish the finding** — Findings Registry → *Publish to Auditee*. Anything raised against it appears in the next report compiled for that engagement.
 
 ### Analytics
 
@@ -631,7 +702,7 @@ Practical starting sequences. Each assumes you have signed in with your Employee
 4. **Risk → Matrix** — record assessments. Check the **Heat Map** and confirm the universe risk scores have updated.
 5. **Planning → Annual Plans** — draft the year's plan with objectives, scope, methodology, budget and schedule. Decide whether it is a directorate plan or the consolidated master.
 6. **Submit**, then **Approve** it.
-7. **Planning → Engagements** — schedule audits under the plan, naming a lead auditor and a supervisor, and add team members with allocated days.
+7. **Planning → Engagements** — schedule audits under the plan, naming a lead auditor, a supervisor and the **auditee representative**, and add team members with allocated days. The representative is who the engagement's findings are addressed to, so naming one here is what makes the rest of the flow work.
 8. **Reports → Templates** — create the templates your reports will use.
 9. Track progress on the **Dashboard**, using the directorate selector.
 
@@ -640,8 +711,8 @@ Practical starting sequences. Each assumes you have signed in with your Employee
 1. **Dashboard → My Work** — see what is waiting on you.
 2. **Execution** — open the engagement's program, read its objectives and scope, and **Approve Fieldwork** when it is sound.
 3. **Execution → Working Papers** — open each uploaded paper, add review notes and sign off. Download the file if you need to check it.
-4. **Findings** — review findings and **Close** the ones whose remediation you have verified. Only closing counts towards compliance, so do not close on a promise.
-5. **CAPA** — open completed actions and **Verify & Schedule Follow-up**.
+4. **Findings** — a finding logged on an engagement you supervise notifies you that it is awaiting your review. Read it and **Publish to Auditee** to endorse it; that is what puts it in front of the auditee and starts their clock. Then **Close** the ones whose remediation you have verified. Only closing counts towards compliance, so do not close on a promise.
+5. **CAPA** — open actions whose evidence has been filed and **Verify & Close CAPA**. Verification and closure are one step, so there is no way to close one without recording what you checked.
 6. **Risk → Self Assessments** — **Review** submissions.
 7. **Audit Trail** — available to you if you need to trace a change.
 
@@ -655,7 +726,7 @@ Risk parameters and report templates are not yours to change; ask the audit mana
 4. **Submit for Review** and wait for the supervisor's approval.
 5. Work the procedures: move each to *In Progress*, then **Complete** it with a conclusion. The engagement lead is notified.
 6. Upload **working papers** as you go, with a reference and title. Someone with review rights signs them off — not you.
-7. **Findings → Log Finding** — record condition, criteria, cause, effect and recommendation; set severity, category, assignee and auditee. The number is assigned by the server.
+7. **Findings → Log Finding** — record condition, criteria, cause, effect and recommendation; set severity and category. The number is assigned by the server. The finding starts as **Pending Supervisor Review** and is addressed to the engagement's auditee representative; the supervisor is notified to endorse it before the auditee ever sees it.
 8. On the finding's detail page, add comments, attach evidence, and **Resolve** when remediation is done. Closing is usually the supervisor's call.
 9. **CAPA** — raise actions from findings with an owner, priority and due date.
 10. **Reports** — generate the engagement report.
@@ -668,13 +739,13 @@ Your role holds no system-wide permissions on purpose. What you can do, you can 
 
 1. **Dashboard → My Work** — findings assigned to you, corrective actions you own, self-assessments awaiting you.
 2. **Risk → Self Assessment** — submit your department's own view: likelihood, impact, control effectiveness and a justification. Edit it freely until a manager reviews it; after that it locks.
-3. **Findings** — you see findings that name you, plus findings on engagements in your department. For each one:
+3. **Findings** — you see findings that name you, plus findings on engagements in your department. Note the difference: findings that *name* you as the auditee representative are yours to act on; others in your department are readable for context but refused if you try to answer them. For the ones that are yours:
    - **Add a comment** to ask a question or explain context.
    - **Upload evidence** — the auditor who raised the finding is notified.
    - **Respond** with the management response.
    - **Dispute** it if you disagree with the facts. The auditor is notified and the finding is flagged, not deleted.
-4. **CAPA** — you see your department's actions. On one you own, **Respond** with progress notes, a status update and evidence.
-5. You will not see create or edit buttons on the audit universe, plans, engagements, programs, procedures, findings or CAPAs, and you cannot resolve, close or verify anything — including your own remediation. That separation is what makes the record credible.
+4. **CAPA** — you see your department's actions. On one you own, **Respond** with progress notes, a status update and evidence. When the work is finished, set **Evidence Submitted / Pending Verification** and attach the proof — that hands it to the auditor to verify, and it is the furthest an owner can move an action.
+5. You will not see create or edit buttons on the audit universe, plans, engagements, programs, procedures, findings or CAPAs, and you cannot resolve, close or verify anything — including your own remediation. That separation is what makes the record credible, and the server enforces it rather than just hiding the buttons.
 
 ---
 
@@ -684,10 +755,10 @@ The bell in the header refreshes about every 30 seconds. Select a notification t
 
 | Type | Sent when |
 |---|---|
-| **New Finding** | A finding is logged naming you as assignee or auditee. |
+| **New Finding** | A supervisor publishes a finding naming you as assignee or auditee. Logging one does not send this — an unpublished finding is not yet yours to act on. |
 | **Assigned to You** | You are made lead auditor or supervisor on an engagement, assigned a procedure, or given ownership of a corrective action. |
-| **Approval Needed** | A plan or program is submitted and you can approve it. |
-| **Approved** | Your plan or program is approved. |
+| **Approval Needed** | A plan or program is submitted and you can approve it, or a finding is logged against an engagement you supervise. It needs your endorsement before the auditee sees it. |
+| **Approved** | Your plan or program is approved, or a corrective action you own is verified as effective and closed. |
 | **Rejected** | Something you submitted is sent back. |
 | **Action Due** | A corrective action you own is due within 3 days. |
 | **Action Overdue** | A corrective action you own has passed its due date. |
@@ -737,6 +808,8 @@ Departments carry **two** hierarchies, distinguished by unit type:
 | `AUDIT` | The internal audit function itself |
 
 Audit units are further identified by directorate: **IAEO** (Internal Audit Executive Office), **FPA** (Financial & Performance Audit), **TA** (Technical Audit), **ITA** (Information Technology Audit), **PP** (Planning & Performance), and Other.
+
+Within the **FPA** directorate, the structure is subdivided into HQ staff (`FPA-STAFF`), the Regional Coordination Audit Manager (`FPA-RAC`), and 32 per-region audit units (`FPA-RGN-*`). Each regional unit carries a reference to the corporate region it audits (`Department.region`), allowing `RegionScopeMixin` to confine regional auditors' read queries (Universe, Engagements, Findings, Corrective Actions, Dashboard stats) to their specific region, while the Regional Coordination Audit Manager and HQ staff maintain enterprise-wide oversight.
 
 Each department has an optional parent, an Amharic name (shown when the interface language is Amharic), a head title, and a staff count. The cascading department → region → service-center picker and the org chart both read the whole tree in one request, which is why that one endpoint is not paginated.
 

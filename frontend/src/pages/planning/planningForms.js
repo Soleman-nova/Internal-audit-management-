@@ -27,7 +27,7 @@ export const emptyEngagement = {
   title: '', plan: '', audit_universe: '', department: '', region: '', service_center: '',
   engagement_type: 'operational', risk_level: 'medium',
   planned_start: '', planned_end: '', planned_days: 0,
-  lead_auditor: '', supervisor: ''
+  lead_auditor: '', supervisor: '', auditee: '', objectives: '', scope: ''
 };
 
 /** Blank "Register a new PPM project" mini-form. */
@@ -68,6 +68,8 @@ export function engagementToForm(eng) {
     risk_level: eng.risk_level || 'medium', planned_start: eng.planned_start || '',
     planned_end: eng.planned_end || '', planned_days: eng.planned_days ?? 0,
     lead_auditor: eng.lead_auditor || '', supervisor: eng.supervisor || '',
+    auditee: eng.auditee || '',
+    objectives: eng.objectives || '', scope: eng.scope || '',
   };
 }
 

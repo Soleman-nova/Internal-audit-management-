@@ -7,13 +7,9 @@ import { usePermissions } from '../../hooks/usePermissions';
 import Spinner from '../../components/ui/Spinner';
 import {
     ArrowLeft, AlertCircle, MessageCircle, FileText, Send,
-    CalendarCheck, Paperclip, Download, ClipboardCheck
+    CalendarCheck, Paperclip, Download, ClipboardCheck, ShieldCheck
 } from 'lucide-react';
-
-const STATUS_OPTIONS = [
-    'open', 'in_progress', 'partially_resolved', 'resolved',
-    'not_implemented', 'closed',
-];
+import { canVerifyAndClose, responseStatusOptions } from '../../utils/capaStatus';
 
 function CapaDetailPage() {
     const { id } = useParams();
@@ -35,8 +31,13 @@ function CapaDetailPage() {
     // Supervisor verification
     const [followUpDate, setFollowUpDate] = useState('');
     const [followUpNotes, setFollowUpNotes] = useState('');
-    const [followUpVerified, setFollowUpVerified] = useState(false);
     const [savingFollowUp, setSavingFollowUp] = useState(false);
+    const [approving, setApproving] = useState(false);
+
+    // Verification & closure — one act, so one set of fields
+    const [verifyDate, setVerifyDate] = useState('');
+    const [verifyNotes, setVerifyNotes] = useState('');
+    const [closing, setClosing] = useState(false);
 
     // Nothing here touches state before the first await, deliberately: this runs
     // from an effect on mount, and it is also the refetch after every mutation —
@@ -114,10 +115,9 @@ function CapaDetailPage() {
             await capaApi.scheduleFollowup(id, {
                 scheduled_date: followUpDate,
                 notes: followUpNotes,
-                status: followUpVerified ? 'completed' : 'scheduled',
-                outcome: followUpVerified ? 'Implementation verified as effective' : '',
+                status: 'scheduled',
             });
-            setFollowUpDate(''); setFollowUpNotes(''); setFollowUpVerified(false);
+            setFollowUpDate(''); setFollowUpNotes('');
             await fetchCapa();
             toast.success('Follow-up recorded');
         } catch (err) {
@@ -126,6 +126,45 @@ function CapaDetailPage() {
             toast.error(msg);
         } finally {
             setSavingFollowUp(false);
+        }
+    };
+
+    // Verification and closure are the same act server-side, so there is no
+    // state in which this page has recorded one without the other.
+    const handleVerifyAndClose = async (e) => {
+        e.preventDefault();
+        setClosing(true);
+        try {
+            await capaApi.verifyAndClose(id, {
+                // Omitted rather than blank when untouched: the server defaults it
+                // to today, and an empty string would fail the date field.
+                scheduled_date: verifyDate || undefined,
+                notes: verifyNotes.trim(),
+            });
+            setVerifyDate(''); setVerifyNotes('');
+            await fetchCapa();
+            toast.success(t('capaVerifiedClosed'));
+        } catch (err) {
+            const msg = typeof err.response?.data === 'object'
+                ? JSON.stringify(err.response.data) : t('capaVerifyFailed');
+            toast.error(msg);
+        } finally {
+            setClosing(false);
+        }
+    };
+
+    const handleApprovePlan = async () => {
+        setApproving(true);
+        try {
+            await capaApi.approveAction(id);
+            await fetchCapa();
+            toast.success(t('capaApproved'));
+        } catch (err) {
+            const msg = typeof err.response?.data === 'object'
+                ? JSON.stringify(err.response.data) : t('capaApproveFailed');
+            toast.error(msg);
+        } finally {
+            setApproving(false);
         }
     };
 
@@ -297,7 +336,28 @@ function CapaDetailPage() {
                     </ul>
                 )}
 
-                {canRespond && capa.status !== 'closed' && (
+                {/* The auditor's sign-off on the *plan*, before any work starts.
+                    The owner's response form below is about implementation, which
+                    cannot begin until this has been given. */}
+                {capa.status === 'pending_approval' && (canVerify || canApprovePlans) && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-800">
+                        <p className="text-xs text-muted mb-2">{t('pendingApprovalHint')}</p>
+                        <button
+                            type="button"
+                            className="btn btn-accent btn-sm inline-flex items-center gap-2"
+                            disabled={approving}
+                            onClick={handleApprovePlan}
+                        >
+                            <ClipboardCheck size={14} />
+                            {approving ? t('loading') : t('approveCapaPlan')}
+                        </button>
+                    </div>
+                )}
+
+                {/* No response form until the plan has been agreed: reporting
+                    progress would walk the action out of `pending_approval`, which
+                    is the gate above, and the server refuses it. */}
+                {canRespond && !['closed', 'pending_approval'].includes(capa.status) && (
                     <form onSubmit={handleAddResponse} className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-800 space-y-3">
                         <textarea
                             className="form-input w-full"
@@ -313,7 +373,7 @@ function CapaDetailPage() {
                                 value={statusUpdate}
                                 onChange={(e) => setStatusUpdate(e.target.value)}
                             >
-                                {STATUS_OPTIONS.map(s => (
+                                {responseStatusOptions(canWriteAudit).map(s => (
                                     <option key={s} value={s}>{s.replace('_', ' ')}</option>
                                 ))}
                             </select>
@@ -337,7 +397,54 @@ function CapaDetailPage() {
                 )}
             </div>
 
-            {/* Follow-ups — verification visits by a supervisor or manager */}
+            {/* Verify & close. One act, because the server writes the follow-up
+                record and the closure in the same transaction — the record is the
+                evidence the verification happened, so there is no version of this
+                where the action is closed and nothing says who checked it. */}
+            {canVerify && canVerifyAndClose(capa.status) && (
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="flex items-center gap-2">
+                            <ShieldCheck size={16} className="text-accent" />
+                            {t('verifyAndClose')}
+                        </h3>
+                    </div>
+                    <p className="text-xs text-muted mb-3">{t('verifyAndCloseHint')}</p>
+                    <form onSubmit={handleVerifyAndClose} className="space-y-3">
+                        <div className="flex flex-wrap gap-3 items-center">
+                            <label className="text-xs text-muted" htmlFor="verify_date">
+                                {t('verificationDate')}
+                            </label>
+                            <input
+                                id="verify_date"
+                                type="date"
+                                className="form-input"
+                                value={verifyDate}
+                                onChange={(e) => setVerifyDate(e.target.value)}
+                            />
+                        </div>
+                        <textarea
+                            id="verify_notes"
+                            className="form-input w-full"
+                            rows={2}
+                            placeholder={t('followUpFindings')}
+                            value={verifyNotes}
+                            onChange={(e) => setVerifyNotes(e.target.value)}
+                        />
+                        <button
+                            type="submit"
+                            className="btn btn-accent btn-sm inline-flex items-center gap-2"
+                            disabled={closing}
+                        >
+                            <ShieldCheck size={14} />
+                            {closing ? t('loading') : t('verifyAndClose')}
+                        </button>
+                    </form>
+                </div>
+            )}
+
+            {/* Follow-ups — scheduled verification visits by the auditor. Recording
+                one does not settle the action; that is the card above. */}
             <div className="card">
                 <div className="card-header">
                     <h3 className="flex items-center gap-2">
@@ -376,14 +483,6 @@ function CapaDetailPage() {
                                 value={followUpDate}
                                 onChange={(e) => setFollowUpDate(e.target.value)}
                             />
-                            <label className="text-xs text-muted inline-flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    checked={followUpVerified}
-                                    onChange={(e) => setFollowUpVerified(e.target.checked)}
-                                />
-                                {t('isVerified')}
-                            </label>
                         </div>
                         <textarea
                             className="form-input w-full"
@@ -397,7 +496,7 @@ function CapaDetailPage() {
                             className="btn btn-primary btn-sm inline-flex items-center gap-2"
                             disabled={savingFollowUp}
                         >
-                            <ClipboardCheck size={14} /> {savingFollowUp ? t('loading') : t('verifyAndSchedule')}
+                            <ClipboardCheck size={14} /> {savingFollowUp ? t('loading') : t('scheduleFollowUp')}
                         </button>
                     </form>
                 )}

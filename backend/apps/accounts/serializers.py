@@ -16,7 +16,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
         fields = ['id', 'directorate_type_display', 'unit_type_display', 'children',
                   'name', 'name_am', 'code', 'head', 'head_title', 'head_title_am',
                   'unit_type', 'directorate_type', 'staff_count', 'description',
-                  'is_active', 'parent']
+                  'is_active', 'parent', 'region']
 
     def get_children(self, obj):
         """Expose child departments for the org chart.
@@ -44,6 +44,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
                 'unit_type_display': c.get_unit_type_display(),
                 'directorate_type': c.directorate_type,
                 'directorate_type_display': c.get_directorate_type_display(),
+                'region_id': c.region_id,
             }
             for c in children
         ]

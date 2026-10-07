@@ -276,6 +276,13 @@ class Command(BaseCommand):
                 'status': 'fieldwork',
                 'lead_auditor': auditor,
                 'supervisor': supervisor,
+                # The demo case's findings are raised through the register, which
+                # asks for no auditee — they inherit this one. Without it the
+                # walkthrough's §4.4 dead-ends: the auditee sees Finding A
+                # (the register falls back to the engagement's department) and
+                # gets a 403 on every button, because the object-level check
+                # matches on the finding's own `auditee` field.
+                'auditee': auditee,
                 'planned_start': datetime.date(current_year, 3, 1),
                 'planned_end': datetime.date(current_year, 5, 30),
                 'planned_days': 60,

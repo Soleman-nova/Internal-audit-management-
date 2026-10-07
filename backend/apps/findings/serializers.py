@@ -1,8 +1,10 @@
 from rest_framework import serializers
 from rest_framework.reverse import reverse
+from django.utils import timezone
 
 from .models import AuditFinding, Evidence, FindingComment
 from apps.accounts.serializers import UserSerializer
+from apps.audit_execution.models import AuditProcedure
 
 
 class EvidenceSerializer(serializers.ModelSerializer):
@@ -65,12 +67,24 @@ class AuditFindingSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     engagement_title = serializers.SerializerMethodField()
     corrective_actions_count = serializers.SerializerMethodField()
+    # Which piece of fieldwork produced this finding, in one string. The `procedure`
+    # id alone is not something a page can render — a finding raised from step 3.1 is
+    # only meaningful to a reader who can see what step 3.1 was — and a reader who
+    # cannot see it has no way to trace the assertion back to the test behind it.
+    procedure_label = serializers.SerializerMethodField()
+    # Derived from the target date rather than stored, so a finding is shown as past
+    # its own deadline the day it passes it, not only once some job has run. The
+    # counterpart of CorrectiveActionSerializer.is_overdue, and the same reason it
+    # exists: a stored flag that no scheduler is guaranteed to write is indistinguishable
+    # from "nothing is late".
+    is_overdue = serializers.SerializerMethodField()
 
     class Meta:
         model = AuditFinding
         fields = ['id', 'evidence', 'comments', 'identified_by_name',
                   'assigned_to_name', 'auditee_name', 'severity_display',
                   'status_display', 'engagement_title', 'corrective_actions_count',
+                  'procedure_label', 'is_overdue',
                   'finding_number', 'title', 'description', 'severity', 'category',
                   'status', 'condition', 'criteria', 'cause', 'effect',
                   'recommendation', 'management_response', 'risk_impact',
@@ -116,6 +130,90 @@ class AuditFindingSerializer(serializers.ModelSerializer):
 
     def get_corrective_actions_count(self, obj):
         return obj.corrective_actions.count()
+
+    def get_procedure_label(self, obj):
+        """The fieldwork step behind the finding, named.
+
+        None rather than a placeholder for the rows that predate the linkage
+        rule — a page can then say "no procedure recorded" honestly instead of
+        printing an empty breadcrumb.
+        """
+        if obj.procedure is None:
+            return None
+        return f'{obj.procedure.step_number}. {obj.procedure.title}'
+
+    def get_is_overdue(self, obj):
+        """Past its own target date, and not yet settled.
+
+        The settled pair is written out rather than derived by subtracting from
+        the status choices, for the reason `AuditEngagementViewSet` writes its
+        own out: a status added to the model later should have to be classified
+        here on purpose. A finding with no target date is not late — the date is
+        what the deadline is, not a convention.
+        """
+        settled = ('resolved', 'closed')
+        if obj.target_resolution_date is None or obj.status in settled:
+            return False
+        return obj.target_resolution_date < timezone.now().date()
+
+    def validate(self, attrs):
+        """A finding must hang off the procedure that failed.
+
+        This is the execution-linkage rule: procedures belong to a program, and
+        findings belong to a procedure that actually ran and found the control
+        wanting. Without it a finding is an assertion with no test behind it —
+        nothing on the record says which piece of fieldwork produced it.
+
+        Note the model cannot carry this on its own. ``AuditFinding.procedure``
+        is ``null=True`` (historical rows have no parent and no honest backfill
+        exists), and DRF reads ``null=True`` as "not required" regardless of
+        ``blank``. Hence the explicit check.
+        """
+        procedure = attrs.get('procedure', getattr(self.instance, 'procedure', None))
+        engagement = attrs.get('engagement', getattr(self.instance, 'engagement', None))
+
+        # The finding answers to the same person the engagement does. Nothing in
+        # the register's create form asks for an auditee — `AuditFinding.auditee`
+        # was writable but never written, so every finding raised through the UI
+        # landed with it NULL. That is not a cosmetic gap: the object-level gate
+        # on respond / add-comment / upload-evidence / dispute matches against
+        # `auditee` and `assigned_to`, so a finding with neither is readable by
+        # the auditee's department (the read scope falls back to
+        # `engagement.department`) and answerable by nobody. Publishing it
+        # notified no one either, since the recipients are drawn from the same
+        # two fields.
+        #
+        # Create only, and only when the payload is silent: an explicit `auditee`
+        # still wins, and existing rows are never re-pointed — a finding is
+        # addressed to whoever held it when it was raised, so re-stamping it when
+        # the engagement's representative changes would rewrite that history.
+        if self.instance is None and not attrs.get('auditee') \
+                and engagement is not None and engagement.auditee_id:
+            attrs['auditee'] = engagement.auditee
+
+        if procedure is None:
+            # Only enforced on the way in. Rows that predate the rule keep
+            # working, and a PATCH that doesn't touch the link shouldn't fail.
+            if self.instance is None:
+                raise serializers.ValidationError({'procedure': (
+                    'A finding must be raised from the procedure that failed. '
+                    'Name the audit procedure this finding came from.'
+                )})
+            return attrs
+
+        if procedure.status != AuditProcedure.FAILED:
+            raise serializers.ValidationError({'procedure': (
+                f'Procedure {procedure.step_number} is '
+                f'"{procedure.get_status_display()}", not failed. Record the test '
+                'outcome as failed before raising a finding from it.'
+            )})
+
+        if engagement is not None and procedure.program.engagement_id != engagement.id:
+            raise serializers.ValidationError({'procedure': (
+                'That procedure belongs to a different engagement than this finding.'
+            )})
+
+        return attrs
 
 
 class AuditFindingListSerializer(AuditFindingSerializer):

@@ -87,6 +87,18 @@ export const executionApi = {
     const res = await apiClient.post(`/execution/programs/${programId}/approve/`);
     return res.data;
   },
+  // Close the program, and open it again. Both go through the action rather than a
+  // status PATCH because `status` is read-only server-side: `complete` is the only
+  // thing that checks the fieldwork is finished, and `reopen` is the only way the
+  // locked procedure controls come back.
+  completeProgram: async (programId) => {
+    const res = await apiClient.post(`/execution/programs/${programId}/complete/`);
+    return res.data;
+  },
+  reopenProgram: async (programId) => {
+    const res = await apiClient.post(`/execution/programs/${programId}/reopen/`);
+    return res.data;
+  },
 };
 
 export default executionApi;

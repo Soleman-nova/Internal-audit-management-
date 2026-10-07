@@ -12,13 +12,50 @@ import FormErrorSummary from '../../components/ui/FormErrorSummary';
 import OrgUnitSelect from '../../components/ui/OrgUnitSelect';
 import { TrendingUp, Sliders, Plus, RefreshCw, AlertOctagon, ClipboardList, CheckCircle2, Star } from 'lucide-react';
 
+/**
+ * The manager's scores next to the auditee's, one row per dimension.
+ *
+ * A divergence is *marked* rather than folded into a number: the two sets are
+ * separate judgements, and the review dialog's whole point is choosing between
+ * them (`adopt_self_values`). Deriving a "gap score" here would invent a formula
+ * the backend does not use.
+ */
+function RiskScoreComparison({ manager, self, heading }) {
+  const { t } = useI18n();
+  const rows = [
+    { key: 'likelihood', label: t('likelihoodLabel'), mine: manager?.likelihood, theirs: self?.likelihood_self },
+    { key: 'impact', label: t('impactLabel'), mine: manager?.impact, theirs: self?.impact_self },
+    { key: 'control', label: t('controlLabel'), mine: manager?.control_effectiveness, theirs: self?.control_effectiveness_self },
+  ];
+  return (
+    <div className="text-xs">
+      <span className="block font-bold text-muted">{heading}</span>
+      {rows.map(({ key, label, mine, theirs }) => {
+        const differs = mine != null && theirs != null && Number(mine) !== Number(theirs);
+        return (
+          <div key={key} className="flex items-center gap-1 mt-1">
+            <span className="font-semibold w-20">{label}</span>
+            <span className="text-muted">{t('riskManagerColumn')}</span>
+            <span className={`badge ${differs ? 'badge-warning' : 'badge-outline'}`}>{mine ?? '—'}</span>
+            <span className="text-muted">{t('riskAuditeeColumn')}</span>
+            <span className={`badge ${differs ? 'badge-warning' : 'badge-outline'}`}>{theirs ?? '—'}</span>
+            {differs && <span>{t('riskDiffers')}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function RiskAssessmentPage() {
   const toast = useToast();
   const auth = useAuth();
   const { t, lang } = useI18n();
-  const { canWriteAudit } = usePermissions();
+  const { canWriteAudit, canManageSettings, canApprovePlans } = usePermissions();
   const [activePageTab, setActivePageTab] = useState('matrix'); // 'matrix' or 'selfAssessment'
   const [formErrors, setFormErrors] = useState({});
+  // Which row's approval action is in flight, so only that row's buttons disable.
+  const [busyAssessmentId, setBusyAssessmentId] = useState(null);
   const currentUser = auth.user;
 
   // Which heat-map cell the detail pane shows, held as its coordinates rather than
@@ -54,12 +91,18 @@ function RiskAssessmentPage() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedSelfAss, setSelectedSelfAss] = useState(null);
   const [reviewerNotes, setReviewerNotes] = useState('');
+  // The review's two newer inputs: re-score the assessment from the auditee's
+  // figures, and the note recording why.
+  const [adoptSelfValues, setAdoptSelfValues] = useState(false);
+  const [reviewNote, setReviewNote] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  // One request, six results. The page used to keep each result in its own
+  const [recomputing, setRecomputing] = useState(false);
+
+  // One request, seven results. The page used to keep each result in its own
   // `useState` and have a hand-rolled `fetchAll` write all six — a shape with no
   // way to discard a response that landed after a newer Refresh, so a slow first
-  // load could overwrite the matrix the user had just reloaded. Because the six
+  // load could overwrite the matrix the user had just reloaded. Because the seven
   // come from one `Promise.all`, the loader returns them as one object and the
   // hook owns `data`/`loading`/`error`; nothing is copied into a second state.
   //
@@ -67,13 +110,22 @@ function RiskAssessmentPage() {
   // was never a per-request message to keep distinguishable.
   const { data, loading, reload: fetchAll, setData } = useAsyncData(
     async () => {
-      const [paramRes, assessRes, uniRes, heatRes, sumRes, selfRes] = await Promise.all([
+      const [paramRes, assessRes, uniRes, heatRes, sumRes, selfRes, policyRes] = await Promise.all([
         riskApi.getParameters(),
-        riskApi.getAssessments(),
+        // The full register, not the default first page of 20. Two things here
+        // need every row: the detail pane draws each cell's assessments from
+        // these rows (the heat map's own are a four-field projection — see
+        // `gridCells`), and a self-assessment carries its parent only as a
+        // foreign key, so the parent's scores have to be looked up in this list.
+        riskApi.getAssessments({ page_size: 1000 }),
         planningApi.getUniverse(),
         riskApi.getHeatmap(),
         riskApi.getSummary(),
         riskApi.getSelfAssessments(),
+        // The policy endpoint is new and the banner it feeds is additive, so it
+        // degrades to `null` rather than taking the matrix down with it when the
+        // backend migration has not reached this database yet.
+        riskApi.getPolicy().catch(() => null),
       ]);
       return {
         parameters: paramRes || [],
@@ -82,6 +134,7 @@ function RiskAssessmentPage() {
         heatmap: heatRes || [],
         summary: sumRes || {},
         selfAssessments: selfRes || [],
+        policy: policyRes,
       };
     },
     [],
@@ -97,6 +150,23 @@ function RiskAssessmentPage() {
   const heatmapData = data?.heatmap ?? [];
   const summary = data?.summary ?? {};
   const selfAssessments = data?.selfAssessments ?? [];
+  const policy = data?.policy ?? null;
+  const staleCount = policy?.stale_assessments ?? 0;
+
+  // A self-assessment points at its parent by foreign key, so `risk_assessment`
+  // is normally just the id; a nested object is accepted too, since that is the
+  // shape this page's older code reads. The full parent row is what carries the
+  // manager's own likelihood/impact/control effectiveness — the values a review
+  // compares the submission against.
+  const assessmentById = new Map(assessments.map(a => [a.id, a]));
+  const managerScoresFor = (sa) => {
+    const parent = sa?.risk_assessment;
+    if (parent !== null && typeof parent === 'object') return assessmentById.get(parent.id) ?? parent;
+    return assessmentById.get(parent) ?? {};
+  };
+  // The assessment behind the open review dialog, resolved once for the block
+  // that shows its department, its scores and any previous adoption note.
+  const reviewParent = selectedSelfAss ? managerScoresFor(selectedSelfAss) : {};
 
   const handleCreateAssessment = async (e) => {
     e.preventDefault();
@@ -131,10 +201,58 @@ function RiskAssessmentPage() {
       toast.success(t('riskCreateSuccess'));
       fetchAll(); // Refresh heatmap
     } catch (err) {
-      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
+      const data = err.response?.data;
+      // Map DRF field errors ({ audit_universe: ["..."] }) back onto the form so
+      // the offending select is marked and its message sits under it, rather than
+      // the reason for the refusal only flashing past in a toast. This is the
+      // path a department with several active universe entries and no entity
+      // picked takes.
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const fieldErrors = {};
+        for (const [field, msg] of Object.entries(data)) {
+          fieldErrors[field] = Array.isArray(msg) ? msg.join(' ') : String(msg);
+        }
+        setFormErrors(fieldErrors);
+      }
+      const msg = typeof data === 'object' ? JSON.stringify(data) : err.message;
       toast.error(t('riskCreateFailed', msg));
     } finally {
       setSaving(false);
+    }
+  };
+
+  // The user-facing half of "a parameter edit must reach the data": re-score the
+  // stale rows server-side, then pull the refreshed matrix and the new counts.
+  const handleRecompute = async () => {
+    setRecomputing(true);
+    try {
+      const res = await riskApi.recomputeAssessments();
+      toast.success(t('riskRecomputeSuccess', res?.updated ?? 0));
+      fetchAll();
+    } catch (err) {
+      const msg = typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : err.message;
+      toast.error(t('riskRecomputeFailed', msg));
+    } finally {
+      setRecomputing(false);
+    }
+  };
+
+  // ── Approval workflow (assess → submit → approve/return) ─────────────
+  // Each step is its own endpoint: the capability gate, the reviewer stamps,
+  // the audit entry, and the score's propagation onto the auditable entity all
+  // live server-side, and only an approved assessment moves the entity's score.
+  const runAssessmentAction = async (assess, call, key, successKey) => {
+    setBusyAssessmentId(assess.id);
+    try {
+      await call(assess.id);
+      toast.success(t(successKey));
+      fetchAll();
+    } catch (err) {
+      const msg = typeof err.response?.data === 'object'
+        ? JSON.stringify(err.response.data) : err.message;
+      toast.error(msg);
+    } finally {
+      setBusyAssessmentId(null);
     }
   };
 
@@ -193,6 +311,11 @@ function RiskAssessmentPage() {
   const handleOpenReview = (selfAss) => {
     setSelectedSelfAss(selfAss);
     setReviewerNotes(selfAss.reviewer_notes || '');
+    // Never carry a previous dialog's adoption choice onto a different
+    // assessment — adopting changes the parent's score, so a stale `true` here
+    // would re-score the wrong row.
+    setAdoptSelfValues(false);
+    setReviewNote('');
     setShowReviewModal(true);
   };
 
@@ -205,7 +328,10 @@ function RiskAssessmentPage() {
       // enforces APPROVE_PLANS, stamps reviewed_by/reviewed_at, writes the
       // audit trail and notifies the submitter. The backend now also refuses
       // to accept status through PATCH at all.
-      await riskApi.reviewSelfAssessment(selectedSelfAss.id, reviewerNotes);
+      await riskApi.reviewSelfAssessment(selectedSelfAss.id, reviewerNotes, {
+        adopt_self_values: adoptSelfValues,
+        note: reviewNote,
+      });
       toast.success(t('riskReviewSubmitted'));
       setShowReviewModal(false);
       fetchAll();
@@ -229,9 +355,14 @@ function RiskAssessmentPage() {
   const gridCells = [];
   for (let i = 5; i >= 1; i--) {
     for (let l = 1; l <= 5; l++) {
-      const cellItems = heatmapData.filter(a => a.likelihood === l && a.impact === i);
-      const fallback = assessments.filter(a => a.likelihood === l && a.impact === i);
-      const items = cellItems.length > 0 ? cellItems : fallback;
+      // The heat map's rows are a four-field projection (likelihood, impact,
+      // risk_score, risk_rating), so they cannot carry the residual score or the
+      // policy markers the detail pane shows. The full register rows are
+      // therefore preferred, and the projection stays as the fallback for a cell
+      // whose rows fell outside the loaded page.
+      const full = assessments.filter(a => a.likelihood === l && a.impact === i);
+      const projected = heatmapData.filter(a => a.likelihood === l && a.impact === i);
+      const items = full.length > 0 ? full : projected;
       gridCells.push({ impact: i, likelihood: l, colorClass: getCellColorClass(l, i), items });
     }
   }
@@ -259,6 +390,17 @@ function RiskAssessmentPage() {
     }
   };
 
+  // Where the score sits in the approval chain. Only `approved` has reached the
+  // auditable entity, so that is the only one shown as settled.
+  const assessmentStatusClass = (status) => {
+    switch (status) {
+      case 'approved': return 'badge-success';
+      case 'submitted': return 'badge-info';
+      case 'rejected': return 'badge-danger';
+      default: return 'badge-outline';
+    }
+  };
+
   const isAuditee = currentUser && currentUser.role === 'auditee';
 
   // Filter assessments for Auditee department
@@ -268,6 +410,29 @@ function RiskAssessmentPage() {
     if (currentUser?.department_name && a.department_name === currentUser.department_name) return true;
     return false;
   });
+
+  // A universe entry is a candidate when it shares *any* of the assessment's
+  // three scopes — matching on department alone would hide an entity registered
+  // against the region or the service center. With only a department chosen this
+  // behaves exactly as it did before the scopes were split.
+  const universeMatches = universe.filter(u => {
+    const { department, region, service_center } = newAssessment;
+    if (!department && !region && !service_center) return true;
+    return (
+      (department && String(u.department) === String(department)) ||
+      (region && u.region && String(u.region) === String(region)) ||
+      (service_center && u.service_center && String(u.service_center) === String(service_center))
+    );
+  });
+
+  // Whether "Auto (by department)" is still a safe answer. The server refuses the
+  // create when the chosen department has more than one *active* entity and none
+  // was picked, so the hint mirrors that rule rather than the picker's wider
+  // three-scope candidate list.
+  const departmentEntityCount = newAssessment.department
+    ? universe.filter(u => String(u.department) === String(newAssessment.department) && u.status === 'active').length
+    : 0;
+  const universeError = formErrors.audit_universe;
 
   return (
     <div className="risk-view">
@@ -283,6 +448,54 @@ function RiskAssessmentPage() {
 
       {activePageTab === 'matrix' ? (
         <>
+          {/* Parameter policy in force. The weights are a multiplier on every
+              score, and editing one silently moved rows into other bands; this
+              banner is where the multiplier and the rows it invalidated become
+              visible, with the recompute that reconciles them. */}
+          <div className="card">
+            <div className="card-header justify-between">
+              <div>
+                <h3><Sliders size={18} className="inline mr-2" />{t('riskPolicyTitle')}</h3>
+                <p className="card-subtitle">{t('riskPolicySubtitle')}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {policy ? (
+                  <>
+                    <span className="badge badge-outline">{t('riskPolicyActiveCount', policy.active_count)}</span>
+                    <span className="badge badge-outline">{t('riskPolicyWeightSum', policy.weight_sum)}</span>
+                    <span className="badge badge-info">{t('riskPolicyUplift', Math.round(Number(policy.uplift) * 100))}</span>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted">{t('riskPolicyUnavailable')}</span>
+                )}
+              </div>
+            </div>
+            {staleCount > 0 && (
+              <div className="alert alert-red" style={{ marginBottom: 0 }}>
+                <span className="alert-icon">!</span>
+                <div className="flex items-center justify-between gap-3 flex-wrap w-full">
+                  <span>{t('riskPolicyStale', staleCount)}</span>
+                  {/* Recompute rewrites the whole register, so the endpoint requires
+                      MANAGE_SETTINGS — the same capability that edits the parameters
+                      it responds to. Anyone else reading the page sees the warning
+                      without a button that would 403. */}
+                  {canManageSettings ? (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm flex items-center gap-1"
+                      onClick={handleRecompute}
+                      disabled={recomputing}
+                    >
+                      <RefreshCw size={13} /> {recomputing ? t('riskRecomputing') : t('riskRecompute')}
+                    </button>
+                  ) : (
+                    <span className="text-xs">{t('riskRecomputeNeedsManager')}</span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Summary KPI Strip */}
           <div className="risk-kpi-strip mb-4">
             {[
@@ -376,11 +589,31 @@ function RiskAssessmentPage() {
                         <div key={i} className="risk-item-detail">
                           <div className="flex justify-between items-center mb-1">
                             <h4>{orgScopeLabel(lang, item, t('riskDeptFallback', item.department))}</h4>
-                            <span className="risk-score-value">{t('score')} {item.risk_score || (item.likelihood * item.impact)}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="risk-score-value">{t('riskInherentScore', item.risk_score || (item.likelihood * item.impact))}</span>
+                              <span className="badge badge-outline" title={t('riskResidualHint')}>
+                                {t('riskResidualScore', item.residual_risk ?? '—')}
+                              </span>
+                            </div>
                           </div>
                           <p className="text-sm text-secondary">
                             {t('periodLabel')} {item.assessment_period || 'Annual'} — {t('rating')} {item.risk_rating || '—'}
                           </p>
+                          {(item.is_stale || item.adopted_source === 'self_assessment') && (
+                            <div className="flex items-center gap-2 mt-1">
+                              {item.is_stale && (
+                                <span className="badge badge-warning" title={t('riskStaleHint')}>{t('riskStaleBadge')}</span>
+                              )}
+                              {item.adopted_source === 'self_assessment' && (
+                                <span className="badge badge-info" title={t('riskAdoptedHint')}>{t('riskAdoptedBadge')}</span>
+                              )}
+                            </div>
+                          )}
+                          {item.adoption_note && (
+                            <p className="text-xs text-muted mt-1">
+                              <span className="font-bold">{t('riskAdoptionNoteLabel')}</span> {item.adoption_note}
+                            </p>
+                          )}
                         </div>
                       ))
                     )}
@@ -390,6 +623,7 @@ function RiskAssessmentPage() {
                 <div>
                   <h3>{t('allRiskAssessments')}</h3>
                   <p className="card-subtitle mb-4">{t('scoredRiskRecords')}</p>
+                  <p className="card-subtitle mb-4">{t('riskScoreLegend')}</p>
                   <div className="risk-full-list">
                     {assessments.length === 0 ? (
                       <div className="text-center py-8">
@@ -407,14 +641,81 @@ function RiskAssessmentPage() {
                           <div className="risk-row-left">
                             <h4>{orgScopeLabel(lang, item, t('riskDepartmentFallback', item.department))}</h4>
                             <span className="text-xs text-muted">{item.assessment_period} {item.year}</span>
+                            {item.adoption_note && (
+                              <span className="block text-xs text-muted">
+                                {t('riskAdoptionNoteLabel')} {item.adoption_note}
+                              </span>
+                            )}
                           </div>
-                          <div className="risk-row-right flex items-center gap-2">
+                          <div className="risk-row-right flex items-center gap-2 flex-wrap">
                             <span className={`badge ${getRatingClass(item.risk_rating)}`}>
                               {item.risk_rating?.toUpperCase()}
                             </span>
                             <span className="risk-tag medium">
-                              {t('score')} {item.risk_score}
+                              {t('riskInherentScore', item.risk_score)}
                             </span>
+                            <span className="badge badge-outline" title={t('riskResidualHint')}>
+                              {t('riskResidualScore', item.residual_risk ?? '—')}
+                            </span>
+                            {item.is_stale && (
+                              <span className="badge badge-warning" title={t('riskStaleHint')}>{t('riskStaleBadge')}</span>
+                            )}
+                            {item.adopted_source === 'self_assessment' && (
+                              <span className="badge badge-info" title={t('riskAdoptedHint')}>{t('riskAdoptedBadge')}</span>
+                            )}
+                            {/* Where the score is in the approval chain. `draft`
+                                and `rejected` are the assessor's to move on;
+                                `submitted` is waiting on a reviewer. */}
+                            <span className={`badge ${assessmentStatusClass(item.status)}`}>
+                              {item.status_display || item.status}
+                            </span>
+                          </div>
+                          <div className="risk-row-actions flex items-center gap-1">
+                            {/* The assessor pushes their own draft to the reviewers. */}
+                            {canWriteAudit
+                              && item.assessed_by === currentUser?.id
+                              && ['draft', 'rejected'].includes(item.status) && (
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-sm"
+                                disabled={busyAssessmentId === item.id}
+                                onClick={() => runAssessmentAction(
+                                  item, riskApi.submitAssessment, 'submitAssessment',
+                                  'assessmentSubmitted',
+                                )}
+                              >
+                                {t('submitAssessment')}
+                              </button>
+                            )}
+                            {/* Approval is what puts the score on the auditable
+                                entity, so it sits with APPROVE_PLANS. The assessor
+                                cannot approve their own score. */}
+                            {canApprovePlans && ['draft', 'submitted'].includes(item.status) && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn btn-accent btn-sm"
+                                  disabled={busyAssessmentId === item.id}
+                                  onClick={() => runAssessmentAction(
+                                    item, riskApi.approveAssessment, 'approveAssessment',
+                                    'assessmentApproved',
+                                  )}
+                                >
+                                  {t('approveAssessment')}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline btn-sm"
+                                  disabled={busyAssessmentId === item.id}
+                                  onClick={() => runAssessmentAction(
+                                    item, riskApi.rejectAssessment, 'rejectAssessment',
+                                    'assessmentRejected',
+                                  )}
+                                >
+                                  {t('rejectAssessment')}
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                       ))
@@ -498,11 +799,17 @@ function RiskAssessmentPage() {
                           <tr key={assess.id}>
                             <td><strong>{assess.year} {assess.assessment_period}</strong></td>
                             <td>
-                              <div className="flex gap-2 items-center">
+                              <div className="flex gap-2 items-center flex-wrap">
                                 <span className={`badge ${getRatingClass(assess.risk_rating)}`}>
                                   {assess.risk_rating?.toUpperCase()}
                                 </span>
                                 <span className="text-xs text-muted">{t('riskScoreBreakdown', assess.risk_score, assess.likelihood, assess.impact)}</span>
+                                <span className="badge badge-outline" title={t('riskResidualHint')}>
+                                  {t('riskResidualScore', assess.residual_risk ?? '—')}
+                                </span>
+                                {assess.is_stale && (
+                                  <span className="badge badge-warning" title={t('riskStaleHint')}>{t('riskStaleBadge')}</span>
+                                )}
                               </div>
                             </td>
                             <td>
@@ -562,37 +869,48 @@ function RiskAssessmentPage() {
                         <td colSpan="6" className="text-center py-8 text-muted">{t('noSelfAssessments')}</td>
                       </tr>
                     ) : (
-                      selfAssessments.map(sa => (
-                        <tr key={sa.id}>
-                          <td><strong>{localizedName(lang, sa.risk_assessment?.department_name, sa.risk_assessment?.department_name_am) || t('riskDeptFallback', sa.risk_assessment?.department)}</strong></td>
-                          <td>{sa.risk_assessment?.year} {sa.risk_assessment?.assessment_period}</td>
-                          <td>
-                            <span className="block text-xs font-semibold">L: {sa.likelihood_self} | I: {sa.impact_self} | C: {sa.control_effectiveness_self}</span>
-                          </td>
-                          <td>
-                            <div className="max-w-md">
-                              <span className="block text-xs font-bold text-muted">{t('justificationLabel')}</span>
-                              <p className="text-xs truncate">{sa.justification}</p>
-                              {sa.mitigating_controls && (
-                                <>
-                                  <span className="block text-xs font-bold text-muted mt-1">{t('mitigatingLabel')}</span>
-                                  <p className="text-xs truncate">{sa.mitigating_controls}</p>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                          <td>
-                            <span className={`badge ${sa.status === 'reviewed' ? 'badge-success' : 'badge-warning'}`}>
-                              {sa.status?.toUpperCase()}
-                            </span>
-                          </td>
-                          <td>
-                            <button className="btn btn-outline btn-sm" onClick={() => handleOpenReview(sa)}>
-                              {t('review')}
-                            </button>
-                          </td>
-                        </tr>
-                      ))
+                      selfAssessments.map(sa => {
+                        // The parent's own fields live on the assessment row, not
+                        // on the submission (which carries only its foreign key) —
+                        // reading `sa.risk_assessment.department_name` off what is
+                        // an id is what used to render "Dept #undefined" here.
+                        const parent = managerScoresFor(sa);
+                        return (
+                          <tr key={sa.id}>
+                            <td><strong>{localizedName(lang, parent.department_name, parent.department_name_am) || t('riskDeptFallback', parent.department)}</strong></td>
+                            <td>{parent.year} {parent.assessment_period}</td>
+                            <td>
+                              <RiskScoreComparison
+                                manager={parent}
+                                self={sa}
+                                heading={t('riskScoreComparison')}
+                              />
+                            </td>
+                            <td>
+                              <div className="max-w-md">
+                                <span className="block text-xs font-bold text-muted">{t('justificationLabel')}</span>
+                                <p className="text-xs truncate">{sa.justification}</p>
+                                {sa.mitigating_controls && (
+                                  <>
+                                    <span className="block text-xs font-bold text-muted mt-1">{t('mitigatingLabel')}</span>
+                                    <p className="text-xs truncate">{sa.mitigating_controls}</p>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`badge ${sa.status === 'reviewed' ? 'badge-success' : 'badge-warning'}`}>
+                                {sa.status?.toUpperCase()}
+                              </span>
+                            </td>
+                            <td>
+                              <button className="btn btn-outline btn-sm" onClick={() => handleOpenReview(sa)}>
+                                {t('review')}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -640,30 +958,29 @@ function RiskAssessmentPage() {
               <label className="form-label" htmlFor="assessment_universe">{t('auditUniverseEntry')}</label>
               <select
                 id="assessment_universe"
-                className="form-control"
+                className={`form-control ${universeError ? 'is-invalid' : ''}`}
+                aria-invalid={Boolean(universeError)}
+                aria-describedby={
+                  universeError ? 'assessment_universe_error'
+                    : departmentEntityCount > 1 ? 'assessment_universe_hint' : undefined
+                }
                 value={newAssessment.audit_universe}
                 onChange={e => setNewAssessment({ ...newAssessment, audit_universe: e.target.value })}
               >
                 <option value="">{t('autoByDepartment')}</option>
-                {universe
-                  // A universe entry is a candidate when it shares *any* of the
-                  // assessment's three scopes — matching on department alone
-                  // would hide an entity registered against the region or the
-                  // service center. With only a department chosen this behaves
-                  // exactly as it did before the scopes were split.
-                  .filter(u => {
-                    const { department, region, service_center } = newAssessment;
-                    if (!department && !region && !service_center) return true;
-                    return (
-                      (department && String(u.department) === String(department)) ||
-                      (region && u.region && String(u.region) === String(region)) ||
-                      (service_center && u.service_center && String(u.service_center) === String(service_center))
-                    );
-                  })
-                  .map(u => (
-                    <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
-                  ))}
+                {universeMatches.map(u => (
+                  <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
+                ))}
               </select>
+              {/* Shown only when the choice is ambiguous: one entity is what
+                  "Auto (by department)" resolves to anyway, and several is what
+                  makes the server refuse a create that left this blank. */}
+              {departmentEntityCount > 1 && !universeError && (
+                <p className="form-hint" id="assessment_universe_hint">{t('riskUniverseMultipleHint')}</p>
+              )}
+              {universeError && (
+                <p className="form-error" id="assessment_universe_error">{universeError}</p>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="assessment_period">{t('period')}</label>
@@ -820,8 +1137,19 @@ function RiskAssessmentPage() {
           <form id="mgr-review-form" onSubmit={handleSubmitReview}>
           <FormErrorSummary errors={formErrors} />
             <div className="mb-4 p-3 rounded" style={{ background: 'var(--bg-card-secondary)' }}>
-              <p className="text-sm font-semibold">{t('deptLabel')} {localizedName(lang, selectedSelfAss.risk_assessment?.department_name, selectedSelfAss.risk_assessment?.department_name_am) || t('riskDeptFallback', selectedSelfAss.risk_assessment?.department)}</p>
-              <p className="text-xs text-muted">{t('auditeeProposedScores')} L={selectedSelfAss.likelihood_self} | I={selectedSelfAss.impact_self} | C={selectedSelfAss.control_effectiveness_self}</p>
+              <p className="text-sm font-semibold">{t('deptLabel')} {localizedName(lang, reviewParent.department_name, reviewParent.department_name_am) || t('riskDeptFallback', reviewParent.department)}</p>
+              <RiskScoreComparison
+                manager={reviewParent}
+                self={selectedSelfAss}
+                heading={t('riskScoreComparison')}
+              />
+              {/* Why a previous score came from the auditee's numbers, if one did —
+                  the context for deciding whether to adopt them again. */}
+              {reviewParent.adoption_note && (
+                <p className="text-xs text-muted mt-1">
+                  {t('riskAdoptionNoteLabel')} {reviewParent.adoption_note}
+                </p>
+              )}
               <p className="text-xs text-muted mt-2">{t('justificationLabel')} &quot;{selectedSelfAss.justification}&quot;</p>
               {selectedSelfAss.mitigating_controls && (
                 <p className="text-xs text-muted mt-1">{t('mitigatingLabel')} &quot;{selectedSelfAss.mitigating_controls}&quot;</p>
@@ -833,6 +1161,29 @@ function RiskAssessmentPage() {
               <textarea id="mgr_reviewer_notes" rows="4" className="form-control" placeholder={t('typeFeedback')}
                 value={reviewerNotes}
                 onChange={e => setReviewerNotes(e.target.value)} required />
+            </div>
+
+            {/* The review's other decision: which set of figures the score should
+                be based on. Checked, it becomes the auditee's — stated plainly
+                because that silently changes the parent assessment's score. */}
+            <div className="form-group">
+              <label className="form-label flex items-center gap-2" htmlFor="mgr_adopt_self">
+                <input
+                  id="mgr_adopt_self"
+                  type="checkbox"
+                  checked={adoptSelfValues}
+                  onChange={e => setAdoptSelfValues(e.target.checked)}
+                />
+                {t('riskAdoptSelfValues')}
+              </label>
+              <p className="form-hint">{t('riskAdoptSelfValuesHint')}</p>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="mgr_review_note">{t('riskAdoptionNote')}</label>
+              <textarea id="mgr_review_note" rows="2" className="form-control" placeholder={t('riskAdoptionNotePlaceholder')}
+                value={reviewNote}
+                onChange={e => setReviewNote(e.target.value)} />
             </div>
           </form>
         )}

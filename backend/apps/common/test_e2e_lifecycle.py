@@ -143,6 +143,10 @@ class EndToEndLifecycleTest(RoleFixtureMixin, TestCase):
             'department': self.department.id,
             'lead_auditor': self.auditor.id,
             'supervisor': self.supervisor.id,
+            # Spawning an engagement is where the audit gets its bounds, so both
+            # are mandatory — an engagement without them is an unscoped audit.
+            'objectives': 'Assess the adequacy of revenue assurance controls.',
+            'scope': 'Revenue cycle systems and records for the trailing year.',
         }, format='json')
         self.assertEqual(response.status_code, 201, response.data)
         engagement = AuditEngagement.objects.get(pk=response.data['id'])
@@ -212,6 +216,27 @@ class EndToEndLifecycleTest(RoleFixtureMixin, TestCase):
         self.assertEqual(procedure.status, 'completed')
         self.assertEqual(procedure.completed_by, self.auditor)
 
+        # 11b ─ A second procedure that fails ───────────────────────────────
+        # The two outcomes are distinct: `completed` means the test ran and the
+        # control held, `failed` means it ran and found the control wanting. Only
+        # the second can raise a finding, so the lifecycle needs both.
+        response = self.as_user(self.auditor).post(PROCEDURES_URL, {
+            'program': program.id,
+            'step_number': '2',
+            'title': 'Reconcile the receipting sub-ledger to the general ledger',
+            'description': 'Agree the sub-ledger control total to the ledger.',
+            'procedure_type': 'substantive',
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        failed_procedure = AuditProcedure.objects.get(pk=response.data['id'])
+        response = self.as_user(self.auditor).patch(
+            f'{PROCEDURES_URL}{failed_procedure.id}/',
+            {'status': 'failed'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        failed_procedure.refresh_from_db()
+        self.assertEqual(failed_procedure.status, 'failed')
+
         # 12 ─ Submit the program for review ────────────────────────────────
         response = self.as_user(self.auditor).post(f'{PROGRAMS_URL}{program.id}/submit/')
         self.assertEqual(response.status_code, 200, response.data)
@@ -264,7 +289,7 @@ class EndToEndLifecycleTest(RoleFixtureMixin, TestCase):
         # 16 ─ Finding ──────────────────────────────────────────────────────
         response = self.as_user(self.auditor).post(FINDINGS_URL, {
             'engagement': engagement.id,
-            'procedure': procedure.id,
+            'procedure': failed_procedure.id,
             'title': 'Unapproved journal entries',
             'description': 'Twelve journals were posted without review.',
             'severity': 'high',
@@ -276,7 +301,26 @@ class EndToEndLifecycleTest(RoleFixtureMixin, TestCase):
         finding = AuditFinding.objects.get(pk=response.data['id'])
         self.assert_number(finding.finding_number, 'FND')
         self.assertEqual(finding.identified_by, self.auditor)
-        self.assertEqual(finding.status, 'open')
+        # A draft, not a live finding: it is the audit team's own work until a
+        # reviewer endorses it.
+        self.assertEqual(finding.status, 'draft')
+
+        # 16b ─ Supervisor endorses and publishes it ────────────────────────
+        # Spec: the review that sits between the team raising a finding and the
+        # auditee answering it. Until it happens the finding is invisible and
+        # inert, which is what the steps below depend on — without it the auditee
+        # was commenting on, uploading against, and answering a finding that no
+        # supervisor had looked at yet.
+        self.assertEqual(
+            self.as_user(self.auditee).get(f'{FINDINGS_URL}{finding.id}/').status_code,
+            404,
+        )
+        response = self.as_user(self.supervisor).post(
+            f'{FINDINGS_URL}{finding.id}/publish/',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        finding.refresh_from_db()
+        self.assertEqual(finding.status, AuditFinding.AWAITING_AUDITEE)
 
         # 17 ─ Auditee comments on the finding about them ───────────────────
         response = self.as_user(self.auditee).post(
@@ -334,22 +378,45 @@ class EndToEndLifecycleTest(RoleFixtureMixin, TestCase):
         finding.refresh_from_db()
         self.assertEqual(finding.status, 'closed')
 
-        # 21 ─ CAPA from the finding ────────────────────────────────────────
-        response = self.as_user(self.auditor).post(ACTIONS_URL, {
+        # 21 ─ The auditee formulates the remediation plan ──────────────────
+        # Spec Step 11: the plan is the auditee's to write, and it lands with
+        # the auditor for sign-off rather than live. Creation used to be gated
+        # on WRITE_AUDIT, so the audit team wrote this on the auditee's behalf
+        # and the approval step that follows had nothing of theirs to approve.
+        response = self.as_user(self.auditee).post(ACTIONS_URL, {
             'finding': finding.id,
             'title': 'Reinstate authorisation controls',
             'description': 'Journals posted without a second approver.',
             'recommendation': 'Document and test the control monthly.',
-            'owner': self.auditee.id,
             'priority': 'high',
             'due_date': timezone.now().date() + timezone.timedelta(days=30),
         }, format='json')
         self.assertEqual(response.status_code, 201, response.data)
         action = CorrectiveAction.objects.get(pk=response.data['id'])
         self.assert_number(action.action_number, 'CAPA')
+        self.assertEqual(action.status, 'pending_approval')
+        self.assertEqual(action.owner, self.auditee)
+        # Routed to the engagement's lead auditor, not back to its author —
+        # `assigned_by` is what the approve gate checks.
         self.assertEqual(action.assigned_by, self.auditor)
-        self.assertTrue(self.notifications_for(self.auditee)
+        self.assertTrue(self.notifications_for(self.auditor)
                         .filter(notification_type='assigned').exists())
+        # The sign-off is not the author's to give.
+        self.assertEqual(
+            self.as_user(self.auditee).post(
+                f'{ACTIONS_URL}{action.id}/approve/',
+            ).status_code,
+            403,
+        )
+
+        # 21b ─ The lead auditor accepts the plan ───────────────────────────
+        response = self.as_user(self.auditor).post(f'{ACTIONS_URL}{action.id}/approve/')
+        self.assertEqual(response.status_code, 200, response.data)
+        action.refresh_from_db()
+        self.assertEqual(action.status, 'open')
+        self.assertEqual(action.approved_by, self.auditor)
+        self.assertTrue(self.notifications_for(self.auditee)
+                        .filter(notification_type='approved').exists())
 
         # 22 ─ Owner responds to their own CAPA ─────────────────────────────
         response = self.as_user(self.auditee).post(

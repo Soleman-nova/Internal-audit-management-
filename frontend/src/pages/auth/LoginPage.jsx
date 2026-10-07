@@ -62,7 +62,7 @@ const DEMO_ROLES = [
 /* ======================================================================
    DEMO BUTTON Component
 ====================================================================== */
-function DemoButton({ role, loading, active, onClick}) {
+function DemoButton({ role, loading, active, onClick }) {
   const { t } = useI18n();
   const [hov, setHov] = useState(false);
   return (
@@ -270,27 +270,27 @@ function LoginPage() {
       <div className="relative z-10 flex w-full max-w-[480px] flex-col items-center">
         {/* ============================================================ HEADER (logo + title) — sits above card */}
         <div className="flex flex-col items-center gap-2 mb-6 mt-2">
-        <div className="w-[72px] h-[72px] rounded-full bg-[#1b2f52] p-[3px] flex items-center justify-center"
-          style={{
-            boxShadow: '0 0 0 3px #f2a93b,0 0 0 5px #1b2f52,0 0 0 7px rgba(20,33,61,0.6),0 0 0 10px rgba(0,166,81,0.22),0 8px 28px rgba(0,0,0,0.35)',
-          }}>
-          <img src="/eeu-logo.png" alt={t('brandLogoAlt')} className="w-full h-full rounded-full object-cover block" />
-        </div>
-        <div className="text-center">
-          <div className="text-[18px] font-extrabold text-white tracking-[0.02em] leading-tight drop-shadow-lg">
-            የኢትዮጵያ ኤሌክትሪክ አገልግሎት
+          <div className="w-[72px] h-[72px] rounded-full bg-[#1b2f52] p-[3px] flex items-center justify-center"
+            style={{
+              boxShadow: '0 0 0 3px #f2a93b,0 0 0 5px #1b2f52,0 0 0 7px rgba(20,33,61,0.6),0 0 0 10px rgba(0,166,81,0.22),0 8px 28px rgba(0,0,0,0.35)',
+            }}>
+            <img src="/eeu-logo.png" alt={t('brandLogoAlt')} className="w-full h-full rounded-full object-cover block" />
           </div>
-          <div className="text-[17px] font-extrabold text-white tracking-[0.01em] leading-tight drop-shadow-lg">
-            Ethiopian Electric Utility
+          <div className="text-center">
+            <div className="text-[18px] font-extrabold text-white tracking-[0.02em] leading-tight drop-shadow-lg">
+              የኢትዮጵያ ኤሌክትሪክ አገልግሎት
+            </div>
+            <div className="text-[17px] font-extrabold text-white tracking-[0.01em] leading-tight drop-shadow-lg">
+              Ethiopian Electric Utility
+            </div>
           </div>
+          <div className="text-[11px] font-bold tracking-[0.3em] text-amber-300 uppercase drop-shadow-md">
+            {t('loginSystemTitle')}
+          </div>
+          <div className="w-12 h-[3px] rounded-full bg-gradient-to-r from-amber-400 to-emerald-500 drop-shadow-md" />
         </div>
-        <div className="text-[11px] font-bold tracking-[0.3em] text-amber-300 uppercase drop-shadow-md">
-          {t('loginSystemTitle')}
-        </div>
-        <div className="w-12 h-[3px] rounded-full bg-gradient-to-r from-amber-400 to-emerald-500 drop-shadow-md" />
-      </div>
 
-      {/* ============================================================ LOGIN CARD
+        {/* ============================================================ LOGIN CARD
           Translucent so the background video reads through it. The white is
           not opaque enough on its own to hold the dark text against whatever
           frame is playing behind it, so the blur is doing the legibility work:
@@ -301,162 +301,162 @@ function LoginPage() {
           The hairline border is what keeps the panel from dissolving into a
           light frame — at this opacity the shadow alone is not enough to find
           the card's edge. */}
-      <div
-        className="relative z-10 shrink-0 rounded-[20px] border border-white/50 bg-white/[0.68]"
-        style={{
-          width: 430,
-          padding: '32px 40px 24px',
-          // Spelled out rather than left to the `backdrop-blur-*` utility: the
-          // `-webkit-` copy is still required by Safari below 18, and writing
-          // both here keeps them from drifting apart.
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.3),0 8px 24px rgba(0,0,0,0.2),0 2px 6px rgba(0,0,0,0.1)',
-        }}
-      >
-        <h2 className="text-[24px] font-extrabold text-[#14213d] text-center mb-1 -tracking-[0.01em]">
-          {t('loginWelcomeBack')}
-        </h2>
-        <p className="text-sm text-gray-500 text-center mb-5 font-normal">
-          {t('loginSignInSubtitle')}
-        </p>
+        <div
+          className="relative z-10 shrink-0 rounded-[20px] border border-white/50 bg-white/[0.68]"
+          style={{
+            width: 430,
+            padding: '32px 40px 24px',
+            // Spelled out rather than left to the `backdrop-blur-*` utility: the
+            // `-webkit-` copy is still required by Safari below 18, and writing
+            // both here keeps them from drifting apart.
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3),0 8px 24px rgba(0,0,0,0.2),0 2px 6px rgba(0,0,0,0.1)',
+          }}
+        >
+          <h2 className="text-[24px] font-extrabold text-[#14213d] text-center mb-1 -tracking-[0.01em]">
+            {t('loginWelcomeBack')}
+          </h2>
+          <p className="text-sm text-gray-500 text-center mb-5 font-normal">
+            {t('loginSignInSubtitle')}
+          </p>
 
-        {/* Error banner */}
-        {error && (
-          <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-red-600 text-[13px] mb-3.5" role="alert">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" className="shrink-0 mt-0.5">
-              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            <span>{error}</span>
-          </div>
-        )}
+          {/* Error banner */}
+          {error && (
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-red-600 text-[13px] mb-3.5" role="alert">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" className="shrink-0 mt-0.5">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          )}
 
-        {/* SSO — additive to the form below, not a replacement. Keeping the local
+          {/* SSO — additive to the form below, not a replacement. Keeping the local
             login working means a Logto outage is not a lockout, and the seeded
             demo accounts (and the Playwright suite that drives them) still work. */}
-        {isLogtoConfigured && (
-          <>
-            <LogtoSignInButton onError={setError} />
-            <div className="flex items-center gap-3 my-4">
-              <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-[11.5px] font-semibold text-gray-400 tracking-[0.06em]">
-                {t('loginOrSignInWithUserId')}
-              </span>
-              <div className="flex-1 h-px bg-gray-200" />
-            </div>
-          </>
-        )}
+          {isLogtoConfigured && (
+            <>
+              <LogtoSignInButton onError={setError} />
+              <div className="flex items-center gap-3 my-4">
+                <div className="flex-1 h-px bg-gray-200" />
+                <span className="text-[11.5px] font-semibold text-gray-400 tracking-[0.06em]">
+                  {t('loginOrSignInWithUserId')}
+                </span>
+                <div className="flex-1 h-px bg-gray-200" />
+              </div>
+            </>
+          )}
 
-        <form onSubmit={handleLogin} className="mt-1">
-          {/* Username */}
-          <div className="mb-4">
-            <label className="block text-[13px] font-semibold text-[#14213d] mb-1.5 text-left" htmlFor="login-employee-id">
-              {t('user')}
-            </label>
-            <div className="relative flex items-center">
-              <span className={`absolute left-3 flex items-center pointer-events-none transition-colors duration-200 ${userFocus ? 'text-[#24406e]' : 'text-gray-400'}`}>
-                <User size={17} strokeWidth={1.9} />
-              </span>
-              <input
-                id="login-employee-id"
-                type="text"
-                placeholder={t('loginUserIdPlaceholder')}
-                value={employeeId}
-                onChange={e => setEmployeeId(e.target.value)}
-                autoComplete="username"
-                required
-                onFocus={() => setUserFocus(true)}
-                onBlur={() => setUserFocus(false)}
-                className="w-full h-[50px] rounded-[10px] bg-white/60 text-[14px] text-slate-800 outline-none transition-all duration-200 font-[inherit]"
-                style={{
-                  paddingLeft: '42px',
-                  paddingRight: '16px',
-                  border: `1.5px solid ${userFocus ? '#24406e' : '#e5e7eb'}`,
-                  boxShadow: userFocus ? '0 0 0 3px rgba(36,64,110,0.12)' : 'none',
-                }}
-              />
+          <form onSubmit={handleLogin} className="mt-1">
+            {/* Username */}
+            <div className="mb-4">
+              <label className="block text-[13px] font-semibold text-[#14213d] mb-1.5 text-left" htmlFor="login-employee-id">
+                {t('user')}
+              </label>
+              <div className="relative flex items-center">
+                <span className={`absolute left-3 flex items-center pointer-events-none transition-colors duration-200 ${userFocus ? 'text-[#24406e]' : 'text-gray-400'}`}>
+                  <User size={17} strokeWidth={1.9} />
+                </span>
+                <input
+                  id="login-employee-id"
+                  type="text"
+                  placeholder={t('loginUserIdPlaceholder')}
+                  value={employeeId}
+                  onChange={e => setEmployeeId(e.target.value)}
+                  autoComplete="username"
+                  required
+                  onFocus={() => setUserFocus(true)}
+                  onBlur={() => setUserFocus(false)}
+                  className="w-full h-[50px] rounded-[10px] bg-white/60 text-[14px] text-slate-800 outline-none transition-all duration-200 font-[inherit]"
+                  style={{
+                    paddingLeft: '42px',
+                    paddingRight: '16px',
+                    border: `1.5px solid ${userFocus ? '#24406e' : '#e5e7eb'}`,
+                    boxShadow: userFocus ? '0 0 0 3px rgba(36,64,110,0.12)' : 'none',
+                  }}
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Password */}
-          <div className="mb-4">
-            <label className="block text-[13px] font-semibold text-[#14213d] mb-1.5 text-left" htmlFor="login-password">
-              {t('password')}
-            </label>
-            <div className="relative flex items-center">
-              <span className={`absolute left-3 flex items-center pointer-events-none transition-colors duration-200 ${passFocus ? 'text-[#24406e]' : 'text-gray-400'}`}>
-                <Lock size={17} strokeWidth={1.9} />
-              </span>
-              <input
-                id="login-password"
-                type={showPassword ? 'text' : 'password'}
-                placeholder={t('loginPasswordPlaceholder')}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-                onFocus={() => setPassFocus(true)}
-                onBlur={() => setPassFocus(false)}
-                className="w-full h-[50px] rounded-[10px] bg-white/60 text-[14px] text-slate-800 outline-none transition-all duration-200 font-[inherit]"
-                style={{
-                  paddingLeft: '42px',
-                  paddingRight: '46px',
-                  border: `1.5px solid ${passFocus ? '#24406e' : '#e5e7eb'}`,
-                  boxShadow: passFocus ? '0 0 0 3px rgba(36,64,110,0.12)' : 'none',
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
-                aria-label={showPassword ? t('loginHidePassword') : t('loginShowPassword')}
-              >
-                {showPassword ? <EyeOff size={17} strokeWidth={1.9} /> : <Eye size={17} strokeWidth={1.9} />}
-              </button>
+            {/* Password */}
+            <div className="mb-4">
+              <label className="block text-[13px] font-semibold text-[#14213d] mb-1.5 text-left" htmlFor="login-password">
+                {t('password')}
+              </label>
+              <div className="relative flex items-center">
+                <span className={`absolute left-3 flex items-center pointer-events-none transition-colors duration-200 ${passFocus ? 'text-[#24406e]' : 'text-gray-400'}`}>
+                  <Lock size={17} strokeWidth={1.9} />
+                </span>
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder={t('loginPasswordPlaceholder')}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  onFocus={() => setPassFocus(true)}
+                  onBlur={() => setPassFocus(false)}
+                  className="w-full h-[50px] rounded-[10px] bg-white/60 text-[14px] text-slate-800 outline-none transition-all duration-200 font-[inherit]"
+                  style={{
+                    paddingLeft: '42px',
+                    paddingRight: '46px',
+                    border: `1.5px solid ${passFocus ? '#24406e' : '#e5e7eb'}`,
+                    boxShadow: passFocus ? '0 0 0 3px rgba(36,64,110,0.12)' : 'none',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label={showPassword ? t('loginHidePassword') : t('loginShowPassword')}
+                >
+                  {showPassword ? <EyeOff size={17} strokeWidth={1.9} /> : <Eye size={17} strokeWidth={1.9} />}
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* LOG IN button */}
-          <button
-            id="login-submit-btn"
-            type="submit"
-            disabled={loading}
-            onMouseEnter={() => setBtnHov(true)}
-            onMouseLeave={() => setBtnHov(false)}
-            className="w-full h-[52px] rounded-[11px] border-none text-white text-[15px] flex items-center justify-center gap-2.5 transition-all duration-150 font-[inherit] cursor-pointer disabled:cursor-not-allowed"
-            style={{
-              background: btnHov
-                ? 'linear-gradient(180deg,#f59032 0%,#e06f10 100%)'
-                : 'linear-gradient(180deg,#f5921a 0%,#f2801f 40%,#e06f10 100%)',
-              boxShadow: btnHov
-                ? '0 8px 28px rgba(242,128,31,0.55),0 2px 8px rgba(224,111,16,0.4)'
-                : '0 5px 20px rgba(242,128,31,0.45),0 2px 6px rgba(224,111,16,0.3)',
-              transform: btnHov ? 'translateY(-1px)' : 'translateY(0)',
-              opacity: loading ? 0.82 : 1,
-            }}
-          >
-            <LogIn size={18} strokeWidth={2.2} />
-            <span className="tracking-[0.12em] font-bold">
-              {loading ? t('loginSigningInUppercase') : t('loginLogIn')}
+            {/* LOG IN button */}
+            <button
+              id="login-submit-btn"
+              type="submit"
+              disabled={loading}
+              onMouseEnter={() => setBtnHov(true)}
+              onMouseLeave={() => setBtnHov(false)}
+              className="w-full h-[52px] rounded-[11px] border-none text-white text-[15px] flex items-center justify-center gap-2.5 transition-all duration-150 font-[inherit] cursor-pointer disabled:cursor-not-allowed"
+              style={{
+                background: btnHov
+                  ? 'linear-gradient(180deg,#f59032 0%,#e06f10 100%)'
+                  : 'linear-gradient(180deg,#f5921a 0%,#f2801f 40%,#e06f10 100%)',
+                boxShadow: btnHov
+                  ? '0 8px 28px rgba(242,128,31,0.55),0 2px 8px rgba(224,111,16,0.4)'
+                  : '0 5px 20px rgba(242,128,31,0.45),0 2px 6px rgba(224,111,16,0.3)',
+                transform: btnHov ? 'translateY(-1px)' : 'translateY(0)',
+                opacity: loading ? 0.82 : 1,
+              }}
+            >
+              <LogIn size={18} strokeWidth={2.2} />
+              <span className="tracking-[0.12em] font-bold">
+                {loading ? t('loginSigningInUppercase') : t('loginLogIn')}
+              </span>
+            </button>
+          </form>
+
+          {/* Trust strip */}
+          <div className="flex items-center justify-center gap-2 mt-4 text-[12px] text-gray-400">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span>{t('loginSecure')}</span>
+            <span className="text-[#1b2f52] font-bold">•</span>
+            <span className="flex items-center gap-1">
+              <ShieldCheck size={15} className="text-[#1b2f52]" strokeWidth={1.8} />
+              {t('loginReliable')}
             </span>
-          </button>
-        </form>
+            <span className="text-[#1b2f52] font-bold">•</span>
+            <span>{t('loginTransparent')}</span>
+            <div className="flex-1 h-px bg-gray-200" />
+          </div>
 
-        {/* Trust strip */}
-        <div className="flex items-center justify-center gap-2 mt-4 text-[12px] text-gray-400">
-          <div className="flex-1 h-px bg-gray-200" />
-          <span>{t('loginSecure')}</span>
-          <span className="text-[#1b2f52] font-bold">•</span>
-          <span className="flex items-center gap-1">
-            <ShieldCheck size={15} className="text-[#1b2f52]" strokeWidth={1.8} />
-            {t('loginReliable')}
-          </span>
-          <span className="text-[#1b2f52] font-bold">•</span>
-          <span>{t('loginTransparent')}</span>
-          <div className="flex-1 h-px bg-gray-200" />
-        </div>
-
-        {/* Demo quick access — dev/test only. Gated on `import.meta.env.DEV` so
+          {/* Demo quick access — dev/test only. Gated on `import.meta.env.DEV` so
             the plaintext demo credentials in DEMO_ROLES are tree-shaken out of a
             production build, while the Playwright suite (which runs the dev
             server) still has the #demo-* buttons to click.
@@ -464,45 +464,45 @@ function LoginPage() {
             No `hidden` attribute here: the gate above is what excludes this from
             production, and carrying both made the panel render-but-invisible in
             dev, so the demo buttons could never actually be clicked. */}
-        {import.meta.env.DEV && (
-          <div className="mt-4 pt-3.5 border-t border-slate-100"hidden>
-            <div className="flex items-center gap-1.5 mb-2.5">
-              <Zap size={13} className="text-amber-400 fill-amber-400" />
-              <span className="text-[11.5px] font-bold text-gray-500 tracking-[0.02em]">
-                {t('loginQuickDemoAccess')}
-              </span>
+          {import.meta.env.DEV && (
+            <div className="mt-4 pt-3.5 border-t border-slate-100"  >
+              <div className="flex items-center gap-1.5 mb-2.5">
+                <Zap size={13} className="text-amber-400 fill-amber-400" />
+                <span className="text-[11.5px] font-bold text-gray-500 tracking-[0.02em]">
+                  {t('loginQuickDemoAccess')}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {DEMO_ROLES.map(role => (
+                  <DemoButton
+                    key={role.label}
+                    role={role}
+                    loading={loading}
+                    active={activeRole === role.label && loading}
+                    onClick={() => handleDemo(role)}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              {DEMO_ROLES.map(role => (
-                <DemoButton
-                  key={role.label}
-                  role={role}
-                  loading={loading}
-                  active={activeRole === role.label && loading}
-                  onClick={() => handleDemo(role)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* ============================================================ FEATURE STRIP — sits below card */}
-      <div className="relative z-10 flex gap-4 justify-center flex-wrap mt-6 px-4 max-w-2xl">
-        {[
-          { Icon: ShieldCheck, label: t('loginSecureAccess'), iconClass: 'text-amber-300' },
-          { Icon: BarChart2, label: t('loginRealTimeInsights'), iconClass: 'text-emerald-400' },
-          { Icon: Users, label: t('loginAccountability'), iconClass: 'text-emerald-400' },
-        ].map(({ Icon, label, iconClass }) => (
-          <div
-            key={label}
-            className="flex items-center gap-2 text-white/90 drop-shadow-md"
-          >
-            <Icon size={18} strokeWidth={2} className={iconClass} />
-            <span className="text-[13px] font-semibold">{label}</span>
-          </div>
-        ))}
-      </div>
+        {/* ============================================================ FEATURE STRIP — sits below card */}
+        <div className="relative z-10 flex gap-4 justify-center flex-wrap mt-6 px-4 max-w-2xl">
+          {[
+            { Icon: ShieldCheck, label: t('loginSecureAccess'), iconClass: 'text-amber-300' },
+            { Icon: BarChart2, label: t('loginRealTimeInsights'), iconClass: 'text-emerald-400' },
+            { Icon: Users, label: t('loginAccountability'), iconClass: 'text-emerald-400' },
+          ].map(({ Icon, label, iconClass }) => (
+            <div
+              key={label}
+              className="flex items-center gap-2 text-white/90 drop-shadow-md"
+            >
+              <Icon size={18} strokeWidth={2} className={iconClass} />
+              <span className="text-[13px] font-semibold">{label}</span>
+            </div>
+          ))}
+        </div>
 
         {/* ============================================================ FOOTER */}
         <div className="flex flex-col items-center gap-1 mt-6 px-4 text-center">

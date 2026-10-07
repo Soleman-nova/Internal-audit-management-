@@ -15,13 +15,23 @@ class RiskParameterAdmin(admin.ModelAdmin):
 class RiskAssessmentAdmin(admin.ModelAdmin):
     # Scores are recomputed by the model on save (weighted parameters, control
     # effectiveness), so they are surfaced read-only rather than hand-editable.
+    # Same for the frozen-policy columns: they record what the model computed,
+    # and ``is_stale`` tells an administrator whether a recompute is due.
     list_display = ('department', 'audit_universe', 'year', 'assessment_period',
-                    'risk_score', 'risk_rating', 'is_self_assessment', 'assessed_by')
-    list_filter = ('year', 'assessment_period', 'risk_rating', 'is_self_assessment')
+                    'risk_score', 'risk_rating', 'adopted_source', 'is_stale_display',
+                    'is_self_assessment', 'assessed_by')
+    list_filter = ('year', 'assessment_period', 'risk_rating', 'adopted_source',
+                   'is_self_assessment')
     search_fields = ('department__name', 'department__code', 'notes')
     autocomplete_fields = ('department', 'audit_universe', 'assessed_by', 'reviewed_by')
-    readonly_fields = ('risk_score', 'risk_rating', 'inherent_risk', 'residual_risk',
+    readonly_fields = ('risk_score', 'risk_rating', 'residual_risk', 'weight_sum',
+                       'uplift_applied', 'policy_digest', 'is_stale_display',
                        'created_at', 'updated_at')
+
+    @admin.display(boolean=True, description='Stale')
+    def is_stale_display(self, obj):
+        """Whether a parameter edit has left this row scored under an old policy."""
+        return obj.is_stale if obj.pk else False
 
 
 @admin.register(SelfAssessment)

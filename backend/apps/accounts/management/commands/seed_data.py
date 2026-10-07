@@ -3,7 +3,8 @@ import datetime
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from apps.accounts.models import User, Department, Role
-from apps.risk_assessment.models import RiskParameter, RiskAssessment
+from apps.risk_assessment.models import RiskAssessment
+from apps.risk_assessment.seed import ensure_risk_parameters
 from apps.audit_planning.models import AuditUniverse, AuditPlan, AuditEngagement, AuditTeamMember
 from apps.audit_execution.models import AuditProgram, AuditProcedure
 from apps.findings.models import AuditFinding
@@ -121,18 +122,12 @@ class Command(BaseCommand):
         admin_user.save()
 
         # 4. Create Risk Parameters
-        risk_params = [
-            {"name": "Financial Impact", "description": "Potential direct or indirect monetary loss to EEU", "weight": 0.3, "category": "financial"},
-            {"name": "Operational Disruption", "description": "Degree of interruption to power supply or utility services", "weight": 0.25, "category": "operational"},
-            {"name": "Compliance Violations", "description": "Exposure to regulatory penalties or audits exceptions", "weight": 0.2, "category": "compliance"},
-            {"name": "Process Complexity", "description": "Internal controls complexity and number of actors", "weight": 0.15, "category": "operational"},
-            {"name": "System Automation", "description": "Lack of automated reconciliation or reliance on manual work", "weight": 0.1, "category": "it"},
-        ]
-        for rp in risk_params:
-            RiskParameter.objects.get_or_create(
-                name=rp["name"],
-                defaults={"description": rp["description"], "weight": rp["weight"], "category": rp["category"]}
-            )
+        # The canonical list lives in apps.risk_assessment.seed so every seeding
+        # path yields the same policy (and therefore the same scores). Seeding this
+        # command used to install 5 of the 7 parameters, which made the same
+        # likelihood×impact pair score +20% here and +27% after the EEU structure
+        # seed.
+        ensure_risk_parameters()
 
         # 4b. Create a Risk Assessment (so report "Risk Analysis" isn't empty on demo data).
         # risk_score / risk_rating / residual_risk are computed in RiskAssessment.save(),
@@ -327,7 +322,11 @@ class Command(BaseCommand):
                 "condition": "Accounts department personnel and DBAs share administrative roles that override transaction blocks.",
                 "effect": "Increased risk of fraudulent payments being injected directly into the database without manager check-offs.",
                 "cause": "Absence of a quarterly system role review and lack of dynamic workflow blocks at the application tier.",
-                "status": "draft",
+                # Published, not draft: this finding exists to demonstrate the
+                # finding -> CAPA chain, and the CAPA below is owned by the
+                # auditee. A draft finding is pre-publication, so the auditee
+                # would see neither it nor the action answering it.
+                "status": "awaiting_auditee_response",
                 "identified_by": users[Role.AUDITOR],
             }
         )

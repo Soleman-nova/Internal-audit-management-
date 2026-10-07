@@ -65,6 +65,82 @@ export async function api(page, method, path, body) {
   }
 }
 
+/**
+ * Create an engagement over the API.
+ *
+ * Objective and scope are mandatory on the engagement endpoint — an engagement
+ * is where an audit gets its bounds, so the API refuses one without both. They
+ * are defaulted here rather than restated at each of the seed sites, so a spec
+ * can keep talking about the behaviour it is actually testing. Pass `fields` to
+ * override anything, including the two defaults.
+ */
+export async function createEngagement(page, fields) {
+  return api(page, 'POST', '/planning/engagements/', {
+    engagement_type: 'financial',
+    objectives: 'Verify the control under test operates as described.',
+    scope: 'The records seeded by this end-to-end spec.',
+    ...fields,
+  });
+}
+
+/**
+ * Create a finding over the API, together with the failed procedure it must hang
+ * off.
+ *
+ * A finding is only accepted from a procedure marked failed, and a procedure
+ * needs a program — whose `engagement` is a OneToOne, so the program is reused
+ * when the engagement already has one rather than created twice. Pass an
+ * existing `procedure` id to hang several findings off one step, which is what
+ * the specs that seed a page of findings do: it saves a request per row.
+ *
+ * Returns the `api()` response for the *finding*, so call sites read
+ * `.status`/`.body.id` exactly as they did before.
+ */
+export async function createFinding(page, { engagement, procedure, ...fields }) {
+  let procedureId = procedure;
+  if (!procedureId) {
+    const existing = await api(
+      page, 'GET', `/execution/programs/?engagement=${engagement}`,
+    );
+    let programId = existing.body.results[0]?.id;
+    if (!programId) {
+      const program = await api(page, 'POST', '/execution/programs/', {
+        engagement, title: `E2E Seed Program ${Date.now()}`,
+      });
+      programId = program.body.id;
+    }
+    const failed = await api(page, 'POST', '/execution/procedures/', {
+      program: programId,
+      step_number: '1',
+      title: `E2E Failed Procedure ${Date.now()}`,
+      description: 'Seeded as failed so a finding can be raised from it.',
+      procedure_type: 'substantive',
+      status: 'failed',
+    });
+    procedureId = failed.body.id;
+  }
+  return api(page, 'POST', '/findings/findings/', {
+    ...fields,
+    engagement,
+    procedure: procedureId,
+  });
+}
+
+/**
+ * Endorse and publish a finding, as a supervisor.
+ *
+ * A finding is a draft until this happens, and a draft is invisible to the
+ * auditee — they cannot read it, comment on it, attach evidence to it, answer it
+ * or raise a CAPA against it. Specs that put a finding in front of an auditee
+ * have to publish it first, which is also what the real flow does.
+ *
+ * Requires the caller's `page` to be signed in as a supervisor (`EEU-10003`),
+ * since this is gated on APPROVE_PLANS.
+ */
+export async function publishFinding(page, findingId) {
+  return api(page, 'POST', `/findings/findings/${findingId}/publish/`);
+}
+
 /** English sidebar labels (I18nContext.jsx `en` block). */
 export const NAV = {
   dashboard: 'Dashboard',

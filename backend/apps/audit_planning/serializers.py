@@ -65,6 +65,7 @@ class ProjectSerializer(OrgScopeNamesMixin, serializers.ModelSerializer):
 class AuditEngagementSerializer(OrgScopeNamesMixin, serializers.ModelSerializer):
     lead_auditor_name = serializers.SerializerMethodField()
     supervisor_name = serializers.SerializerMethodField()
+    auditee_name = serializers.SerializerMethodField()
     directorate_name = serializers.SerializerMethodField()
     directorate_name_am = serializers.SerializerMethodField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
@@ -83,7 +84,8 @@ class AuditEngagementSerializer(OrgScopeNamesMixin, serializers.ModelSerializer)
         model = AuditEngagement
         fields = ['id', 'department_name', 'department_name_am', 'region_name',
                   'region_name_am', 'service_center_name', 'service_center_name_am',
-                  'lead_auditor_name', 'supervisor_name', 'directorate_name',
+                  'lead_auditor_name', 'supervisor_name', 'auditee_name',
+                  'directorate_name',
                   'directorate_name_am', 'status_display', 'engagement_type_display',
                   'plan_title', 'plan_year', 'team_members', 'findings_count',
                   'progress_percent', 'title', 'engagement_number', 'engagement_type',
@@ -91,8 +93,18 @@ class AuditEngagementSerializer(OrgScopeNamesMixin, serializers.ModelSerializer)
                   'actual_start', 'actual_end', 'planned_days', 'actual_days',
                   'risk_level', 'technical_metadata', 'created_at', 'updated_at',
                   'plan', 'audit_universe', 'department', 'region', 'service_center',
-                  'directorate', 'lead_auditor', 'supervisor']
-        read_only_fields = ['engagement_number']
+                  'directorate', 'lead_auditor', 'supervisor', 'auditee']
+        # `status` and the two actual dates belong to the `update-status` action,
+        # which is the only path that checks the completion precondition (an
+        # engagement cannot be completed while findings sit in
+        # draft/open/in_progress/disputed), stamps actual_start/actual_end and
+        # closes the re-audit loop by writing the universe's last_audited.
+        # Left writable, a plain PATCH moved an engagement to `completed` with open
+        # findings and no actual_end — the one refusal this route exists to make.
+        # Same shape as AuditFindingSerializer.read_only_fields, which closed the
+        # identical door on the findings register.
+        read_only_fields = ['engagement_number', 'status', 'actual_start',
+                            'actual_end']
 
     @staticmethod
     def _plan_of(obj):
@@ -120,6 +132,14 @@ class AuditEngagementSerializer(OrgScopeNamesMixin, serializers.ModelSerializer)
         if obj.supervisor:
             return obj.supervisor.full_name
         return 'Unassigned'
+
+    def get_auditee_name(self, obj):
+        # Unlike the two above, a blank auditee is not "unassigned work" — it is
+        # the reason this engagement's findings will reach nobody. `None` rather
+        # than the string, so the client can tell the difference and prompt.
+        if obj.auditee:
+            return obj.auditee.full_name
+        return None
 
     def get_directorate_name(self, obj):
         if obj.directorate:
@@ -163,6 +183,15 @@ class AuditPlanSerializer(serializers.ModelSerializer):
                   'plan_scope', 'approved_at', 'start_date', 'end_date',
                   'total_budget_days', 'created_at', 'updated_at', 'directorate',
                   'parent_plan', 'created_by', 'approved_by']
+        # `status`, `approved_at` and `approved_by` belong to the `approve` action,
+        # which gates on APPROVE_PLANS, stamps the approver and notifies the plan's
+        # author; `created_by` is assigned by perform_create. Left writable, a PATCH
+        # could approve a plan that no approver had seen — and attribute the
+        # approval to a chosen user — which made the action unreachable as the only
+        # honest record of sign-off. Same shape as
+        # AuditEngagementSerializer.read_only_fields directly above, and
+        # AuditFindingSerializer.read_only_fields on the findings register.
+        read_only_fields = ['status', 'approved_at', 'approved_by', 'created_by']
 
     def get_created_by_name(self, obj):
         if obj.created_by:

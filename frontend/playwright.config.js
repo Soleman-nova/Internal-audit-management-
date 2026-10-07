@@ -110,6 +110,15 @@ export default defineConfig({
       dependencies: ['setup'],
     },
     {
+      // The risk register's scoring policy: the weights, the uplift they imply, and
+      // whether stored scores still match the active policy.
+      name: 'risk',
+      testMatch: /risk\.spec\.js/,
+      dependencies: ['setup'],
+      // A manager: MANAGE_SETTINGS (write parameters) *and* WRITE_AUDIT (score).
+      use: { storageState: 'e2e/.auth/manager.json' },
+    },
+    {
       // The i18n integrity checks — no data setup, so it can run anywhere.
       name: 'i18n',
       testMatch: /i18n\.spec\.js/,

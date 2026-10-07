@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { executionApi, planningApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -11,7 +11,7 @@ import FormErrorSummary from '../../components/ui/FormErrorSummary';
 import EngagementPickerBar from '../../components/ui/EngagementPickerBar';
 import {
   ListTodo, Plus, Paperclip, Upload, Eye, CheckCircle2,
-  ClipboardList, ShieldCheck, Edit3, Trash2, Download
+  ClipboardList, ShieldCheck, Edit3, Trash2, Download, Lock, AlertTriangle
 } from 'lucide-react';
 
 /**
@@ -47,9 +47,15 @@ function ExecutionPage() {
   const toast = useToast();
   const { t } = useI18n();
   const { canWriteAudit, canApprovePlans } = usePermissions();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const focusProgramId = searchParams.get('program');
   const focusEngagementId = searchParams.get('engagement');
+  // The step a finding was raised from, when arriving from that finding's page.
+  // Held as a raw string because it is only ever compared against
+  // `String(proc.id)` — resolving it to a number would need the id to parse,
+  // and a stale link has to be inert rather than throwing.
+  const focusProcedureId = searchParams.get('procedure');
   // The engagement the user has picked, held as an id and left empty until they
   // touch the picker. Anything that has to act on "the engagement on screen"
   // reads the resolved `activeEngId` below instead: before that first touch the
@@ -70,6 +76,10 @@ function ExecutionPage() {
   const [showProgramModal, setShowProgramModal] = useState(false);
   const [programForm, setProgramForm] = useState({ title: '', objectives: '', scope: '' });
   const [savingProgram, setSavingProgram] = useState(false);
+  // One flag for both program transitions: they cannot overlap — `complete` and
+  // `reopen` are inverses of each other — and a second spinner would let a
+  // double-click fire the second one against a program the first already moved.
+  const [busyProgram, setBusyProgram] = useState(false);
 
   // ── Procedure Modal ──
   const [showProcModal, setShowProcModal] = useState(false);
@@ -178,6 +188,15 @@ function ExecutionPage() {
   const workingPapers = executionData?.workingPapers ?? [];
   const workingPaperCount = executionData?.workingPaperCount ?? 0;
   const workingPapersTruncated = executionData?.workingPapersTruncated ?? false;
+
+  // Whether procedures may still be added, edited or deleted. The rule is one
+  // statement in one place because it was previously three different ones — the
+  // header Add required draft/active, Edit/Delete required draft, and the
+  // empty-state Add checked nothing at all. That last inconsistency is the bug
+  // it fixed: on any other status you added exactly one procedure and every
+  // control for a second one disappeared, even though the API has no such limit
+  // (and `e2e/auditor.spec.js` relies on that).
+  const programOpen = Boolean(program) && program.status !== 'completed';
 
   // The last clause covers the gap between `activeEngId` becoming non-empty and
   // the hook above flipping its own `loading` on: without it the "no audit
@@ -364,6 +383,50 @@ function ExecutionPage() {
   };
 
   // ─────────────────────────────────────────────────────────────
+  // Auditor: Close / reopen the fieldwork
+  // ─────────────────────────────────────────────────────────────
+  // Both patch the program from the response rather than from a locally guessed
+  // status: `complete` returns the record, and reading `status` off it means the
+  // header cannot disagree with the server about what just happened.
+  //
+  // The refusal is read from `detail` before the page's usual JSON.stringify
+  // fallback, because it *is* the message — it names the steps with no recorded
+  // outcome. Showing `{"detail":"Cannot complete this program: 2 procedure(s)…"}`
+  // would bury the one line the auditor needs.
+  const messageOf = (err, fallback) => (
+    err.response?.data?.detail
+    || (typeof err.response?.data === 'object'
+      ? JSON.stringify(err.response.data)
+      : fallback)
+  );
+
+  const handleCompleteProgram = async () => {
+    setBusyProgram(true);
+    try {
+      const updated = await executionApi.completeProgram(program.id);
+      patchExecution({ program: updated });
+      toast.success(t('executionProgramCompleted'));
+    } catch (err) {
+      toast.error(messageOf(err, t('executionProgramCompleteFailed')));
+    } finally {
+      setBusyProgram(false);
+    }
+  };
+
+  const handleReopenProgram = async () => {
+    setBusyProgram(true);
+    try {
+      const updated = await executionApi.reopenProgram(program.id);
+      patchExecution({ program: updated });
+      toast.success(t('executionProgramReopened'));
+    } catch (err) {
+      toast.error(messageOf(err, t('executionProgramReopenFailed')));
+    } finally {
+      setBusyProgram(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
   // Supervisor: Approve Program
   // ─────────────────────────────────────────────────────────────
   const handleApproveProgram = async () => {
@@ -532,6 +595,33 @@ function ExecutionPage() {
                       <ShieldCheck size={14} /> {t('reviewApprove')}
                     </button>
                   )}
+                  {/* Close the fieldwork. The server refuses while any step is
+                      still pending or in progress, and names the steps — so the
+                      button is the one place that can tell the auditor what is
+                      left, and the refusal is surfaced rather than swallowed.
+                      `programOpen` is "not completed", which is the state this
+                      button applies to. */}
+                  {canWriteAudit && programOpen && (
+                    <button
+                      className="btn btn-sm btn-outline flex items-center gap-1"
+                      onClick={handleCompleteProgram}
+                      disabled={busyProgram}
+                    >
+                      <Lock size={14} /> {t('completeFieldwork')}
+                    </button>
+                  )}
+                  {/* And the way back: `completed` is what locks every procedure
+                      control on this board, so undoing it has to be deliberate
+                      rather than a status somebody edits. */}
+                  {canWriteAudit && !programOpen && (
+                    <button
+                      className="btn btn-sm btn-outline flex items-center gap-1"
+                      onClick={handleReopenProgram}
+                      disabled={busyProgram}
+                    >
+                      {t('reopenFieldwork')}
+                    </button>
+                  )}
                 </div>
               </div>
               <h2>{program.title}</h2>
@@ -550,18 +640,22 @@ function ExecutionPage() {
                     <p className="text-xs text-muted">{t('showingFirstOf', procedures.length, procedureCount)}</p>
                   )}
                 </div>
-                {/* Auditor: Add procedure if program is draft */}
-                {canWriteAudit && (program.status === 'draft' || program.status === 'active') && (
+                {canWriteAudit && programOpen && (
                   <button className="btn btn-sm btn-primary flex items-center gap-1" onClick={openNewProc}>
                     <Plus size={14} /> {t('addProcedure')}
                   </button>
+                )}
+                {canWriteAudit && !programOpen && (
+                  <span className="text-xs text-muted flex items-center gap-1">
+                    <Lock size={12} /> {t('proceduresLockedCompleted')}
+                  </span>
                 )}
               </div>
 
               {procedures.length === 0 ? (
                 <div className="text-center py-6 text-muted">
                   <p>{t('noProcedures')}</p>
-                  {canWriteAudit && (
+                  {canWriteAudit && programOpen && (
                     <button className="btn btn-sm btn-outline mt-2" onClick={openNewProc}>
                       {t('addFirstProcedure')}
                     </button>
@@ -570,13 +664,36 @@ function ExecutionPage() {
               ) : (
                 <div className="procedure-list">
                   {procedures.map(proc => (
-                    <div key={proc.id} className="procedure-item-card">
+                    <div
+                      key={proc.id}
+                      // A finding's page links back with `?procedure=<id>` to name
+                      // the step it came from. The row is outlined so the eye lands
+                      // on it — the page has no scrolling to do, since the whole
+                      // program is already on screen, and an unhighlighted arrival
+                      // is indistinguishable from an ordinary page load.
+                      className={`procedure-item-card ${String(proc.id) === focusProcedureId ? 'focused-step' : ''}`}
+                      data-testid={`procedure-${proc.id}`}
+                    >
                       <div className="proc-meta">
                         <span className="proc-ref">{proc.step_number}</span>
                         <span className="proc-type badge badge-outline">{proc.procedure_type?.replace(/_/g, ' ')}</span>
                         {proc.assertion && (
                           <span className="badge badge-outline" style={{ fontSize: '0.7rem', opacity: 0.8 }}>
                             {proc.assertion}
+                          </span>
+                        )}
+                        {/* The other end of the linkage a finding enforces on
+                            the way in: a failed step either has produced a
+                            finding or it has not. Without this the two boards
+                            disagreed silently, and the only way to learn which
+                            was to go and look in the findings register. */}
+                        {proc.status === 'failed' && (proc.findings_count ?? 0) > 0 && (
+                          <span
+                            className="badge badge-danger"
+                            style={{ fontSize: '0.7rem' }}
+                            title={t('findingsRaisedFromStep')}
+                          >
+                            {t('findingsRaisedCount', proc.findings_count)}
                           </span>
                         )}
                       </div>
@@ -596,16 +713,31 @@ function ExecutionPage() {
                       </div>
                       <div className="proc-actions">
                         <select
-                          className={`form-control select-sm ${proc.status === 'completed' ? 'border-success text-success' : proc.status === 'in_progress' ? 'border-info text-info' : ''}`}
+                          className={`form-control select-sm ${proc.status === 'completed' ? 'border-success text-success' : proc.status === 'failed' ? 'border-danger text-danger' : proc.status === 'in_progress' ? 'border-info text-info' : ''}`}
                           value={proc.status}
                           onChange={(e) => handleStatusChange(proc.id, e.target.value)}
                         >
                           <option value="pending">{t('pending')}</option>
                           <option value="in_progress">{t('inProgress')}</option>
                           <option value="completed">{t('completed')}</option>
+                          <option value="failed">{t('failed')}</option>
                           <option value="not_applicable">N/A</option>
                         </select>
-                        {canWriteAudit && program.status === 'draft' && (
+                        {/* Only a failed procedure can raise a finding, so this is
+                            offered exactly when the outcome makes it meaningful —
+                            and it carries both ids so the findings form opens
+                            already pointed at this step. */}
+                        {proc.status === 'failed' && canWriteAudit && (
+                          <button
+                            className="btn-icon text-danger"
+                            title={t('logFinding')}
+                            data-testid={`log-finding-${proc.id}`}
+                            onClick={() => navigate(`/findings?engagement=${activeEngId}&procedure=${proc.id}`)}
+                          >
+                            <AlertTriangle size={14} />
+                          </button>
+                        )}
+                        {canWriteAudit && programOpen && (
                           <div className="flex gap-1 mt-1">
                             <button className="btn-icon" title={t('edit')} onClick={() => openEditProc(proc)}>
                               <Edit3 size={14} />

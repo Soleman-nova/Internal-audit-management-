@@ -34,10 +34,21 @@ class AuditProgram(models.Model):
 
 
 class AuditProcedure(models.Model):
+    # Named like Role.ADMIN: the finding serializer gates on this outcome, and a
+    # bare 'failed' string on both sides of that check is one typo away from a
+    # rule that silently stops matching.
+    FAILED = 'failed'
+
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('in_progress', 'In Progress'),
         ('completed', 'Completed'),
+        # A procedure that ran and found the control wanting. This is a terminal
+        # outcome distinct from `completed` ("the test ran, the control held"):
+        # it is the only state a finding may be raised from, so collapsing the
+        # two would mean either every completed step could spawn a finding or
+        # none could.
+        (FAILED, 'Failed / Non-Compliant'),
         ('not_applicable', 'Not Applicable'),
     ]
 
@@ -49,6 +60,20 @@ class AuditProcedure(models.Model):
         ('observation', 'Observation'),
         ('inspection', 'Inspection & Re-performance'),
     ]
+
+    # The states that mean the fieldwork on this step is over. Everything outside
+    # the set — `pending`, `in_progress` — still has an auditor's work outstanding,
+    # so a program is only finished when every one of its steps has reached one of
+    # these. `AuditProgramSerializer.get_completion_percent` reads this rather than
+    # counting `completed` alone, because `failed` ("the test ran, the control did
+    # not hold") and `not_applicable` ("this step did not apply") are finished
+    # outcomes too — and one of them is the very thing that produces a finding.
+    TESTED_STATUSES = ('completed', FAILED, 'not_applicable')
+
+    # How each outcome reads in a sentence, for the notification the lead gets
+    # when a step ends. `completed` is deliberately absent: the `complete` route
+    # passes its own label, so the pair cannot disagree about the same event.
+    OUTCOME_LABELS = {FAILED: 'failed', 'not_applicable': 'not applicable'}
 
     program = models.ForeignKey(AuditProgram, on_delete=models.CASCADE, related_name='procedures')
     step_number = models.CharField(max_length=20)

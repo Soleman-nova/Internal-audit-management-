@@ -4,12 +4,16 @@ Tests for the RBAC capability matrix and permission classes.
 from django.core.exceptions import ValidationError
 from django.test import SimpleTestCase, TestCase
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework.test import APIClient
 from apps.accounts.models import Department, Role
+from apps.audit_planning.models import AuditEngagement
 from apps.common.permissions import (
     has_capability, MANAGE_USERS, MANAGE_SETTINGS, APPROVE_PLANS,
     WRITE_AUDIT, CLOSE_FINDINGS, VIEW_AUDIT_TRAIL
 )
+from apps.common.reference_numbers import next_reference_number
+from apps.common.role_fixtures import make_plan
 from apps.common.validators import (
     MAX_DOCUMENT_SIZE, MAX_IMAGE_SIZE, UploadValidator,
     validate_document_upload, validate_image_upload,
@@ -284,3 +288,115 @@ class UploadValidatorTest(SimpleTestCase):
         # exactly what the migration file does at load time.
         rebuilt = UploadValidator(*args, **kwargs)
         self.assertEqual(rebuilt, validate_image_upload)
+
+
+class ReferenceNumberSequenceTest(TestCase):
+    """`PREFIX-YYYY-NNNN` allocation, and the seeded rows it has to coexist with.
+
+    The bug this pins down was invisible in the test database and fatal in the
+    demo one. The seeders hand-number their own rows — ``ENG-2026-PP-001`` and
+    friends — beside the generated ones. Those are *longer* strings than
+    ``ENG-2026-0426``, so a length-first sort over the year ended on one of them,
+    the numeric parse failed, and the fallback handed out ``count() + 1``. That
+    is not the next number, it is merely one more row than exist, so it returned
+    a number already taken: an ``IntegrityError`` on a unique column, surfaced to
+    the user as a 500 with the engagement they were creating lost. Every create
+    on that register failed, which is how it was found.
+    """
+
+    def setUp(self):
+        self.year = timezone.now().year
+        self.stem = f'ENG-{self.year}-'
+
+    def make(self, number, **kwargs):
+        defaults = {
+            'plan': make_plan(),
+            'title': f'Engagement {number}',
+            'engagement_number': number,
+        }
+        defaults.update(kwargs)
+        return AuditEngagement.objects.create(**defaults)
+
+    def test_an_empty_year_starts_at_one(self):
+        self.assertEqual(
+            next_reference_number(AuditEngagement, 'engagement_number', 'ENG'),
+            f'{self.stem}0001',
+        )
+
+    def test_it_counts_up_from_the_highest_existing_number(self):
+        self.make(f'{self.stem}0001')
+        self.make(f'{self.stem}0002')
+        self.assertEqual(
+            next_reference_number(AuditEngagement, 'engagement_number', 'ENG'),
+            f'{self.stem}0003',
+        )
+
+    def test_gaps_do_not_make_it_reissue_a_taken_number(self):
+        """The shape of the real failure: the count is below the highest number.
+
+        `count() + 1` is only "the next one" while the series is gapless. As soon
+        as a number is deleted — which happens every time an engagement is
+        removed during testing — the count falls behind the maximum and the
+        fallback starts handing out numbers that are already in use.
+        """
+        for n in range(1, 6):
+            self.make(f'{self.stem}{n:04d}')
+        AuditEngagement.objects.filter(
+            engagement_number=f'{self.stem}0003').delete()
+
+        handed_out = next_reference_number(
+            AuditEngagement, 'engagement_number', 'ENG')
+        self.assertEqual(handed_out, f'{self.stem}0006')
+        self.assertFalse(
+            AuditEngagement.objects.filter(engagement_number=handed_out).exists(),
+            'it handed out a number that is already taken',
+        )
+
+    def test_a_longer_hand_numbered_row_does_not_derail_the_sequence(self):
+        """The regression itself.
+
+        `ENG-<year>-PP-001` is longer than any generated number, so an ordering
+        over the whole year lands on it. The generated series has to be unaffected
+        by the presence of rows from the other one.
+        """
+        self.make(f'{self.stem}0426')
+        self.make(f'{self.stem}-PP-001')
+
+        self.assertEqual(
+            next_reference_number(AuditEngagement, 'engagement_number', 'ENG'),
+            f'{self.stem}0427',
+        )
+
+    def test_the_hand_numbered_rows_are_still_reachable(self):
+        """Narrowing the query must not hide or renumber the seed rows."""
+        self.make(f'{self.stem}-PP-001')
+        self.assertTrue(
+            AuditEngagement.objects.filter(
+                engagement_number=f'{self.stem}-PP-001').exists()
+        )
+
+    def test_another_year_does_not_affect_this_one(self):
+        self.make(f'ENG-{self.year - 1}-9999')
+        self.make(f'{self.stem}0007')
+        self.assertEqual(
+            next_reference_number(AuditEngagement, 'engagement_number', 'ENG'),
+            f'{self.stem}0008',
+        )
+
+    def test_an_explicit_year_is_honoured(self):
+        self.make('ENG-1999-0004')
+        self.assertEqual(
+            next_reference_number(
+                AuditEngagement, 'engagement_number', 'ENG', year=1999),
+            'ENG-1999-0005',
+        )
+
+    def test_numbers_past_the_fixed_width_keep_growing(self):
+        """The length-first ordering exists for this: `9999` < `10000` as a number
+        but not as a string."""
+        self.make(f'{self.stem}9999')
+        self.make(f'{self.stem}10000')
+        self.assertEqual(
+            next_reference_number(AuditEngagement, 'engagement_number', 'ENG'),
+            f'{self.stem}10001',
+        )

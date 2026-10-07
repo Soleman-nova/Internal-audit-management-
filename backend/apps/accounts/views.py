@@ -32,6 +32,7 @@ from apps.common.permissions import (
 )
 from apps.common.audit_utils import log_audit
 from apps.common.date_utils import month_starts, month_end
+from apps.common.scoping import region_for
 from .logto import (
     LogtoNotConfigured, identity_candidates, jwt_header,
     resolve_or_provision_user, verify_logto_id_token,
@@ -581,6 +582,20 @@ class DashboardStatsView(generics.GenericAPIView):
     # with the reviewer, so a resolved finding leaves its owner's My Work queue
     # even though it does not score yet.
     SETTLED_FINDING_STATUSES = ('resolved', 'closed')
+    # Everything the register can hold apart from the settled pair — what the
+    # "Open Findings" KPI and its donut count. Written out rather than derived by
+    # subtracting the settled set, because a status added to the model later
+    # should have to be classified here on purpose.
+    #
+    # This used to be the literal `status='open'`, which was already narrower than
+    # the label suggested — it missed `in_progress`, `awaiting_auditee_response`
+    # and `disputed` — and once findings are born `draft` it would have matched
+    # nothing at all, pinning the tile at zero. `draft` is included deliberately:
+    # an unendorsed finding is live work, and it is what a supervisor needs to see
+    # waiting on them.
+    LIVE_FINDING_STATUSES = (
+        'draft', 'open', 'awaiting_auditee_response', 'in_progress', 'disputed',
+    )
     # Engagement statuses that mean "work is under way" for the execution chart.
     ACTIVE_ENGAGEMENT_STATUSES = ('in_progress', 'fieldwork', 'reporting')
     # CAPA statuses that still need something from their owner.
@@ -607,17 +622,35 @@ class DashboardStatsView(generics.GenericAPIView):
             actions = actions.filter(finding__engagement__directorate_id=directorate.id)
             plans = plans.filter(directorate_id=directorate.id)
 
+        # Region scoping: a regional FPA auditor lands on this view first and the
+        # EEU-wide totals would be meaningless (and potentially disclosive) to them.
+        # Narrow here beside the directorate narrowing above, after it so both can
+        # apply if someone ever passes ?directorate= as a regional auditor.
+        region_id = region_for(request.user)
+        total_users_qs = User.objects.filter(is_active=True)
+        if region_id is not None:
+            engagements = engagements.filter(region_id=region_id)
+            findings = findings.filter(engagement__region_id=region_id)
+            actions = actions.filter(finding__engagement__region_id=region_id)
+            # Count users whose department sits in this region via the region FK
+            # on the user's department — same structural trigger as the scoping.
+            total_users_qs = total_users_qs.filter(department__region_id=region_id)
+
         stats = {
             'directorate': self._directorate_payload(directorate),
             'total_engagements': engagements.count(),
             'active_engagements': engagements.filter(status='in_progress').count(),
             'total_findings': findings.count(),
-            'open_findings': findings.filter(status='open').count(),
-            'critical_findings': findings.filter(severity='critical', status='open').count(),
-            'high_findings': findings.filter(severity='high', status='open').count(),
+            'open_findings': findings.filter(status__in=self.LIVE_FINDING_STATUSES).count(),
+            'critical_findings': findings.filter(
+                severity='critical', status__in=self.LIVE_FINDING_STATUSES,
+            ).count(),
+            'high_findings': findings.filter(
+                severity='high', status__in=self.LIVE_FINDING_STATUSES,
+            ).count(),
             'overdue_actions': actions.filter(due_date__lt=today, status__in=['open', 'in_progress']).count(),
             'open_actions': actions.filter(status__in=['open', 'in_progress']).count(),
-            'total_users': User.objects.filter(is_active=True).count(),
+            'total_users': total_users_qs.count(),
             'active_plans': plans.filter(status='active').count(),
             'compliance_score': self._compliance_score(findings),
             'findings_by_severity': list(
@@ -627,7 +660,8 @@ class DashboardStatsView(generics.GenericAPIView):
             # it needs the open-only split — otherwise it sums to a different
             # total than the Open Findings KPI sitting right above it.
             'open_findings_by_severity': list(
-                findings.filter(status='open').values('severity').annotate(count=Count('id'))
+                findings.filter(status__in=self.LIVE_FINDING_STATUSES)
+                .values('severity').annotate(count=Count('id'))
             ),
             'engagements_by_status': list(
                 engagements.values('status').annotate(count=Count('id'))
@@ -711,6 +745,15 @@ class DashboardStatsView(generics.GenericAPIView):
             # (medium before critical) rather than by how bad the finding is.
             .order_by(models.F('target_resolution_date').asc(nulls_last=True), '-created_at')
         )
+        if user.role == 'auditee':
+            # This queue is the auditee's *work*, so an unpublished finding is not
+            # on it — the same rule the findings register applies. Restricted to
+            # auditees rather than applied to everyone: an auditor assigned to a
+            # finding they have not yet put to a supervisor should still see it
+            # here, and this is the only place their own drafts surface.
+            findings = findings.exclude(
+                status__in=AuditFinding.PRE_PUBLICATION_STATUSES,
+            )
         actions = (
             CorrectiveAction.objects
             .filter(owner=user, status__in=cls.OPEN_ACTION_STATUSES)

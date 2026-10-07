@@ -17,9 +17,12 @@ the interface can render the head-office units in either language. Each row eith
 
 * **merges** onto a Department that ``seed_org_structure`` /
   ``seed_eeu_audit_structure`` already created (the export's CEO Office, chief
-  offices, and Internal Audit directorates all overlap the coarse tree), or
+  offices, and Internal Audit directorates all overlap the coarse tree, and the
+  export's ``10003693 CO Regional Audit Coordination`` merges onto ``FPA-RAC``
+  — the Regional Audit Coordination node created by ``seed_eeu_audit_structure``),
+  or
 * is **skipped** because the audit system already models the unit a better way
-  (the export's region-coordination and regional-audit rows), or
+  (the export's Addis Ababa / Oromia region-coordination stubs), or
 * is **created** as a new ``CORPORATE`` department with code ``HO-<erp id>`` and
   wired under the resolved parent (an existing merged node or another created
   node). Orphan rows whose export parent was ``NO_PARNT`` default to the CEO
@@ -77,6 +80,11 @@ MERGE_MAP = {
     # collapses into Region Coordination (the 32 regions hang off it). Its SCADA
     # children are created beneath the same node.
     '10003356': 'RGN Coordination',
+    # CO Regional Audit Coordination — the export's leaf unit for regional audit
+    # coordination, previously skipped. It now maps onto FPA-RAC, the Regional
+    # Audit Coordination node created by seed_eeu_audit_structure, so the export
+    # and the seeded audit tree are reconciled rather than duplicated.
+    '10003693': 'FPA-RAC',
 }
 
 # Export rows intentionally left out, each with the reason.
@@ -86,10 +94,10 @@ SKIP_CODES = {
     # would add empty coordination stubs beside them. Both are leaf rows.
     '10000048': 'Addis Ababa Region Coordination already covered by the seeded regions',
     '10000049': 'Oromia Region Coordination already covered by the seeded regions',
-    # CO Regional Audit Coordination. The audit side of this system is modelled
-    # authoritatively as IAEO + the four directorates; a fifth, unwired audit
-    # unit would only add noise. Leaf row.
-    '10003693': 'audit structure already modelled (IAEO + FPA/TA/ITA/PP)',
+    # 10003693 CO Regional Audit Coordination was previously skipped here. It now
+    # merges onto FPA-RAC (see MERGE_MAP above) — the rationale for skipping it
+    # ("audit structure already modelled as IAEO + FPA/TA/ITA/PP") is no longer
+    # true now that FPA is subdivided with an explicit coordination node.
 }
 
 # Export rows the source left with a NO_PARNT parent, re-homed onto the office

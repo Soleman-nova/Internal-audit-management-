@@ -19,10 +19,11 @@ how the auditee interacts through findings and CAPAs.
 | Audit Universe entity | Audit Manager | **pre-seeded** (code `DEMO-PROC-01`) |
 | Risk assessment + self-assessment | Manager / Auditee | **pre-seeded**, reviewed |
 | Annual plan | Audit Manager | **pre-seeded**, approved |
-| Engagement + team | Audit Manager | **pre-seeded**, `fieldwork`, lead + supervisor assigned |
+| Engagement + team | Audit Manager | **pre-seeded**, `fieldwork`, lead + supervisor + auditee representative assigned |
 | Program & procedures | Auditor | **live** — auditor builds them |
 | Program approval / workpaper review | Supervisor | **live** |
-| Findings | Auditor | **live** |
+| Findings | Auditor | **live** — raises as *Pending Supervisor Review* |
+| Finding endorsement | Supervisor | **live** — publishes, which is what reaches the auditee |
 | Finding response & evidence | Auditee | **live** |
 | CAPA | Auditor → Auditee → Supervisor | **live** |
 | Report | Auditor / Manager | **live** — generate + download |
@@ -92,8 +93,10 @@ Sidebar has **no** User Management — the route guard blocks `/users`.
 - **Planning → Annual Audit Plans**: `DEMO Annual Audit Plan 2026` shows
   **APPROVED**.
 - **Planning → Engagements**: `DEMO-ENG-2026-001` is `fieldwork`, with lead
-  auditor and supervisor named. The status dropdown here is how an engagement
-  moves through stages.
+  auditor, supervisor and the **auditee representative** (`Kidus Yosef`) named.
+  The status dropdown here is how an engagement moves through stages. Point at the
+  auditee column and say why it matters: a finding inherits this person, and the
+  form that logs a finding never asks for one.
 - **Risk Assessment**: the assessment exists with a computed score; the auditee's
   self-assessment is `reviewed`.
 
@@ -128,6 +131,10 @@ this demo from a green-toast illusion.
 5. Set procedure **1.0** to `in_progress`, then **2.0** to `completed` (this
    stamps `completed_by`/`completed_at` and notifies the engagement lead).
 6. **Submit for Review** on the program header. The badge flips to **SUBMITTED**.
+7. Once every step carries an outcome, **Complete Fieldwork** on the program
+   header. Try it first with a step still pending: it refuses and names the step.
+   *Failed* and *Not Applicable* count as outcomes, so a step that found a
+   problem does not hold the program open.
 
 ### 4.2 Supervisor — `EEU-10003` — approve program, review workpaper
 
@@ -171,63 +178,104 @@ this demo from a green-toast illusion.
    The server numbers them `FND-2026-0001` / `0002` — the form does not invent
    numbers.
 
-3. Open Finding A (double-click) → the detail page. Mention this is where the
-   auditee will respond next.
+3. Open Finding A → the detail page. Point out the badge reads
+   **PENDING SUPERVISOR REVIEW** — the finding is the audit team's own work until
+   a supervisor endorses it. Nothing has gone to the auditee yet; the next step is
+   the supervisor's.
+4. Note the **Source Procedure** row names the step the finding was raised from,
+   and links back to it on the execution board. Click through if you like — the
+   step is highlighted when you arrive. This is the difference between a finding
+   that is evidence of something and one that is merely asserted.
+5. Note the **Auditee** row in the detail panel names `Kidus Yosef`. That person
+   comes from the engagement, not this form — the form never asks for an auditee,
+   which is exactly where the workflow used to dead-end: findings landed with
+   nobody named, so the auditee could see them (their department owns the
+   engagement) and got a 403 on every button on them.
 
-### 4.4 Auditee — `EEU-10005` — respond with evidence
+### 4.4 Supervisor — `EEU-10003` — endorse the findings
 
-1. Log in. The bell should show a notification about the new finding; the
-   dashboard's **My Work** lists it.
+1. Log in. The bell shows **Finding awaiting your review** for each finding just
+   logged — the notification that was previously never sent, which left findings
+   sitting in the reviewer's queue with nobody told there was a queue.
+2. **Findings Registry** → the demo engagement → open Finding A.
+3. **Publish to Auditee** → the badge flips to **AWAITING AUDITEE RESPONSE**, and
+   *only now* is the auditee notified and able to act on it.
+4. Repeat for Finding B — or leave it unpublished for now and use it to
+   demonstrate that an unpublished finding is invisible to the auditee. If you
+   take that detour, **publish B before §4.7**: the auditee answers `CAPA-0002`
+   there, and they cannot see a corrective action whose finding is unpublished —
+   the register applies the same gate to actions that it applies to findings.
+
+### 4.5 Auditee — `EEU-10005` — respond with evidence
+
+1. Log in. The bell now shows a notification about the published finding; the
+   dashboard's **My Work** lists it. (Both are keyed off the publish in §4.4 —
+   before it, the auditee had no notification to click.)
 2. **Findings Registry** → the demo engagement → Finding A → open it.
-   Because the engagement's department is the auditee's department, the auditee
-   sees it.
 3. Add a **comment**: `We have re-inspected all three units and completed the missing reports.`
 4. **Upload evidence** (any file, e.g. a scan or text file titled
    `Inspection sign-off log`).
 5. Note the auditee has no Resolve/Close buttons here — those belong to the audit
    team.
 
-### 4.5 Lead Auditor — `EEU-10004` — spawn CAPAs
+### 4.6 Lead Auditor — `EEU-10004` — spawn CAPAs
 
-1. Log in → **Corrective Actions** → **Spawn & Assign CAPA**.
-2. For Finding A:
+**The short way.** Open Finding A → **Spawn CAPA Task linked to Finding**. The
+follow-up form opens already pointed at that finding, with its title,
+description and recommendation carried across — so the action cannot end up
+attached to the wrong record. Fill in owner, priority and due date, save, and the
+new action appears in the finding's own **Corrective Actions** section. Repeat
+from Finding B.
+
+The long way, if you would rather show the list: log in → **Corrective Actions** →
+**Spawn CAPA Task** (the button on the list; **Spawn & Assign CAPA** is the
+modal's submit).
+
+1. For Finding A:
    - Link to Audit Finding: `FND-2026-0001 …`
    - Title: `Re-inspect units and enforce inspection sign-off before booking`
    - Description: `Complete inspection reports for the three outstanding units and require inspection sign-off before store booking.`
    - Recommendation: `Update the stores procedure and train receiving staff.`
    - Assign Owner: `Kidus Yosef` · Priority: `High` · Due Date: today + 14 days
-3. Repeat for Finding B:
+2. Repeat for Finding B:
    - Title: `Restore monthly bin-card reconciliation`
    - Description: `Resume monthly stock reconciliation and sign-off by the regional finance officer.`
    - Recommendation: `Assign a responsible clerk and document the reconciliation cycle.`
    - Assign Owner: `Kidus Yosef` · Priority: `Medium` · Due Date: today + 30 days
-4. The numbers come from the server: `CAPA-2026-0001` / `0002`.
+3. The numbers come from the server: `CAPA-2026-0001` / `0002`.
 
-### 4.6 Auditee — `EEU-10005` — CAPA responses
+### 4.7 Auditee — `EEU-10005` — CAPA responses
 
 1. Log in → **Corrective Actions** → the two CAPAs are listed under **Open /
    In Progress**.
 2. CAPA-0001 → **Respond**:
-   - Progress Status: `Resolved / Actioned`
+   - Progress Status: `Evidence Submitted / Pending Verification`
    - Notes: `All three units re-inspected and signed off. Stores procedure updated; receiving staff trained.`
    - Upload an implementation document (any file).
 3. CAPA-0002 → **Respond**:
    - Progress Status: `In Progress`
    - Notes: `Reconciliation restarted; first monthly log prepared, pending regional finance sign-off.`
-4. There is no **Verify & Schedule Follow-up** button for the auditee — the owner
-   cannot sign off their own remediation.
+4. The status list offers only `In Progress`, `Partially Resolved` and `Evidence
+   Submitted / Pending Verification`. An owner reports progress, not outcomes —
+   `Resolved` and `Closed` are refused server-side even if posted by hand, and
+   there is no **Verify & Close CAPA** button here, because the owner cannot sign
+   off their own remediation.
 
-### 4.7 Supervisor — `EEU-10003` — verify and close
+### 4.8 Supervisor — `EEU-10003` — verify and close
 
 1. Log in → **Corrective Actions**.
-2. CAPA-0002 → **Verify & Schedule Follow-up** (on the CAPA detail page):
-   schedule a follow-up a week out; the owner is notified.
-3. Back on the list, open **CAPA-0001** → verify the response and mark it closed.
-4. **Findings Registry** → Finding A → **Resolve** then **Close** (an auditee is
-   403 here — only the audit team closes). This is the moment the engagement can
-   eventually be marked `completed`.
+2. **CAPA-0002** → open it → **Schedule Follow-up**: a week out. This records a
+   *scheduled* visit and notifies the owner. It does not settle the action.
+3. Back on the list, open **CAPA-0001** — the one whose evidence was filed in 4.6
+   → **Verify & Close CAPA**: set the verification date and record what you
+   checked. Verification and closure are deliberately one step, so there is no way
+   to close an action without recording who verified it.
+4. **Findings Registry** → Finding A now reads `Closed`: settling the corrective
+   action carried the closure up to the finding it remediates. An auditee is 403
+   on Resolve/Close — only the audit team closes. This is the moment the
+   engagement can eventually be marked `completed`.
 
-### 4.8 Lead Auditor / Manager — generate and download the report
+### 4.9 Lead Auditor / Manager — generate and download the report
 
 1. Log in as **Auditor** (or Manager) → **Reports & Analytics** → **Compile
    Report**.
@@ -237,10 +285,18 @@ this demo from a green-toast illusion.
 4. The row appears as **GENERATING**, then flips to **READY** on its own (the page
    polls — no refresh needed).
 5. **Download** → a real PDF opens, named from the title.
-6. Optional flourish: generate an **Excel** and a **Word** version of the same
+6. In section 5, both corrective actions are listed. Point out what the report
+   does with material it may not distribute: a corrective action is only as
+   publishable as the finding it answers, so if Finding B were still unpublished
+   its `CAPA-0002` would not be printed — and the section would **say so**
+   (`Not shown above: 1 corrective action whose finding has not yet been endorsed
+   for publication.`) rather than claiming no actions exist. That distinction is
+   the point: the register showed you the action, so a report that denied it
+   would be lying, not just incomplete.
+7. Optional flourish: generate an **Excel** and a **Word** version of the same
    report and download both.
 
-### 4.9 Cross-cutting (as time permits)
+### 4.10 Cross-cutting (as time permits)
 
 - **Dashboard** as each role: KPIs and charts rescope; the auditee's dashboard
   shows **My Work** (findings, CAPAs, self-assessments).
@@ -257,7 +313,11 @@ this demo from a green-toast illusion.
 - Statuses move only through the permitted path (`draft → submitted → approved`,
   `planned → fieldwork → …`), enforced on the backend, not just hidden in the UI.
 - The auditee holds no capabilities; every action they can take is an
-  object-level check on records naming them or their department.
+  object-level check on records naming them.
+- The engagement names the **auditee representative**, and its findings inherit
+  that person. Reading and writing use different rules on purpose: an auditee can
+  *see* their department's findings, but can only *answer* the ones naming them —
+  which is why the representative has to be set before a finding is raised.
 - Report generation is asynchronous: `generating → ready`, and the download is
   gated through an authenticated endpoint.
 

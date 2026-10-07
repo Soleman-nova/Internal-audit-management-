@@ -1705,6 +1705,23 @@ tbody tr:hover {
   color: var(--text-muted);
 }
 
+/* A value the form shows but does not let you choose, sized to sit in the same
+   row as the .form-control elements beside it — used where the server decides
+   the value (the CAPA owner, for an auditee proposing their own plan) and a
+   disabled select would only imply a choice that gets discarded. */
+.form-control-static {
+  display: flex;
+  align-items: center;
+  min-height: 41px;
+  padding: 10px 12px;
+  margin: 0;
+  background: var(--bg-card2);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 /* Inline client-side validation feedback. Without these, a form that blocks
    submit on a failed validator gives the user no signal at all. */
 .form-control.is-invalid {
@@ -3058,6 +3075,15 @@ textarea.form-control {
 
 .procedure-item-card:hover {
   border-color: var(--border-active);
+}
+
+/* The step a finding was raised from, when arriving from that finding's page
+   (`?procedure=<id>`). An outline rather than a scroll or a flash: the whole
+   program is already on screen, so the only thing a deep link can usefully do
+   is say which card the reader is meant to be looking at. */
+.procedure-item-card.focused-step {
+  border-color: var(--color-danger, #dc2626);
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.18);
 }
 
 .proc-meta {
