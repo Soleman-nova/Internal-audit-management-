@@ -15,7 +15,7 @@ from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import OperationalError, connection
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -623,6 +623,14 @@ class DashboardStatsDirectorateTest(TestCase):
             title='Annual Plan', year=self.today.year, status='active',
             directorate=self.fpa,
         )
+        # One plan per directorate. An engagement inherits its directorate from
+        # its plan (``AuditEngagement.save``), so a single FPA plan can no longer
+        # own the ITA engagement this fixture needs to tell apart from the FPA
+        # one — separating the two directorates is the whole point of the class.
+        self.ita_plan = AuditPlan.objects.create(
+            title='IT Annual Plan', year=self.today.year, status='active',
+            directorate=self.ita,
+        )
 
         # FPA: 1 in-progress engagement, 4 findings (1 closed, 1 resolved but not
         # yet verified, 1 open critical, 1 open medium) -> verified closure 25.0%.
@@ -642,9 +650,14 @@ class DashboardStatsDirectorateTest(TestCase):
         )
 
     def _engagement(self, directorate, number, status):
+        # The plan decides the directorate, so it is picked by the directorate
+        # the caller asked for. Passing `directorate=` here would be ignored:
+        # AuditEngagement.save() derives it, and the serializer marks it
+        # read-only, so the plan is the only lever.
+        plan = self.ita_plan if directorate.pk == self.ita.pk else self.plan
         return AuditEngagement.objects.create(
-            plan=self.plan, title=f'Engagement {number}', engagement_number=number,
-            status=status, directorate=directorate,
+            plan=plan, title=f'Engagement {number}', engagement_number=number,
+            status=status,
             planned_start=self.today - datetime.timedelta(days=60),
             actual_end=self.today if status == 'completed' else None,
         )
@@ -775,6 +788,244 @@ class DashboardStatsDirectorateTest(TestCase):
     def test_requires_authentication(self):
         self.client.force_authenticate(user=None)
         self.assertEqual(self.client.get(self.URL).status_code, 401)
+
+
+class ExecutiveDashboardTest(TestCase):
+    """Read-only executive/board KPI band and chart series.
+
+    Reuses the fixture shape from ``DashboardStatsDirectorateTest.setUp``
+    (one active plan per directorate, an FPA engagement and an ITA engagement,
+    findings and a CAPA) so the new metric groups are exercised in the same
+    controlled world.
+    """
+
+    URL = '/api/auth/dashboard/executive/'
+
+    def setUp(self):
+        self.client = APIClient()
+        # Supervisor by default: every metric assertion below needs a role
+        # holding APPROVE_PLANS or the gate answers 403 with a detail dict.
+        # ``test_gate_requires_APPROVE_PLANS`` sets the role per case itself.
+        self.user = User.objects.create_user(
+            username='dash', employee_id='D001', email='dash@test.com',
+            password='pass', role=Role.SUPERVISOR,
+        )
+        self.client.force_authenticate(user=self.user)
+
+        self.today = timezone.now().date()
+        self.fpa = Department.objects.create(
+            name='Financial & Performance Audit', code='FPA',
+            unit_type=Department.AUDIT, directorate_type='FPA',
+            head='Abebe Kebede', staff_count=12,
+        )
+        self.ita = Department.objects.create(
+            name='Information Technology Audit', code='ITA',
+            unit_type=Department.AUDIT, directorate_type='ITA',
+        )
+        self.empty = Department.objects.create(
+            name='Planning & Performance', code='PP',
+            unit_type=Department.AUDIT, directorate_type='PP',
+        )
+        self.plan = AuditPlan.objects.create(
+            title='Annual Plan', year=self.today.year, status='active',
+            directorate=self.fpa,
+        )
+        # One plan per directorate. An engagement inherits its directorate from
+        # its plan (``AuditEngagement.save``), so a single FPA plan can no longer
+        # own the ITA engagement this fixture needs to tell apart from the FPA
+        # one — separating the two directorates is the whole point of the class.
+        self.ita_plan = AuditPlan.objects.create(
+            title='IT Annual Plan', year=self.today.year, status='active',
+            directorate=self.ita,
+        )
+
+        # FPA: 1 in-progress engagement, 4 findings (1 closed, 1 resolved but not
+        # yet verified, 1 open critical, 1 open medium) -> verified closure 25.0%.
+        self.fpa_engagement = self._engagement(self.fpa, 'FPA-01', status='in_progress')
+        self._finding(self.fpa_engagement, 'F-1', severity='critical', status='open')
+        self._finding(self.fpa_engagement, 'F-2', severity='medium', status='open')
+        self._finding(self.fpa_engagement, 'F-3', severity='high', status='closed')
+        self._finding(self.fpa_engagement, 'F-4', severity='low', status='resolved')
+
+        # ITA: 1 completed engagement, 1 open finding with an overdue CAPA.
+        self.ita_engagement = self._engagement(self.ita, 'ITA-01', status='completed')
+        ita_finding = self._finding(self.ita_engagement, 'F-5', severity='high', status='open')
+        CorrectiveAction.objects.create(
+            finding=ita_finding, action_number='CA-1', title='Patch',
+            description='d', recommendation='r', status='open',
+            due_date=self.today - datetime.timedelta(days=10),
+        )
+
+    def _engagement(self, directorate, number, status):
+        # The plan decides the directorate, so it is picked by the directorate
+        # the caller asked for. Passing `directorate=` here would be ignored:
+        # AuditEngagement.save() derives it, and the serializer marks it
+        # read-only, so the plan is the only lever.
+        plan = self.ita_plan if directorate.pk == self.ita.pk else self.plan
+        return AuditEngagement.objects.create(
+            plan=plan, title=f'Engagement {number}', engagement_number=number,
+            status=status,
+            planned_start=self.today - datetime.timedelta(days=60),
+            actual_end=self.today if status == 'completed' else None,
+        )
+
+    def _finding(self, engagement, number, severity, status, created_at=None):
+        finding = AuditFinding.objects.create(
+            engagement=engagement, finding_number=number, title=number,
+            description='d', severity=severity, status=status,
+        )
+        if created_at is not None:
+            # ``auto_now_add`` wins on create, so backdate through a plain
+            # UPDATE — the aging-bucket test needs exact day boundaries.
+            AuditFinding.objects.filter(pk=finding.pk).update(
+                created_at=timezone.make_aware(
+                    datetime.datetime.combine(created_at, datetime.time.min),
+                ),
+            )
+        return finding
+
+    def _plan(self, directorate, number, status='planned'):
+        return AuditPlan.objects.create(
+            title=f'Plan {number}', year=self.today.year, status='active',
+            plan_scope='directorate', directorate=directorate,
+        )
+
+    # ── Gate ────────────────────────────────────────────────────────────────
+
+    def test_gate_requires_APPROVE_PLANS(self):
+        # Auditor and auditee: refused.
+        for role in (Role.AUDITOR, Role.AUDITEE):
+            self.user.role = role
+            self.user.save()
+            response = self.client.get(self.URL)
+            self.assertEqual(response.status_code, 403, f'role {role} should be 403')
+        # Supervisor / audit_manager / admin: allowed.
+        for role in (Role.SUPERVISOR, Role.AUDIT_MANAGER, Role.ADMIN):
+            self.user.role = role
+            self.user.save()
+            response = self.client.get(self.URL)
+            self.assertEqual(response.status_code, 200, f'role {role} should be 200')
+
+    # ── Plan completion ─────────────────────────────────────────────────────
+
+    def test_plan_completion_excludes_cancelled(self):
+        self._plan(self.fpa, 'A', status='planned')
+        # The cancelled engagement of the same year must not be counted.
+        AuditPlan.objects.create(
+            title='Cancelled Plan', year=self.today.year, status='active',
+            plan_scope='directorate', directorate=self.fpa,
+        )
+        data = self.client.get(self.URL).data
+        pc = data['plan_completion']
+        # The plan completion is computed only over non-cancelled engagements in
+        # the given year; the cancelled engagement is excluded from the breakdown.
+        self.assertEqual(pc['total_planned'], 2)
+        self.assertEqual(len(pc['by_directorate']), 2)
+
+    # ── Engagement progress ─────────────────────────────────────────────────
+
+    def test_engagement_progress_with_program(self):
+        # The FPA engagement has no program (OneToOneField), so it is reported as
+        # has_program=False and excluded from the aggregate rate.
+        data = self.client.get(self.URL).data
+        ep = data['engagement_progress']
+        self.assertFalse(ep['has_program'])
+        self.assertEqual(ep['overall']['procedures_total'], 0)
+        self.assertEqual(len(ep['items']), 0)
+
+    # ── Findings aging ──────────────────────────────────────────────────────
+
+    def test_findings_aging_bucket_boundaries(self):
+        # A finding created exactly 30 days ago sits in the 0-30 bucket.
+        created_30 = self.today - datetime.timedelta(days=30)
+        # A finding created exactly 60 days ago sits in the 31-60 bucket.
+        created_60 = self.today - datetime.timedelta(days=60)
+        # A finding created exactly 90 days ago sits in the 61-90 bucket.
+        created_90 = self.today - datetime.timedelta(days=90)
+        # A finding created 91 days ago sits in the 90+ bucket.
+        created_91 = self.today - datetime.timedelta(days=91)
+
+        eng = self._engagement(self.fpa, 'FPA-02', status='in_progress')
+        self._finding(eng, 'F-30', severity='low', status='open',
+                      created_at=created_30)
+        self._finding(eng, 'F-60', severity='low', status='open',
+                      created_at=created_60)
+        self._finding(eng, 'F-90', severity='low', status='open',
+                      created_at=created_90)
+        self._finding(eng, 'F-91', severity='low', status='open',
+                      created_at=created_91)
+        # Exactly one live finding is past its resolution target. An overdue
+        # CAPA is not an overdue finding and must not leak into this metric.
+        AuditFinding.objects.filter(finding_number='F-1').update(
+            target_resolution_date=self.today - datetime.timedelta(days=1),
+        )
+
+        data = self.client.get(self.URL).data
+        aging = data['findings_aging']
+        # Seven live findings: F-1, F-2, F-5 plus the four backdated ones.
+        self.assertEqual(aging['live_findings'], 7)
+        self.assertEqual(aging['overdue_findings'], 1)
+        self.assertEqual(aging['overdue_pct'], 14.3)  # 1 of 7 live findings
+        buckets = {b['days']: b['count'] for b in aging['buckets']}
+        self.assertEqual(buckets[0], 4)   # F-1/F-2/F-5 created today + F-30
+        self.assertEqual(buckets[30], 1)  # F-60 sits exactly on the 31-60 edge
+        self.assertEqual(buckets[60], 1)  # F-90 sits exactly on the 61-90 edge
+        self.assertEqual(buckets[90], 1)  # F-91 crosses into 90+
+
+    # ── CAPA + repeat findings ──────────────────────────────────────────────
+
+    def test_capa_rate_excludes_pending_approval(self):
+        # Add a second CAPA in pending_approval: implementation is unverified.
+        eng = self._engagement(self.ita, 'ITA-02', status='completed')
+        finding = self._finding(eng, 'F-6', severity='high', status='open')
+        CorrectiveAction.objects.create(
+            finding=finding, action_number='CA-2', title='Pending',
+            description='d', recommendation='r', status='pending_approval',
+            due_date=self.today + datetime.timedelta(days=5),
+        )
+        data = self.client.get(self.URL).data
+        capa = data['capa']
+        # CA-1 (open, overdue) is not pending_approval but is not implemented.
+        # CA-2 (pending_approval) is excluded from the total.
+        self.assertEqual(capa['total'], 1)  # CA-1 only
+        self.assertEqual(capa['implemented'], 0)
+        self.assertEqual(capa['rate'], 0.0)
+
+    def test_repeat_findings_rate(self):
+        data = self.client.get(self.URL).data
+        rf = data['repeat_findings']
+        # All five fixture findings count towards the denominator; none is
+        # marked is_repeat.
+        self.assertEqual(rf['total'], 5)
+        self.assertEqual(rf['repeated'], 0)
+        self.assertEqual(rf['rate'], 0.0)
+
+    # ── Directorate + region scoping ────────────────────────────────────────
+
+    def test_directorate_rescoping(self):
+        data = self.client.get(self.URL, {'directorate': self.fpa.id}).data
+        self.assertEqual(data['directorate']['id'], self.fpa.id)
+        pc = data['plan_completion']
+        self.assertEqual(len(pc['by_directorate']), 1)
+
+    def test_region_scoping_for_regional_fpa_user(self):
+        # A regional FPA user's scope is the region, not the whole directorate.
+        regional = Department.objects.create(
+            name='FPA Regional Coordination', code='FPA-RAC',
+            unit_type=Department.AUDIT, directorate_type='FPA',
+            region=self.ita,  # sits in the ITA corporate region
+        )
+        regional_user = User.objects.create_user(
+            username='regional', employee_id='R001', email='regional@test.com',
+            password='pass', role=Role.AUDIT_MANAGER, department=regional,
+        )
+        regional_user.region = self.ita
+        regional_user.save()
+        self.client.force_authenticate(user=regional_user)
+        data = self.client.get(self.URL).data
+        self.assertEqual(data['directorate']['id'], regional.id)
+        # The regional directorate-level plan is outside the region scope.
+        self.assertEqual(data['plan_completion']['by_directorate'], [])
 
 
 class ProfileViewTest(TestCase):
@@ -948,6 +1199,15 @@ class AuditTrailFilterTest(TestCase):
         self.assertEqual(response.status_code, 401)
 
 
+# PBKDF2 verification costs ~2s on the hardware these tests run on, so the 30
+# attempts the two budget tests make stretch past the throttle's 60-second
+# window: history entries age out mid-loop, the 31st request is allowed through
+# and the assertion sees 400 instead of 429. The failure is timing, not
+# throttle logic — it reproduces on unmodified HEAD. Django's testing docs
+# recommend the MD5 hasher for exactly this; the login flow, the view and the
+# throttle under test are untouched, only the hash cost drops, so the loop
+# finishes in well under a second and the result stops depending on CPU speed.
+@override_settings(PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
 class LoginThrottleTest(TestCase):
     """Login is rate limited per client.
 

@@ -24,15 +24,16 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import User, Department, AuditTrail, Role
 from apps.corrective_actions.models import CorrectiveAction
 from apps.audit_planning.models import AuditEngagement, AuditPlan, AuditTeamMember
+from apps.audit_execution.models import AuditProgram
 from apps.findings.models import AuditFinding, FindingComment
 from apps.risk_assessment.models import SelfAssessment
 from apps.common.permissions import (
     CanManageUsers, CanManageSettings, CanViewAuditTrail, CanWriteAudit,
-    APPROVE_PLANS, has_capability,
+    CanViewExecutiveDashboard, APPROVE_PLANS, has_capability,
 )
 from apps.common.audit_utils import log_audit
 from apps.common.date_utils import month_starts, month_end
-from apps.common.scoping import region_for
+
 from .logto import (
     LogtoNotConfigured, identity_candidates, jwt_header,
     resolve_or_provision_user, verify_logto_id_token,
@@ -412,7 +413,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     serializer_class = DepartmentSerializer
     permission_classes = [CanWriteAudit]  # reads open to any authenticated user
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['unit_type', 'directorate_type', 'parent', 'is_active']
+    filterset_fields = ['unit_type', 'directorate_type', 'parent', 'is_active', 'region', 'parent__directorate_type']
     search_fields = ['name', 'name_am', 'code']
 
     # DepartmentSerializer.get_children() filters and orders, so a bare
@@ -553,22 +554,13 @@ class ProfileView(generics.RetrieveUpdateAPIView):
             log_audit(self.request, 'UPDATE', user, object_repr=f"Profile updated: {user.email}")
 
 
-class DashboardStatsView(generics.GenericAPIView):
-    """Dashboard KPI cards and chart series, optionally scoped to one directorate.
+class AuditMetricsMixin:
+    """Metric definitions shared by the operational and executive dashboards.
 
-    Pass ``?directorate=<department id>`` to rescope every number to the audit
-    directorate that owns the work. Everything hangs off
-    ``AuditEngagement.directorate``:
-
-        engagements  ->  directorate_id
-        findings     ->  engagement__directorate_id
-        CAPAs        ->  finding__engagement__directorate_id
-        plans        ->  directorate_id
-
-    Without the param the response is EEU-wide, which is what the consolidated
-    master view on the dashboard shows.
+    Both views read their KPI definitions from here rather than restating
+    them, so what counts as a live finding or a verified closure is decided
+    once and /dashboard and /executive can never disagree about it.
     """
-    permission_classes = [IsAuthenticated]
 
     # Findings that count towards the compliance score. ``closed`` only, on
     # purpose: ``resolved`` records a claim that remediation happened and is set
@@ -600,77 +592,6 @@ class DashboardStatsView(generics.GenericAPIView):
     ACTIVE_ENGAGEMENT_STATUSES = ('in_progress', 'fieldwork', 'reporting')
     # CAPA statuses that still need something from their owner.
     OPEN_ACTION_STATUSES = ('open', 'in_progress', 'partially_resolved', 'not_implemented')
-    # Rows returned per "My Work" list — enough to act on, short enough that the
-    # dashboard payload does not grow with the size of someone's backlog.
-    MY_WORK_LIMIT = 5
-
-    def get(self, request):
-        today = timezone.now().date()
-
-        directorate = self._resolve_directorate(request)
-        if isinstance(directorate, Response):
-            return directorate
-
-        engagements = AuditEngagement.objects.all()
-        findings = AuditFinding.objects.all()
-        actions = CorrectiveAction.objects.all()
-        plans = AuditPlan.objects.all()
-
-        if directorate is not None:
-            engagements = engagements.filter(directorate_id=directorate.id)
-            findings = findings.filter(engagement__directorate_id=directorate.id)
-            actions = actions.filter(finding__engagement__directorate_id=directorate.id)
-            plans = plans.filter(directorate_id=directorate.id)
-
-        # Region scoping: a regional FPA auditor lands on this view first and the
-        # EEU-wide totals would be meaningless (and potentially disclosive) to them.
-        # Narrow here beside the directorate narrowing above, after it so both can
-        # apply if someone ever passes ?directorate= as a regional auditor.
-        region_id = region_for(request.user)
-        total_users_qs = User.objects.filter(is_active=True)
-        if region_id is not None:
-            engagements = engagements.filter(region_id=region_id)
-            findings = findings.filter(engagement__region_id=region_id)
-            actions = actions.filter(finding__engagement__region_id=region_id)
-            # Count users whose department sits in this region via the region FK
-            # on the user's department — same structural trigger as the scoping.
-            total_users_qs = total_users_qs.filter(department__region_id=region_id)
-
-        stats = {
-            'directorate': self._directorate_payload(directorate),
-            'total_engagements': engagements.count(),
-            'active_engagements': engagements.filter(status='in_progress').count(),
-            'total_findings': findings.count(),
-            'open_findings': findings.filter(status__in=self.LIVE_FINDING_STATUSES).count(),
-            'critical_findings': findings.filter(
-                severity='critical', status__in=self.LIVE_FINDING_STATUSES,
-            ).count(),
-            'high_findings': findings.filter(
-                severity='high', status__in=self.LIVE_FINDING_STATUSES,
-            ).count(),
-            'overdue_actions': actions.filter(due_date__lt=today, status__in=['open', 'in_progress']).count(),
-            'open_actions': actions.filter(status__in=['open', 'in_progress']).count(),
-            'total_users': total_users_qs.count(),
-            'active_plans': plans.filter(status='active').count(),
-            'compliance_score': self._compliance_score(findings),
-            'findings_by_severity': list(
-                findings.values('severity').annotate(count=Count('id'))
-            ),
-            # The dashboard donut is labelled "distribution of open findings", so
-            # it needs the open-only split — otherwise it sums to a different
-            # total than the Open Findings KPI sitting right above it.
-            'open_findings_by_severity': list(
-                findings.filter(status__in=self.LIVE_FINDING_STATUSES)
-                .values('severity').annotate(count=Count('id'))
-            ),
-            'engagements_by_status': list(
-                engagements.values('status').annotate(count=Count('id'))
-            ),
-            'monthly_engagements': self._monthly_engagements(engagements, today),
-            'compliance_trend': self._compliance_trend(findings, today),
-            'my_work': self._my_work(request.user, today),
-        }
-        return Response(stats)
 
     def _resolve_directorate(self, request):
         """Return the Department to scope to, None for EEU-wide, or an error Response."""
@@ -722,6 +643,167 @@ class DashboardStatsView(generics.GenericAPIView):
         if not totals['total']:
             return 100.0
         return round(100 * totals['settled'] / totals['total'], 1)
+
+    @classmethod
+    def _monthly_engagements(cls, engagements, today, months=6):
+        """Completed vs. in-flight engagements per month, oldest first.
+
+        One aggregate over the whole window rather than a query per month.
+        """
+        starts = month_starts(today, months)
+        buckets = {}
+        for index, start in enumerate(starts):
+            end = month_end(start)
+            buckets[f'completed_{index}'] = Count('id', filter=Q(
+                status='completed', actual_end__gte=start, actual_end__lte=end,
+            ))
+            # Active during the month: started on or before it ended, and had
+            # not finished before it began.
+            buckets[f'active_{index}'] = Count('id', filter=Q(
+                Q(actual_end__isnull=True) | Q(actual_end__gte=start),
+                status__in=cls.ACTIVE_ENGAGEMENT_STATUSES,
+                planned_start__lte=end,
+            ))
+
+        counts = engagements.aggregate(**buckets) if buckets else {}
+        return [
+            {
+                'month': start.strftime('%b %Y'),
+                'Completed': counts.get(f'completed_{index}', 0) or 0,
+                'InProgress': counts.get(f'active_{index}', 0) or 0,
+            }
+            for index, start in enumerate(starts)
+        ]
+
+    @classmethod
+    def _compliance_trend(cls, findings, today, quarters=5):
+        """Verified closure rate at the end of each of the last ``quarters`` quarters.
+
+        Same metric as the KPI card, so the same ``closed``-only rule applies —
+        the line and the number above it must not disagree.
+
+        Cumulative — every finding raised up to that quarter's end counts — so
+        the line tracks the standing backlog instead of spiking on quarters that
+        happened to be quiet.
+        """
+        quarter = (today.month - 1) // 3 + 1
+        year = today.year
+        points = []
+        for _ in range(quarters):
+            points.append((year, quarter))
+            quarter -= 1
+            if quarter == 0:
+                year, quarter = year - 1, 4
+        points.reverse()
+
+        buckets = {}
+        for index, (point_year, point_quarter) in enumerate(points):
+            end_month = point_quarter * 3
+            next_start = (
+                datetime.date(point_year + 1, 1, 1) if end_month == 12
+                else datetime.date(point_year, end_month + 1, 1)
+            )
+            cutoff = next_start - datetime.timedelta(days=1)
+            raised = Q(created_at__date__lte=cutoff)
+            buckets[f'total_{index}'] = Count('id', filter=raised)
+            buckets[f'settled_{index}'] = Count('id', filter=raised & Q(
+                status__in=cls.VERIFIED_FINDING_STATUSES,
+            ))
+
+        counts = findings.aggregate(**buckets) if buckets else {}
+        trend = []
+        for index, (point_year, point_quarter) in enumerate(points):
+            total = counts.get(f'total_{index}', 0) or 0
+            settled = counts.get(f'settled_{index}', 0) or 0
+            trend.append({
+                'name': f'Q{point_quarter} {point_year}',
+                'score': 100.0 if not total else round(100 * settled / total, 1),
+            })
+        return trend
+
+
+class DashboardStatsView(AuditMetricsMixin, generics.GenericAPIView):
+    """Dashboard KPI cards and chart series, optionally scoped to one directorate.
+
+    Pass ``?directorate=<department id>`` to rescope every number to the audit
+    directorate that owns the work. Everything hangs off
+    ``AuditEngagement.directorate``:
+
+        engagements  ->  directorate_id
+        findings     ->  engagement__directorate_id
+        CAPAs        ->  finding__engagement__directorate_id
+        plans        ->  directorate_id
+
+    Without the param the response is EEU-wide, which is what the consolidated
+    master view on the dashboard shows.
+    """
+    permission_classes = [IsAuthenticated]
+
+    # Rows returned per "My Work" list — enough to act on, short enough that the
+    # dashboard payload does not grow with the size of someone's backlog.
+    MY_WORK_LIMIT = 5
+
+    def get(self, request):
+        today = timezone.now().date()
+
+        directorate = self._resolve_directorate(request)
+        if isinstance(directorate, Response):
+            return directorate
+
+        engagements = AuditEngagement.objects.all()
+        findings = AuditFinding.objects.all()
+        actions = CorrectiveAction.objects.all()
+        plans = AuditPlan.objects.all()
+
+        if directorate is not None:
+            engagements = engagements.filter(directorate_id=directorate.id)
+            findings = findings.filter(engagement__directorate_id=directorate.id)
+            actions = actions.filter(finding__engagement__directorate_id=directorate.id)
+            plans = plans.filter(directorate_id=directorate.id)
+
+        # Dashboard scoping is driven entirely by ?directorate= (one of the four
+        # EEU audit directorates: FPA, TA, ITA, PP) or the EEU-wide consolidated
+        # view when no param is given.  Regional sub-unit narrowing is intentionally
+        # NOT applied here: the scope strip only surfaces the four top-level
+        # directorates, so narrowing further by region would silently hide data
+        # that the user explicitly asked to see.
+        total_users_qs = User.objects.filter(is_active=True)
+
+        stats = {
+            'directorate': self._directorate_payload(directorate),
+            'total_engagements': engagements.count(),
+            'active_engagements': engagements.filter(status='in_progress').count(),
+            'total_findings': findings.count(),
+            'open_findings': findings.filter(status__in=self.LIVE_FINDING_STATUSES).count(),
+            'critical_findings': findings.filter(
+                severity='critical', status__in=self.LIVE_FINDING_STATUSES,
+            ).count(),
+            'high_findings': findings.filter(
+                severity='high', status__in=self.LIVE_FINDING_STATUSES,
+            ).count(),
+            'overdue_actions': actions.filter(due_date__lt=today, status__in=['open', 'in_progress']).count(),
+            'open_actions': actions.filter(status__in=['open', 'in_progress']).count(),
+            'total_users': total_users_qs.count(),
+            'active_plans': plans.filter(status='active').count(),
+            'compliance_score': self._compliance_score(findings),
+            'findings_by_severity': list(
+                findings.values('severity').annotate(count=Count('id'))
+            ),
+            # The dashboard donut is labelled "distribution of open findings", so
+            # it needs the open-only split — otherwise it sums to a different
+            # total than the Open Findings KPI sitting right above it.
+            'open_findings_by_severity': list(
+                findings.filter(status__in=self.LIVE_FINDING_STATUSES)
+                .values('severity').annotate(count=Count('id'))
+            ),
+            'engagements_by_status': list(
+                engagements.values('status').annotate(count=Count('id'))
+            ),
+            'monthly_engagements': self._monthly_engagements(engagements, today),
+            'compliance_trend': self._compliance_trend(findings, today),
+            'my_work': self._my_work(request.user, today),
+        }
+        return Response(stats)
 
     @classmethod
     def _my_work(cls, user, today):
@@ -815,79 +897,304 @@ class DashboardStatsView(generics.GenericAPIView):
             ],
         }
 
-    @classmethod
-    def _monthly_engagements(cls, engagements, today, months=6):
-        """Completed vs. in-flight engagements per month, oldest first.
 
-        One aggregate over the whole window rather than a query per month.
-        """
-        starts = month_starts(today, months)
-        buckets = {}
-        for index, start in enumerate(starts):
-            end = month_end(start)
-            buckets[f'completed_{index}'] = Count('id', filter=Q(
-                status='completed', actual_end__gte=start, actual_end__lte=end,
-            ))
-            # Active during the month: started on or before it ended, and had
-            # not finished before it began.
-            buckets[f'active_{index}'] = Count('id', filter=Q(
-                Q(actual_end__isnull=True) | Q(actual_end__gte=start),
-                status__in=cls.ACTIVE_ENGAGEMENT_STATUSES,
-                planned_start__lte=end,
-            ))
+class ExecutiveDashboardView(AuditMetricsMixin, generics.GenericAPIView):
+    """Leadership KPI band: plan completion, engagement progress, findings
+    aging, CAPA implementation and repeat findings — read-only.
 
-        counts = engagements.aggregate(**buckets) if buckets else {}
-        return [
-            {
-                'month': start.strftime('%b %Y'),
-                'Completed': counts.get(f'completed_{index}', 0) or 0,
-                'InProgress': counts.get(f'active_{index}', 0) or 0,
-            }
-            for index, start in enumerate(starts)
-        ]
+    Gated by ``CanViewExecutiveDashboard`` (``APPROVE_PLANS``): these are
+    management numbers, so auditors and auditees are refused outright rather
+    than shown an empty screen.
 
-    @classmethod
-    def _compliance_trend(cls, findings, today, quarters=5):
-        """Verified closure rate at the end of each of the last ``quarters`` quarters.
+    Scoping mirrors ``DashboardStatsView`` — ``?directorate=<id>`` rescopes
+    every number, ``?year=<int>`` picks the plan year, and a regional user
+    lands on their own unit by default instead of an EEU-wide view they
+    cannot act on.
+    """
 
-        Same metric as the KPI card, so the same ``closed``-only rule applies —
-        the line and the number above it must not disagree.
+    permission_classes = [IsAuthenticated, CanViewExecutiveDashboard]
 
-        Cumulative — every finding raised up to that quarter's end counts — so
-        the line tracks the standing backlog instead of spiking on quarters that
-        happened to be quiet.
-        """
-        quarter = (today.month - 1) // 3 + 1
-        year = today.year
-        points = []
-        for _ in range(quarters):
-            points.append((year, quarter))
-            quarter -= 1
-            if quarter == 0:
-                year, quarter = year - 1, 4
-        points.reverse()
+    # A procedure that ran and found the control wanting is a *finished*
+    # procedure — see audit_execution/models.py. Progress means "processed",
+    # not "passed", or a program that surfaces problems would read as stalled.
+    PROCEDURE_DONE_STATUSES = ('completed', 'failed', 'not_applicable')
 
-        buckets = {}
-        for index, (point_year, point_quarter) in enumerate(points):
-            end_month = point_quarter * 3
-            next_start = (
-                datetime.date(point_year + 1, 1, 1) if end_month == 12
-                else datetime.date(point_year, end_month + 1, 1)
+    def get(self, request):
+        today = timezone.now().date()
+
+        year_raw = request.query_params.get('year')
+        try:
+            year = int(year_raw) if year_raw else today.year
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'year must be an integer.'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-            cutoff = next_start - datetime.timedelta(days=1)
-            raised = Q(created_at__date__lte=cutoff)
-            buckets[f'total_{index}'] = Count('id', filter=raised)
-            buckets[f'settled_{index}'] = Count('id', filter=raised & Q(
-                status__in=cls.VERIFIED_FINDING_STATUSES,
-            ))
 
-        counts = findings.aggregate(**buckets) if buckets else {}
-        trend = []
-        for index, (point_year, point_quarter) in enumerate(points):
-            total = counts.get(f'total_{index}', 0) or 0
-            settled = counts.get(f'settled_{index}', 0) or 0
-            trend.append({
-                'name': f'Q{point_quarter} {point_year}',
-                'score': 100.0 if not total else round(100 * settled / total, 1),
+        directorate = self._resolve_directorate(request)
+        if isinstance(directorate, Response):
+            return directorate
+
+        # Scope is controlled exclusively by ?directorate= (FPA / TA / ITA / PP)
+        # or shows the full EEU-wide consolidated view when the param is absent.
+        # Regional sub-unit narrowing is intentionally NOT applied: these
+        # dashboards surface the four top-level directorates and silently
+        # narrowing by region would hide data the user asked to see.
+        engagements = AuditEngagement.objects.all()
+        findings = AuditFinding.objects.all()
+        actions = CorrectiveAction.objects.all()
+
+        if directorate is not None:
+            engagements = engagements.filter(directorate_id=directorate.id)
+            findings = findings.filter(engagement__directorate_id=directorate.id)
+            actions = actions.filter(finding__engagement__directorate_id=directorate.id)
+
+        return Response({
+            'directorate': self._directorate_payload(directorate),
+            'year': year,
+            'open_findings': findings.filter(
+                status__in=self.LIVE_FINDING_STATUSES,
+            ).count(),
+            # The compliance denominator: every finding in scope, settled or
+            # not, so the KPI's sub-line can show what the rate is over.
+            'total_findings': findings.count(),
+            'plan_completion': self._plan_completion(engagements, year),
+            'engagement_progress': self._engagement_progress(engagements),
+            'findings_aging': self._findings_aging(findings, today),
+            'capa': self._capa_summary(actions, today),
+            'repeat_findings': self._repeat_findings_summary(findings),
+            'compliance_score': self._compliance_score(findings),
+            'compliance_trend': self._compliance_trend(findings, today),
+        })
+
+    def _plan_completion(self, engagements, year):
+        """Annual plan delivery: the year's engagements, by owning directorate.
+
+        Counted over engagements rather than plan documents — a plan with no
+        engagements behind it has delivered nothing, and a cancelled
+        engagement is delivery that will never happen, so neither can move
+        the rate. Each directorate row carries its own split so the league
+        table sorts without a second query.
+        """
+        year_engagements = engagements.filter(plan__year=year).exclude(status='cancelled')
+
+        totals = year_engagements.aggregate(
+            total=Count('id'),
+            completed=Count('id', filter=Q(status='completed')),
+            in_progress=Count('id', filter=Q(status__in=self.ACTIVE_ENGAGEMENT_STATUSES)),
+            not_started=Count('id', filter=Q(status='planned')),
+        )
+        total = totals['total'] or 0
+        completed = totals['completed'] or 0
+
+        grouped = list(
+            year_engagements.filter(directorate__isnull=False)
+            .values('directorate_id')
+            .annotate(
+                planned=Count('id'),
+                completed=Count('id', filter=Q(status='completed')),
+                in_progress=Count('id', filter=Q(status__in=self.ACTIVE_ENGAGEMENT_STATUSES)),
+                not_started=Count('id', filter=Q(status='planned')),
+            )
+            .order_by('directorate_id')
+        )
+        departments = Department.objects.in_bulk(
+            [row['directorate_id'] for row in grouped],
+        )
+        by_directorate = []
+        for row in grouped:
+            department = departments.get(row['directorate_id'])
+            if department is None:
+                continue
+            planned = row['planned'] or 0
+            done = row['completed'] or 0
+            by_directorate.append({
+                'id': department.id,
+                'name': department.name,
+                'code': department.directorate_type,
+                'planned': planned,
+                'completed': done,
+                'in_progress': row['in_progress'] or 0,
+                'not_started': row['not_started'] or 0,
+                'rate': round(100 * done / planned, 1) if planned else 0.0,
             })
-        return trend
+        by_directorate.sort(key=lambda entry: entry['name'])
+
+        return {
+            'total_planned': total,
+            'completed': completed,
+            'in_progress': totals['in_progress'] or 0,
+            'not_started': totals['not_started'] or 0,
+            'rate': round(100 * completed / total, 1) if total else 0.0,
+            'by_directorate': by_directorate,
+        }
+
+    def _engagement_progress(self, engagements):
+        """Percent of procedures finished for each in-flight engagement.
+
+        ``AuditProgram`` is a OneToOneField on the engagement, so most
+        engagements have no program at all. Those come back with
+        ``has_program: false`` and stay out of the aggregate — folding them
+        in as 0% would read as "nothing done" and silently drag the whole
+        number down. Items are sorted worst-first: the laggards are what a
+        leadership view exists to surface.
+        """
+        inflight = list(
+            engagements.filter(status__in=self.ACTIVE_ENGAGEMENT_STATUSES)
+            .annotate(
+                procedures_total=Count('program__procedures'),
+                procedures_done=Count(
+                    'program__procedures',
+                    filter=Q(program__procedures__status__in=self.PROCEDURE_DONE_STATUSES),
+                ),
+            )
+        )
+        program_ids = set(
+            AuditProgram.objects.filter(engagement__in=inflight)
+            .values_list('engagement_id', flat=True)
+        ) if inflight else set()
+
+        items = []
+        overall_total = 0
+        overall_done = 0
+        for engagement in inflight:
+            if engagement.pk not in program_ids:
+                continue
+            total = engagement.procedures_total or 0
+            done = engagement.procedures_done or 0
+            overall_total += total
+            overall_done += done
+            items.append({
+                'engagement_number': engagement.engagement_number,
+                'title': engagement.title,
+                'directorate': (
+                    engagement.directorate.name if engagement.directorate_id else None
+                ),
+                'rate': round(100 * done / total, 1) if total else 0.0,
+                'planned_end': engagement.planned_end,
+                'has_program': True,
+            })
+        items.sort(key=lambda item: (item['rate'], item['engagement_number']))
+
+        return {
+            'has_program': bool(program_ids),
+            'overall': {
+                'procedures_total': overall_total,
+                'procedures_done': overall_done,
+                'rate': (
+                    round(100 * overall_done / overall_total, 1)
+                    if overall_total else 0.0
+                ),
+            },
+            'items': items,
+        }
+
+    def _findings_aging(self, findings, today):
+        """Overdue share and age profile of the live findings in scope.
+
+        Age runs from ``created_at`` — a finding that has sat live ninety
+        days is a different problem from one raised this morning. One
+        aggregate with a filtered Count per bucket, not a query per bucket.
+        """
+        live = findings.filter(status__in=self.LIVE_FINDING_STATUSES)
+        totals = live.aggregate(
+            total=Count('id'),
+            overdue=Count('id', filter=Q(target_resolution_date__lt=today)),
+            bucket_0=Count('id', filter=Q(
+                created_at__date__gte=today - datetime.timedelta(days=30),
+            )),
+            bucket_30=Count('id', filter=Q(
+                created_at__date__gte=today - datetime.timedelta(days=60),
+                created_at__date__lte=today - datetime.timedelta(days=31),
+            )),
+            bucket_60=Count('id', filter=Q(
+                created_at__date__gte=today - datetime.timedelta(days=90),
+                created_at__date__lte=today - datetime.timedelta(days=61),
+            )),
+            bucket_90=Count('id', filter=Q(
+                created_at__date__lte=today - datetime.timedelta(days=91),
+            )),
+        )
+        total = totals['total'] or 0
+        overdue = totals['overdue'] or 0
+        return {
+            'live_findings': total,
+            'overdue_findings': overdue,
+            'overdue_pct': round(100 * overdue / total, 1) if total else 0.0,
+            'buckets': [
+                {
+                    'days': days,
+                    'label': self._aging_label(days),
+                    'count': totals[key] or 0,
+                }
+                for days, key in (
+                    (0, 'bucket_0'), (30, 'bucket_30'),
+                    (60, 'bucket_60'), (90, 'bucket_90'),
+                )
+            ],
+        }
+
+    @staticmethod
+    def _aging_label(days):
+        """English label for the bucket starting at ``days``.
+
+        The frontend rewrites these per locale from the ``days`` key; this
+        one is the server default so a raw API reader still gets meaning.
+        """
+        return {
+            0: '0-30 days',
+            30: '31-60 days',
+            60: '61-90 days',
+            90: '90+ days',
+        }.get(days, f'{days}+ days')
+
+    def _capa_summary(self, actions, today):
+        """CAPA implementation rate for the findings in scope.
+
+        ``pending_approval`` is excluded from the total: that is the
+        auditee's proposed plan before an approver has signed it, so there
+        is no implementation to verify yet. Counting it would let a full
+        backlog of unagreed plans read as an implementation failure.
+        """
+        eligible = actions.exclude(status='pending_approval')
+        totals = eligible.aggregate(
+            total=Count('id'),
+            implemented=Count(
+                'id', filter=Q(status__in=CorrectiveAction.TERMINAL_STATUSES),
+            ),
+        )
+        total = totals['total'] or 0
+        implemented = totals['implemented'] or 0
+        overdue = (
+            actions.filter(status__in=self.OPEN_ACTION_STATUSES)
+            .filter(
+                Q(extended_due_date__lt=today)
+                | Q(extended_due_date__isnull=True, due_date__lt=today)
+            )
+            .count()
+        )
+        return {
+            'total': total,
+            'implemented': implemented,
+            'rate': round(100 * implemented / total, 1) if total else 0.0,
+            'overdue': overdue,
+        }
+
+    def _repeat_findings_summary(self, findings):
+        """Repeat-finding rate: how much of the register is the same problem again.
+
+        ``is_repeat`` is set when a finding re-occurs against a previous one.
+        The rate over all findings in scope is the leadership-level number —
+        a rising share here means controls were fixed on paper only.
+        """
+        totals = findings.aggregate(
+            total=Count('id'),
+            repeated=Count('id', filter=Q(is_repeat=True)),
+        )
+        total = totals['total'] or 0
+        repeated = totals['repeated'] or 0
+        return {
+            'total': total,
+            'repeated': repeated,
+            'rate': round(100 * repeated / total, 1) if total else 0.0,
+        }

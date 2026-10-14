@@ -20,9 +20,23 @@ export const reportsApi = {
     const res = await apiClient.post('/reports/generated/', data);
     return res.data;
   },
-  getAnalytics: async () => {
-    const res = await apiClient.get('/reports/generated/analytics/');
+  getAnalytics: async (params = {}) => {
+    const res = await apiClient.get('/reports/generated/analytics/', { params });
     return res.data;
+  },
+  exportArchive: async (params = {}) => {
+    const res = await apiClient.get('/reports/generated/export-archive/', {
+      params,
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `audit_reports_archive_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   },
   // Same authenticated-blob pattern as executionApi.downloadWorkingPaper:
   // fetch through apiClient so the JWT is attached, then hand the bytes to the

@@ -144,6 +144,7 @@ export async function publishFinding(page, findingId) {
 /** English sidebar labels (I18nContext.jsx `en` block). */
 export const NAV = {
   dashboard: 'Dashboard',
+  executive: 'Executive Dashboard',
   planning: 'Audit Planning',
   execution: 'Audit Execution',
   findings: 'Findings Registry',

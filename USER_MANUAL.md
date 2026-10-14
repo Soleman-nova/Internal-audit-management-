@@ -22,7 +22,7 @@ This manual describes what each screen does, who may use it, and what happens af
 8. [Findings Registry](#8-findings-registry)
 9. [Risk Assessment](#9-risk-assessment)
 10. [Corrective Actions (CAPA)](#10-corrective-actions-capa)
-11. [Reports & Analytics](#11-reports--analytics)
+11. [Reports & Analytics](#11-reports--analytics) — including [Auditor Performance](#auditor-performance)
 12. [User Management](#12-user-management)
 13. [Audit Trail](#13-audit-trail)
 
@@ -124,8 +124,10 @@ The left sidebar is your main navigation. Everyone sees seven destinations:
 | **Corrective Actions** | CAPA tracking and follow-up |
 | **Reports & Analytics** | Report templates and generated reports |
 
-Two more appear only for the roles that hold the matching capability:
+Four appear only for the roles that hold the matching capability:
 
+- **Executive Dashboard** — leadership: administrators, audit managers and supervisors. Plan completion by directorate, engagement progress, findings aging, CAPA implementation and the repeat-finding rate — management material, so an auditor or auditee will not find it in their sidebar (nor by typing the address).
+- **Auditor Performance** — the audit team: administrators, audit managers, supervisors and auditors. An auditee is not the audit team's to rank. See [Auditor Performance](#auditor-performance).
 - **User Management** — administrators only.
 - **Audit Trail** — administrators, audit managers and supervisors.
 
@@ -147,7 +149,7 @@ Below roughly 900 pixels wide, the sidebar becomes a drawer that slides over the
 
 ### Keyboard users
 
-A **Skip to content** link is the first focusable element on every page, so you can jump past the sidebar's 7–11 links straight into the page body.
+A **Skip to content** link is the first focusable element on every page, so you can jump past the sidebar's 7–10 links straight into the page body.
 
 > **Note on the Help modal:** its role checklists still tell you to sign in with an email address such as `admin@eeu.com`. That text is out of date. Log in with your Employee ID, as described in [section 2](#2-signing-in).
 
@@ -617,6 +619,45 @@ Two consequences worth knowing:
 
 The analytics view reports findings over exactly six consecutive calendar months, labelled by month and year. Every month in the window appears once, including February.
 
+### Auditor Performance
+
+**Who can use it:** the audit team — administrator, audit manager, supervisor and auditor. An auditee cannot open the page and the server refuses them the data behind it, because it ranks named people against each other.
+
+Open **Auditor Performance** from the sidebar. It answers two questions: what is each person carrying, and who has completed the most audits.
+
+#### The ranking
+
+The top of the page ranks people by **Completed Engagements** — the number of audits they were part of that reached the *Completed* status. One bar per person, all the same colour: the bar's length is the number, so colouring it darker-where-bigger would say the same thing twice.
+
+Completion is a **verified** state, not a label someone typed. An engagement can only be closed once every finding raised on it has been resolved, and closing it stamps the actual end date. That is what makes this worth ranking on.
+
+The chart lists only people who have completed at least one audit. The table below lists **everyone** named on an engagement, including those with nothing finished yet — a page that hid the people carrying the work in progress would be a strange one.
+
+#### Plan year
+
+**Plan Year** at the top scopes both the chart and the table to engagements belonging to a plan of that year. **All time** is the default. There are no other filters, and none inside the chart or the table: the selector scopes the whole page at once.
+
+#### The table
+
+| Column | What it means |
+|---|---|
+| **Led** | Engagements where this person is the *lead auditor*. |
+| **Worked on** | Every engagement they are credited with — as lead, as supervisor, or as a team member. |
+| **Completed** | Of those, the ones that reached *Completed*. |
+| **In flight** | The ones still open: planned, in progress, fieldwork or reporting. |
+| **On time** | Completed engagements delivered on or before the planned end date, shown as `3 / 4 · 75%`. |
+| **Findings** | Findings they raised *on the engagements they are credited with*. |
+| **Planned days** | Total planned effort across those engagements. |
+
+Two columns are easy to misread, so they are worth stating plainly:
+
+- **Led and Worked on are deliberately separate.** In the seeded data a directorate head is often the lead, the supervisor *and* a team member on the same engagement. If this page added those up, that person would look like they had done three times the work. It counts each engagement **once** per person, however many roles name them — so a large *Worked on* against a small *Led* is the honest picture of someone who supports audits rather than running them.
+- **On time always shows its fraction, and shows `—` for nobody.** A rate of 100% over one engagement is a much weaker claim than 100% over nine, and the fraction is what tells them apart. Where no completed engagement has both a planned and an actual end date there is nothing to measure, so the cell reads `—` rather than a flattering 100%. Engagements with no planned end date have no deadline to have met, so they are left out of the count entirely.
+
+#### A person's engagements
+
+The chevron at the end of a row opens that person's work: a tally by status, then every engagement with its number, title, status and dates. It is included with the row, so opening one costs no extra wait.
+
 ---
 
 ## 12. User Management
@@ -705,6 +746,7 @@ Practical starting sequences. Each assumes you have signed in with your Employee
 7. **Planning → Engagements** — schedule audits under the plan, naming a lead auditor, a supervisor and the **auditee representative**, and add team members with allocated days. The representative is who the engagement's findings are addressed to, so naming one here is what makes the rest of the flow work.
 8. **Reports → Templates** — create the templates your reports will use.
 9. Track progress on the **Dashboard**, using the directorate selector.
+10. **Auditor Performance** — see who is carrying what and who has completed the most audits. The *Led* and *Worked on* columns are worth a look after any staffing change: a large gap between them means someone is supporting audits rather than running them.
 
 ### Audit Supervisor
 
@@ -715,6 +757,7 @@ Practical starting sequences. Each assumes you have signed in with your Employee
 5. **CAPA** — open actions whose evidence has been filed and **Verify & Close CAPA**. Verification and closure are one step, so there is no way to close one without recording what you checked.
 6. **Risk → Self Assessments** — **Review** submissions.
 7. **Audit Trail** — available to you if you need to trace a change.
+8. **Auditor Performance** — the completion ranking and the on-time rate. Remember that *On time* shows its fraction: a rate over one or two engagements is weak evidence, not a perfect record.
 
 Risk parameters and report templates are not yours to change; ask the audit manager.
 
@@ -730,6 +773,7 @@ Risk parameters and report templates are not yours to change; ask the audit mana
 8. On the finding's detail page, add comments, attach evidence, and **Resolve** when remediation is done. Closing is usually the supervisor's call.
 9. **CAPA** — raise actions from findings with an owner, priority and due date.
 10. **Reports** — generate the engagement report.
+11. **Auditor Performance** — your own row against everyone else's: what you are carrying, what you have completed, and your on-time fraction. Note that a finding counts towards you when it is raised on an engagement you are credited with, not for every finding you have ever touched.
 
 Approving plans and programs is not yours; that is the supervisor and audit manager.
 

@@ -195,13 +195,27 @@
   background: rgba(0, 0, 0, 0.25);
 }
 
-/* ── Reset & Base ── */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* ── Reset & Base ──
+   Scoped into Tailwind's `base` layer on purpose. This file is otherwise
+   unlayered, and unlayered rules outrank everything in `@layer utilities`
+   regardless of specificity — so an unlayered `* { margin:0; padding:0 }`
+   silently beat every Tailwind `p-*`, `m-*`, `mt-*`, `space-y-*` utility in
+   the app. Pages built from semantic classes (`.card`, `.detail-section`) set
+   their own padding and never noticed, but the ones built from utilities —
+   the finding-detail record and every `Modal` header/body/footer — rendered
+   with their padding and vertical rhythm zeroed. In `@layer base` the reset
+   still applies to bare elements, while any `p-*`/`m-*` utility (in the later
+   `utilities` layer) now wins the cascade, which is what every caller intended.
+   The app's own semantic classes stay unlayered and keep outranking utilities
+   on conflict, exactly as before. */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 html {
@@ -2097,6 +2111,16 @@ textarea.form-control {
   color: #f8a24d;
 }
 
+/* Used only for the `awaiting_auditee_response` status on the finding-detail
+   record. Indigo keeps it distinct from success (green), info/in-progress
+   (orange), warning/open (amber) and danger (red) so the "waiting on the
+   auditee" state reads as its own thing. Previously undefined, so that one
+   status rendered as a bare, colourless pill. */
+.badge-accent {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+}
+
 .badge-outline {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
@@ -3339,10 +3363,14 @@ textarea.form-control {
 
 .count-badge {
   font-size: 11px;
+  font-weight: 600;
   padding: 1px 8px;
-  background: rgba(255, 255, 255, 0.06);
+  /* Tint the chip from its own text colour so it stays visible in both
+     themes. The old `rgba(255,255,255,0.06)` was white-on-near-white in
+     light mode — effectively invisible on the `--bg-card2` column. */
+  background: color-mix(in srgb, var(--text-secondary) 14%, transparent);
   border-radius: 10px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .kanban-cards-container {
@@ -3641,52 +3669,113 @@ textarea.form-control {
   gap: 20px;
 }
 
-.reports-split-layout {
-  display: grid;
-  grid-template-columns: 340px 1fr;
-  gap: 20px;
-  align-items: start;
+/* ---- Auditor Performance ------------------------------------------------
+   The ranked list of who carried what. Deliberately sparse: one hue per mark,
+   numbers in columns, and the per-person detail behind a disclosure rather
+   than laid out at once — eleven columns plus every engagement would be a wall
+   of figures where the ranking is supposed to read at a glance. */
+
+/* One filter row, above both the chart and the table, so neither card owns a
+   control that would scope only part of the page. */
+.ap-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-@media (max-width: 900px) {
-  .reports-split-layout {
-    grid-template-columns: 1fr;
-  }
+.ap-filters .form-group {
+  margin-bottom: 0;
 }
 
-.templates-list {
+/* The workload meter. The track is a lighter step of the fill's own ramp, not
+   a grey, so the whole mark reads as one measure rather than a value against a
+   neutral background. Fixed width so the bars in a column are comparable down
+   the page — a percentage-of-row meter would be a different length per row for
+   the same number. */
+.ap-workload {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ap-workload-track {
+  display: inline-block;
+  width: 56px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  flex: none;
+}
+
+.ap-workload-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+/* The expanded engagement list. Inset and quieter than the row that opened it,
+   so the eye keeps the ranking as the primary thread. */
+.ap-detail {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
+  padding: 14px 4px 4px;
 }
 
-.template-item {
+.ap-status-tally {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ap-status-tally li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ap-status-tally strong {
+  color: var(--text-primary);
+}
+
+/* The department names are long enough ("Financial & Performance Audit
+   Directorate") to wrap a row to three lines, which triples the height of a
+   table whose whole job is to be scanned down. One line per row, and the
+   full-width table scrolls if the columns outgrow the card. */
+.ap-dept {
+  white-space: nowrap;
+}
+
+/* `14 / 14 · 100%` is one claim. Broken across two lines it reads as two. */
+.ap-ontime {
+  white-space: nowrap;
+}
+
+/* A status is never carried by its colour alone — the dot sits beside a label
+   in every place one appears. */
+.ap-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.row-expanded > td {
   background: var(--bg-card2);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  transition: var(--transition);
 }
 
-.template-item:hover {
-  border-color: var(--border-active);
-}
-
-.template-icon {
-  color: var(--primary-light);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.template-info h4 {
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 3px;
-}
-
+/* The split layout, template card, icon tile, and card title are defined once
+   in the "Reports & Analytics Split Layout & Components" block at the end of
+   this file. The duplicate copies that used to sit here shadowed it — two grid
+   widths (340px/900px vs 320px/960px), two hover treatments, two icon colours —
+   and whichever block came later silently won. Only .template-info p has no
+   counterpart there, so it stays. */
 .template-info p {
   font-size: 11px;
   color: var(--text-muted);
@@ -4984,3 +5073,331 @@ textarea.form-control {
   opacity: 0.85;
   pointer-events: none;
 }
+
+/* ============================================================
+   EXECUTIVE DASHBOARD
+   ============================================================ */
+/* Year select + refresh, above everything the two controls scope. */
+.exec-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.exec-filters .form-group {
+  min-width: 160px;
+}
+
+/* Six leadership tiles instead of the operational dashboard's four. The
+   doubled class outranks .kpi-band's grid at every breakpoint. */
+.kpi-band.kpi-band-6 {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+@media (max-width: 1100px) {
+  .kpi-band.kpi-band-6 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .kpi-band.kpi-band-6 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Plan completion: one stacked bar per directorate. */
+.exec-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.exec-plan-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.exec-plan-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.exec-plan-rate {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Engagement progress: a meter per in-flight engagement. The track colour is
+   set inline as a low-alpha step of the fill's own hue — one meaning, one
+   colour, and the number is always beside the mark. */
+.exec-meter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.exec-overall {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.exec-overall strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.exec-meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.exec-meter-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exec-meter-track {
+  display: block;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bg-card2);
+}
+
+.exec-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 300ms ease;
+}
+
+.exec-meter-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Findings aging: sequential single-hue bars, count in ink beside each. */
+.exec-aging {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.exec-aging-summary {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.exec-aging-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 44px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.exec-aging-label {
+  color: var(--text-secondary);
+}
+
+.exec-aging-track {
+  display: block;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--bg-card2);
+}
+
+.exec-aging-fill {
+  display: block;
+  height: 100%;
+  border-radius: 7px;
+  transition: width 300ms ease;
+}
+
+.exec-aging-count {
+  text-align: right;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ── Reports & Analytics Split Layout & Components ── */
+.reports-split-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .reports-split-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.left-side-card {
+  height: 100%;
+}
+
+.templates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.template-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  transition: all 0.2s ease;
+}
+
+.template-item:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.template-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(0, 166, 81, 0.1);
+  color: var(--primary);
+  flex-shrink: 0;
+  /* Kept from the retired duplicate rule: nudges the tile onto the h4's
+     baseline, since the card is align-items: flex-start. */
+  margin-top: 2px;
+}
+
+.template-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.template-info h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 3px 0;
+  color: var(--text-primary);
+}
+
+.report-filter-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+/* ---- Report filter panel controls --------------------------------------
+   This stylesheet is unlayered, so its rules outrank Tailwind's
+   @layer utilities — and there is no @theme registering the muted / border /
+   foreground colours, so utilities like pl-9, rounded-full, border-t,
+   bg-muted/20 or hover:text-danger either lose to .form-control / .btn /
+   .badge or never generate at all. Each fix below is scoped to this panel. */
+
+/* The search field: .form-control's 12px padding beats pl-9, which left the
+   icon at left-3 sitting on top of the text. Reserve the gutters here. */
+.report-search-input {
+  padding-left: 36px;
+  padding-right: 32px;
+}
+
+.report-search-clear {
+  color: var(--text-muted);
+}
+
+.report-search-clear:hover {
+  color: var(--text-primary);
+}
+
+.report-reset-btn {
+  color: var(--text-muted);
+}
+
+.report-reset-btn:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Drawer surfaces: border-color / background utilities don't generate without
+   a @theme token, which left these dividers at preflight's currentColor — a
+   full-strength line instead of the hairline every other rule uses. */
+.report-filter-body {
+  border-top: 1px solid var(--border);
+  background: var(--bg-card2);
+}
+
+/* The icon inside each advanced-filter label: .form-label is display:block,
+   which beats the label's own flex utility. */
+.report-filter-body .form-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.report-filter-chips {
+  border-top: 1px solid var(--border);
+}
+
+/* The status/format pills: btn-xs never existed, so .btn's 9px/18px padding
+   and 8px radius rendered them as full-size square buttons. */
+.btn-xs {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 999px;
+}
+
+/* Badge variants the archive references but that were never defined — the PDF
+   format chip, the row-count chip, and the active-filter counter all rendered
+   as bare text. Theme-token colours so both light and dark stay legible. */
+.badge-primary {
+  background: rgba(242, 128, 31, 0.15);
+  color: var(--primary-dark);
+}
+
+.badge-secondary {
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--text-secondary);
+}
+
+.badge-light {
+  padding: 1px 7px;
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.28);
+  color: inherit;
+}
+
+

@@ -93,6 +93,16 @@ export default defineConfig({
       use: { storageState: 'e2e/.auth/supervisor.json' },
     },
     {
+      // The executive dashboard: its APPROVE_PLANS gate (the supervisor sees
+      // it, the auditor is refused by the server *and* bounced by the route
+      // guard) and the KPI band rendering behind it. Starts as the supervisor
+      // and switches identity for the negative half.
+      name: 'executive',
+      testMatch: /executive\.spec\.js/,
+      dependencies: ['setup'],
+      use: { storageState: 'e2e/.auth/supervisor.json' },
+    },
+    {
       name: 'auditor',
       testMatch: /auditor\.spec\.js/,
       dependencies: ['setup'],

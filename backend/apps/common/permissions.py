@@ -89,6 +89,43 @@ class CanViewAuditTrail(BasePermission):
         return has_capability(request.user, VIEW_AUDIT_TRAIL)
 
 
+class CanViewAuditorPerformance(BasePermission):
+    """Who carried what — the audit team's own output. A read gate.
+
+    Deliberately *not* a `HasCapability` subclass. That base returns True for
+    every safe method to any authenticated user, which is right for the
+    registers — an auditee must be able to read the finding they answer for —
+    but wrong here. This data ranks named people against each other, which is
+    the team's internal business: the auditee holds no WRITE_AUDIT and is
+    refused, as they are for every other audit-team view.
+
+    Same shape as `CanViewAuditTrail` and for the same reason: a read the
+    capability matrix should gate rather than assume.
+    """
+
+    def has_permission(self, request, view):
+        return has_capability(request.user, WRITE_AUDIT)
+
+
+class CanViewExecutiveDashboard(BasePermission):
+    """The leadership/board view. A read gate.
+
+    Deliberately *not* a `HasCapability` subclass. That base returns True for
+    every safe method to any authenticated user, which is right for the
+    registers — an auditee must be able to read the finding they answer for —
+    but wrong here. This view carries directorate league tables and
+    management-material plan-completion figures that auditors and auditees
+    cannot see: the capability matrix should gate this read rather than assume.
+
+    Same shape as `CanViewAuditTrail` and `CanViewAuditorPerformance` and for
+    the same reason: a read the capability matrix should gate rather than
+    assume. Only roles that hold APPROVE_PLANS may open this page.
+    """
+
+    def has_permission(self, request, view):
+        return has_capability(request.user, APPROVE_PLANS)
+
+
 class RequiresCapability(BasePermission):
     """Gate a specific @action by capability.
 

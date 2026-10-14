@@ -103,8 +103,15 @@ class AuditEngagementSerializer(OrgScopeNamesMixin, serializers.ModelSerializer)
         # findings and no actual_end — the one refusal this route exists to make.
         # Same shape as AuditFindingSerializer.read_only_fields, which closed the
         # identical door on the findings register.
+        #
+        # `directorate` is derived in AuditEngagement.save() from `plan`, which is
+        # the single source of truth for which directorate owns the work. Writable,
+        # it would let a client pin an engagement to a directorate its plan does
+        # not belong to — and `plan` is editable on this serializer, so the two
+        # could disagree the moment either changed. Read-only, the PATCH is simply
+        # ignored and the derivation wins on every save.
         read_only_fields = ['engagement_number', 'status', 'actual_start',
-                            'actual_end']
+                            'actual_end', 'directorate']
 
     @staticmethod
     def _plan_of(obj):

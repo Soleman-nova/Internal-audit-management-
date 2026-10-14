@@ -855,6 +855,146 @@ class AuditEngagementTest(RoleFixtureMixin, TestCase):
         self.assertIsNone(engagement.actual_end)
 
 
+class EngagementDirectorateInheritanceTest(RoleFixtureMixin, TestCase):
+    """`directorate` is derived from the plan, never chosen.
+
+    Every directorate-scoped number on the dashboard filters through
+    ``AuditEngagement.directorate`` (``accounts.views.DashboardStatsView``), and
+    nothing had ever written it: the engagement form has no such control and no
+    signal filled it in, so ``?directorate=<id>`` matched nothing for all four
+    directorates while the unscoped view looked healthy. The plan is now the
+    single source of truth — these tests pin that, including the two ways the
+    derivation could quietly go wrong again (a caller writing the field directly,
+    and a plan edit leaving its engagements on the old directorate).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.fpa = Department.objects.create(
+            name='Financial & Performance Audit', code=f'FPA-{next_seq()}',
+            unit_type=Department.AUDIT, directorate_type='FPA',
+        )
+        self.ita = Department.objects.create(
+            name='Information Technology Audit', code=f'ITA-{next_seq()}',
+            unit_type=Department.AUDIT, directorate_type='ITA',
+        )
+        self.fpa_plan = make_plan(created_by=self.manager, directorate=self.fpa)
+        self.ita_plan = make_plan(created_by=self.manager, directorate=self.ita)
+
+    def test_a_new_engagement_inherits_its_plans_directorate(self):
+        engagement = make_engagement(plan=self.fpa_plan, lead_auditor=self.auditor)
+        self.assertEqual(engagement.directorate, self.fpa)
+
+    def test_a_plan_without_a_directorate_leaves_the_engagement_without_one(self):
+        """Strict inheritance. `make_plan` sets no directorate, and inventing one
+        from the engagement's department would put a different answer in the
+        column than the plan the badge claims to inherit from."""
+        engagement = make_engagement(
+            plan=make_plan(created_by=self.manager), lead_auditor=self.auditor,
+        )
+        self.assertIsNone(engagement.directorate)
+
+    def test_moving_an_engagement_to_another_plan_re_derives(self):
+        engagement = make_engagement(plan=self.fpa_plan, lead_auditor=self.auditor)
+        engagement.plan = self.ita_plan
+        engagement.save()
+        engagement.refresh_from_db()
+        self.assertEqual(engagement.directorate, self.ita)
+
+    def test_a_partial_save_still_persists_the_derivation(self):
+        """`update_fields` is how `update-status` saves. Without directorate in
+        the field set the derivation would be computed and then dropped."""
+        engagement = make_engagement(plan=self.fpa_plan, lead_auditor=self.auditor)
+        engagement.plan = self.ita_plan
+        engagement.save(update_fields=['plan'])
+        engagement.refresh_from_db()
+        self.assertEqual(engagement.directorate, self.ita)
+
+    def test_the_api_ignores_a_client_supplied_directorate(self):
+        """Read-only, so an engagement cannot be pinned to a directorate its plan
+        does not belong to. Silently ignored rather than 400: the field is derived
+        on every save, so there is nothing for the caller to correct."""
+        response = self.as_user(self.manager).post(ENGAGEMENTS_URL, {
+            'plan': self.fpa_plan.id,
+            'title': 'Revenue Assurance Audit',
+            'engagement_type': 'financial',
+            'department': self.department.id,
+            'lead_auditor': self.auditor.id,
+            'directorate': self.ita.id,
+            **ENGAGEMENT_SCOPE,
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+
+        engagement = AuditEngagement.objects.get(pk=response.data['id'])
+        self.assertEqual(engagement.directorate, self.fpa)
+        self.assertEqual(response.data['directorate'], self.fpa.id)
+
+    def test_the_response_names_the_directorate_it_inherited(self):
+        """The form's read-only badge renders these two fields, so they have to
+        agree with the FK rather than being computed independently."""
+        self.fpa.name_am = 'የፋይናንስ እና አፈጻጸም ኦዲት'
+        self.fpa.save()
+        response = self.as_user(self.manager).post(ENGAGEMENTS_URL, {
+            'plan': self.fpa_plan.id,
+            'title': 'Revenue Assurance Audit',
+            'engagement_type': 'financial',
+            'department': self.department.id,
+            'lead_auditor': self.auditor.id,
+            **ENGAGEMENT_SCOPE,
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['directorate_name'], self.fpa.name)
+        self.assertEqual(response.data['directorate_name_am'], self.fpa.name_am)
+
+    def test_editing_a_plans_directorate_cascades_to_its_engagements(self):
+        """The badge says "inherited from Plan". If the plan moves and its
+        engagements do not, that sentence is a lie and the dashboard credits the
+        directorate the plan no longer owns."""
+        engagement = make_engagement(plan=self.fpa_plan, lead_auditor=self.auditor)
+        self.fpa_plan.directorate = self.ita
+        self.fpa_plan.save()
+
+        engagement.refresh_from_db()
+        self.assertEqual(engagement.directorate, self.ita)
+
+    def test_clearing_a_plans_directorate_clears_its_engagements(self):
+        engagement = make_engagement(plan=self.fpa_plan, lead_auditor=self.auditor)
+        self.fpa_plan.directorate = None
+        self.fpa_plan.save()
+
+        engagement.refresh_from_db()
+        self.assertIsNone(engagement.directorate)
+
+    def test_a_plan_edit_that_leaves_the_directorate_alone_changes_nothing(self):
+        """The cascade runs on every plan save. It must not disturb engagements
+        when the directorate is untouched — or the approve/submit workflow, which
+        saves the plan, would re-point its whole engagement list as a side effect."""
+        engagement = make_engagement(plan=self.fpa_plan, lead_auditor=self.auditor)
+        other = make_engagement(plan=self.ita_plan, lead_auditor=self.auditor)
+
+        self.fpa_plan.title = 'Renamed Annual Plan'
+        self.fpa_plan.save()
+
+        engagement.refresh_from_db()
+        other.refresh_from_db()
+        self.assertEqual(engagement.directorate, self.fpa)
+        self.assertEqual(other.directorate, self.ita)
+
+    def test_the_cascade_reaches_engagements_it_never_saved_through_the_api(self):
+        """Rows written straight to the ORM still follow the plan, because the
+        rule lives on the model rather than in a serializer."""
+        engagement = AuditEngagement.objects.create(
+            plan=self.fpa_plan, title='Direct ORM write',
+            engagement_number=f'ENG-DIRECT-{next_seq()}', objectives='o', scope='s',
+        )
+        self.assertEqual(engagement.directorate, self.fpa)
+
+        self.fpa_plan.directorate = self.ita
+        self.fpa_plan.save()
+        engagement.refresh_from_db()
+        self.assertEqual(engagement.directorate, self.ita)
+
+
 class LifecycleStatusIsNotEditableTest(RoleFixtureMixin, TestCase):
     """`status` is the action routes' to move, not a field an edit may set.
 
@@ -1102,3 +1242,304 @@ class OrgScopeSplitTest(RoleFixtureMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         ids = [row['id'] for row in response.data['results']]
         self.assertIn(created.data['id'], ids)
+
+
+AUDITOR_PERFORMANCE_URL = f'{ENGAGEMENTS_URL}auditor-performance/'
+
+
+class AuditorPerformanceTest(RoleFixtureMixin, TestCase):
+    """Who carried what, and who finished the most.
+
+    The endpoint unions three separate records — a person can be named on an
+    engagement as `lead_auditor`, as `supervisor`, and as an `AuditTeamMember`
+    — into one *set* of engagements per person. Most of these tests exist
+    because adding those three counts together would look right on almost every
+    row and be wrong on exactly the rows that matter, starting with the seeded
+    directorate head who holds all three on every engagement.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.plan = make_plan(created_by=self.manager)
+
+    def performance(self, user=None, **params):
+        response = self.as_user(user or self.manager).get(
+            AUDITOR_PERFORMANCE_URL, params,
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        return response.data['auditors']
+
+    @staticmethod
+    def row_for(auditors, user):
+        """The row for `user`, or None. Matched on id, so a shared display name
+        cannot make one person's numbers stand in for another's."""
+        return next((a for a in auditors if a['id'] == user.id), None)
+
+    def add_member(self, engagement, user, role='member'):
+        return AuditTeamMember.objects.create(
+            engagement=engagement, user=user, role=role,
+        )
+
+    # ── The union ────────────────────────────────────────────────────────
+
+    def test_the_whole_team_is_credited_not_only_the_lead(self):
+        """A team member is credited for work the lead happens to be named on."""
+        second = self.make_user(Role.AUDITOR, department=self.department)
+        engagement = make_engagement(
+            plan=self.plan, lead_auditor=self.auditor, status='completed',
+        )
+        self.add_member(engagement, second)
+
+        auditors = self.performance()
+        self.assertEqual(self.row_for(auditors, self.auditor)['completed'], 1)
+        self.assertEqual(self.row_for(auditors, second)['completed'], 1)
+        # ...but only the lead's `led` column moves, which is the whole reason
+        # the two are reported separately.
+        self.assertEqual(self.row_for(auditors, self.auditor)['led'], 1)
+        self.assertEqual(self.row_for(auditors, second)['led'], 0)
+
+    def test_one_person_named_three_times_is_credited_once(self):
+        """The seeded shape: `lead_auditor` *and* `supervisor` *and* a team
+        member — all the same person, on one engagement.
+
+        Summing per-role counts gives 3 here. The set union gives 1, which is
+        what the audit is worth to that person.
+        """
+        engagement = make_engagement(
+            plan=self.plan, lead_auditor=self.auditor,
+            supervisor=self.auditor, status='completed',
+        )
+        self.add_member(engagement, self.auditor, role='lead')
+
+        row = self.row_for(self.performance(), self.auditor)
+        self.assertEqual(row['total'], 1)
+        self.assertEqual(row['completed'], 1)
+        self.assertEqual(row['led'], 1)
+
+    def test_someone_with_no_engagements_is_not_ranked(self):
+        make_engagement(plan=self.plan, lead_auditor=self.auditor)
+
+        auditors = self.performance()
+        self.assertIsNotNone(self.row_for(auditors, self.auditor))
+        self.assertIsNone(self.row_for(auditors, self.auditee))
+
+    def test_ranking_puts_the_most_completed_first(self):
+        quiet = self.make_user(Role.AUDITOR, department=self.department)
+        busy = self.make_user(Role.AUDITOR, department=self.department)
+        make_engagement(plan=self.plan, lead_auditor=quiet, status='completed')
+        for _ in range(3):
+            make_engagement(plan=self.plan, lead_auditor=busy, status='completed')
+
+        auditors = self.performance()
+        order = [a['id'] for a in auditors]
+        self.assertLess(order.index(busy.id), order.index(quiet.id))
+        self.assertEqual(auditors[0]['completed'], 3)
+
+    # ── Status buckets ───────────────────────────────────────────────────
+
+    def test_cancelled_is_neither_completed_nor_in_flight(self):
+        """A cancelled engagement is not output and it is not load. Counting it
+        as either would misstate the person it was assigned to."""
+        make_engagement(plan=self.plan, lead_auditor=self.auditor, status='cancelled')
+
+        row = self.row_for(self.performance(), self.auditor)
+        self.assertEqual(row['completed'], 0)
+        self.assertEqual(row['in_flight'], 0)
+        # It is still theirs, and still in the total — the row exists, it is
+        # just not doing either job.
+        self.assertEqual(row['total'], 1)
+        self.assertEqual(row['by_status']['cancelled'], 1)
+
+    def test_in_flight_covers_the_four_active_statuses(self):
+        for engagement_status in ('planned', 'in_progress', 'fieldwork', 'reporting'):
+            make_engagement(
+                plan=self.plan, lead_auditor=self.auditor, status=engagement_status,
+            )
+
+        row = self.row_for(self.performance(), self.auditor)
+        self.assertEqual(row['in_flight'], 4)
+        self.assertEqual(row['completed'], 0)
+
+    # ── On-time ──────────────────────────────────────────────────────────
+
+    def test_on_time_ships_its_denominator(self):
+        make_engagement(
+            plan=self.plan, lead_auditor=self.auditor, status='completed',
+            planned_end=datetime.date(2026, 6, 30),
+            actual_end=datetime.date(2026, 6, 20),
+        )
+        make_engagement(
+            plan=self.plan, lead_auditor=self.auditor, status='completed',
+            planned_end=datetime.date(2026, 6, 30),
+            actual_end=datetime.date(2026, 7, 15),
+        )
+
+        row = self.row_for(self.performance(), self.auditor)
+        self.assertEqual(row['on_time'], {'met': 1, 'total': 2})
+        self.assertEqual(row['on_time_rate'], 50)
+
+    def test_an_engagement_with_no_planned_end_is_left_out_of_the_rate(self):
+        """No deadline means nothing to have met. Counting it as on time would
+        quietly inflate the score of whoever has the worst-planned work."""
+        make_engagement(
+            plan=self.plan, lead_auditor=self.auditor, status='completed',
+            planned_end=None, actual_end=datetime.date(2026, 7, 15),
+        )
+        make_engagement(
+            plan=self.plan, lead_auditor=self.auditor, status='completed',
+            planned_end=datetime.date(2026, 6, 30),
+            actual_end=datetime.date(2026, 7, 15),
+        )
+
+        row = self.row_for(self.performance(), self.auditor)
+        self.assertEqual(row['on_time'], {'met': 0, 'total': 1})
+        self.assertEqual(row['on_time_rate'], 0)
+
+    def test_no_dated_completion_is_null_not_a_perfect_score(self):
+        """The row must not read 100% for someone with nothing to measure.
+
+        `completed` is 1 here and the rate is still None — the two columns are
+        answering different questions.
+        """
+        make_engagement(
+            plan=self.plan, lead_auditor=self.auditor, status='completed',
+            planned_end=None, actual_end=None,
+        )
+
+        row = self.row_for(self.performance(), self.auditor)
+        self.assertEqual(row['completed'], 1)
+        self.assertEqual(row['on_time'], {'met': 0, 'total': 0})
+        self.assertIsNone(row['on_time_rate'])
+
+    # ── Findings and days ────────────────────────────────────────────────
+
+    def test_findings_are_attributed_to_who_raised_them(self):
+        """Two people on one engagement, each credited with their own findings.
+
+        The supervisor has to be *named on the engagement* to have a row at all
+        — that is the deliberate limit of this count. Findings are tallied
+        inside a person's credited work, not across every finding they ever
+        raised, so every column in a row describes the same set of audits. A
+        finding raised on an engagement the person had no part in is not theirs
+        to be ranked on.
+        """
+        engagement = make_engagement(
+            plan=self.plan, lead_auditor=self.auditor, supervisor=self.supervisor,
+        )
+        make_finding(engagement=engagement, identified_by=self.auditor)
+        make_finding(engagement=engagement, identified_by=self.auditor)
+        make_finding(engagement=engagement, identified_by=self.supervisor)
+
+        auditors = self.performance()
+        self.assertEqual(self.row_for(auditors, self.auditor)['findings'], 2)
+        self.assertEqual(self.row_for(auditors, self.supervisor)['findings'], 1)
+
+    def test_a_finding_on_someone_elses_engagement_is_not_credited(self):
+        """The other half of the rule above, asserted rather than implied: a
+        person with no role on the engagement does not appear at all, however
+        many findings they raised there."""
+        engagement = make_engagement(plan=self.plan, lead_auditor=self.auditor)
+        make_finding(engagement=engagement, identified_by=self.supervisor)
+
+        self.assertIsNone(self.row_for(self.performance(), self.supervisor))
+
+    def test_planned_days_sum_over_the_credited_engagements(self):
+        make_engagement(plan=self.plan, lead_auditor=self.auditor, planned_days=12)
+        make_engagement(plan=self.plan, lead_auditor=self.auditor, planned_days=30)
+
+        row = self.row_for(self.performance(), self.auditor)
+        self.assertEqual(row['planned_days'], 42)
+
+    # ── The per-person engagement list ───────────────────────────────────
+
+    def test_the_row_carries_its_own_engagements(self):
+        """The expandable breakdown is served with the row, so opening one
+        costs no extra request."""
+        engagement = make_engagement(
+            plan=self.plan, lead_auditor=self.auditor, status='completed',
+        )
+
+        row = self.row_for(self.performance(), self.auditor)
+        listed = {e['id']: e for e in row['engagements']}
+        self.assertIn(engagement.id, listed)
+        self.assertEqual(listed[engagement.id]['number'], engagement.engagement_number)
+        self.assertEqual(listed[engagement.id]['status'], 'completed')
+
+    # ── Filters ──────────────────────────────────────────────────────────
+
+    def test_year_narrows_to_that_plans_year(self):
+        this_year = make_plan(created_by=self.manager, year=2026)
+        last_year = make_plan(created_by=self.manager, year=2025)
+        make_engagement(plan=this_year, lead_auditor=self.auditor, status='completed')
+        make_engagement(plan=last_year, lead_auditor=self.auditor, status='completed')
+        make_engagement(plan=last_year, lead_auditor=self.auditor, status='completed')
+
+        self.assertEqual(self.row_for(self.performance(), self.auditor)['completed'], 3)
+        narrowed = self.performance(year=2026)
+        self.assertEqual(self.row_for(narrowed, self.auditor)['completed'], 1)
+
+    def test_a_year_that_is_not_a_number_is_a_400(self):
+        response = self.as_user(self.manager).get(
+            AUDITOR_PERFORMANCE_URL, {'year': 'last year'},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    # ── Permission and scope ─────────────────────────────────────────────
+
+    def test_the_auditee_is_refused(self):
+        """The auditee holds no WRITE_AUDIT.
+
+        Asserted directly rather than inferred from the capability matrix: this
+        is a GET, and `HasCapability` lets *any* authenticated user through on a
+        safe method — so a plain capability class would have leaked the ranking
+        to the people being audited.
+        """
+        response = self.as_user(self.auditee).get(AUDITOR_PERFORMANCE_URL)
+        self.assertEqual(response.status_code, 403)
+
+    def test_every_audit_team_role_can_read_it(self):
+        for user in (self.admin, self.manager, self.supervisor, self.auditor):
+            with self.subTest(role=user.role):
+                response = self.as_user(user).get(AUDITOR_PERFORMANCE_URL)
+                self.assertEqual(response.status_code, 200)
+
+    def test_the_ranking_honours_the_registers_region_scope(self):
+        """It reads through `get_queryset()`, so a regional auditor's ranking is
+        their region's work and not the whole organisation's.
+
+        This is the test that fails if someone later swaps the call for a bare
+        `AuditEngagement.objects` — a change that would look correct for every
+        role except the one the scope exists for.
+        """
+        seq = next_seq()
+        region_adama = Department.objects.create(
+            name=f'Adama Region {seq}', code=f'RGN-ADAMA-{seq}',
+            unit_type=Department.REGION,
+        )
+        region_hawassa = Department.objects.create(
+            name=f'Hawassa Region {seq}', code=f'RGN-HAWASSA-{seq}',
+            unit_type=Department.REGION,
+        )
+        adama_unit = Department.objects.create(
+            name=f'Adama FPA Audit {seq}', code=f'FPA-RGN-ADAMA-{seq}',
+            unit_type=Department.AUDIT, directorate_type='FPA', region=region_adama,
+        )
+        regional_auditor = self.make_user(Role.AUDITOR, department=adama_unit)
+
+        make_engagement(
+            plan=self.plan, lead_auditor=regional_auditor,
+            region=region_adama, status='completed',
+        )
+        make_engagement(
+            plan=self.plan, lead_auditor=regional_auditor,
+            region=region_hawassa, status='completed',
+        )
+
+        # The manager carries no region on their department and sees both.
+        self.assertEqual(
+            self.row_for(self.performance(self.manager), regional_auditor)['completed'], 2,
+        )
+        # The regional auditor sees only their own region's engagement.
+        row = self.row_for(self.performance(regional_auditor), regional_auditor)
+        self.assertEqual(row['completed'], 1)
+        self.assertEqual(row['total'], 1)
