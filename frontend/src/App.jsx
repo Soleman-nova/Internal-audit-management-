@@ -16,6 +16,7 @@ import { hasCapability, getCurrentUser, CAPABILITIES } from './hooks/usePermissi
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const LogtoCallbackPage = lazy(() => import('./pages/auth/LogtoCallbackPage'));
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'));
+const ExecutiveDashboardPage = lazy(() => import('./pages/dashboard/ExecutiveDashboardPage'));
 const PlanningPage = lazy(() => import('./pages/planning/PlanningPage'));
 const ExecutionPage = lazy(() => import('./pages/execution/ExecutionPage'));
 const FindingsPage = lazy(() => import('./pages/findings/FindingsPage'));
@@ -24,6 +25,7 @@ const RiskAssessmentPage = lazy(() => import('./pages/risk/RiskAssessmentPage'))
 const FollowUpPage = lazy(() => import('./pages/followup/FollowUpPage'));
 const CapaDetailPage = lazy(() => import('./pages/followup/CapaDetailPage'));
 const ReportsPage = lazy(() => import('./pages/reports/ReportsPage'));
+const AuditorPerformancePage = lazy(() => import('./pages/reports/AuditorPerformancePage'));
 const UsersPage = lazy(() => import('./pages/admin/UsersPage'));
 const AuditTrailPage = lazy(() => import('./pages/admin/AuditTrailPage'));
 
@@ -94,6 +96,18 @@ function App() {
             >
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<DashboardPage />} />
+              {/* Gated on APPROVE_PLANS, matching the endpoint's own gate: the
+                  plan-completion league tables and directorate figures are
+                  management material, so an auditor or auditee is redirected
+                  rather than shown a page the API would refuse. */}
+              <Route
+                path="executive"
+                element={
+                  <CapabilityRoute capability={CAPABILITIES.APPROVE_PLANS}>
+                    <ExecutiveDashboardPage />
+                  </CapabilityRoute>
+                }
+              />
               <Route path="planning" element={<PlanningPage />} />
               <Route path="execution" element={<ExecutionPage />} />
               <Route path="findings" element={<FindingsPage />} />
@@ -102,6 +116,19 @@ function App() {
               <Route path="capa" element={<FollowUpPage />} />
               <Route path="capa/:id" element={<CapaDetailPage />} />
               <Route path="reports" element={<ReportsPage />} />
+              {/* Gated on WRITE_AUDIT, matching the endpoint's own read gate.
+                  The ranking names people against each other, which is the
+                  audit team's business — an auditee holds no WRITE_AUDIT and
+                  would otherwise be bounced here from the nav into a page whose
+                  data the API refuses them. */}
+              <Route
+                path="auditor-performance"
+                element={
+                  <CapabilityRoute capability={CAPABILITIES.WRITE_AUDIT}>
+                    <AuditorPerformancePage />
+                  </CapabilityRoute>
+                }
+              />
               <Route
                 path="users"
                 element={

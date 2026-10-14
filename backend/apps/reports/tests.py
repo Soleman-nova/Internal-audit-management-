@@ -1059,3 +1059,55 @@ class AnalyticsTest(RoleFixtureMixin, TestCase):
         for user in self.users.values():
             with self.subTest(role=user.role):
                 self.analytics_at(2026, 4, 15, user=user)
+
+
+class GeneratedReportFilterAndExportTest(RoleFixtureMixin, TestCase):
+    """Filter parameters and CSV archive export."""
+
+    def setUp(self):
+        super().setUp()
+        self.engagement = make_engagement(
+            lead_auditor=self.auditor, department=self.department,
+        )
+        self.report1 = GeneratedReport.objects.create(
+            title='FPA Annual Audit Report',
+            format='pdf',
+            status='ready',
+            engagement=self.engagement,
+            generated_by=self.auditor,
+        )
+        self.report2 = GeneratedReport.objects.create(
+            title='IT Security Review Excel',
+            format='excel',
+            status='generating',
+            engagement=self.engagement,
+            generated_by=self.auditor,
+        )
+
+    def test_filter_by_format_and_status(self):
+        res = self.as_user(self.auditor).get(GENERATED_URL, {'format': 'pdf'})
+        self.assertEqual(res.status_code, 200)
+        items = res.data.get('results', res.data)
+        self.assertTrue(all(item['format'] == 'pdf' for item in items))
+
+        res_status = self.as_user(self.auditor).get(GENERATED_URL, {'status': 'ready'})
+        self.assertEqual(res_status.status_code, 200)
+        items_ready = res_status.data.get('results', res_status.data)
+        self.assertTrue(all(item['status'] == 'ready' for item in items_ready))
+
+    def test_filter_by_search_keyword(self):
+        res = self.as_user(self.auditor).get(GENERATED_URL, {'search': 'Security'})
+        self.assertEqual(res.status_code, 200)
+        items = res.data.get('results', res.data)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['id'], self.report2.id)
+
+    def test_export_archive_csv(self):
+        url = '/api/reports/generated/export-archive/'
+        res = self.as_user(self.auditor).get(url, {'format': 'pdf'})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res['Content-Type'], 'text/csv; charset=utf-8')
+        content = res.content.decode('utf-8')
+        self.assertIn('FPA Annual Audit Report', content)
+        self.assertIn('PDF', content)
+

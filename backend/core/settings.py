@@ -160,6 +160,8 @@ REST_FRAMEWORK = {
     # PAGE_SIZE_QUERY_PARAM entry here. See apps/common/pagination.py.
     'DEFAULT_PAGINATION_CLASS': 'apps.common.pagination.DefaultPagination',
     'PAGE_SIZE': 20,
+    # Disable ?format= intercepting format field query parameters
+    'URL_FORMAT_OVERRIDE': None,
     # The browsable explorer is a development convenience; in production it
     # advertises every endpoint and renders HTML forms against them.
     'DEFAULT_RENDERER_CLASSES': [

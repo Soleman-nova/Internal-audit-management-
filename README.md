@@ -42,6 +42,7 @@ Risk assessment → Annual plan → Engagement → Program & procedures
 | **Risk Assessment** | A 5×5 likelihood × impact matrix with weighted risk parameters, scores and ratings computed server-side and propagated back onto the audit universe; auditee self-assessments with a manager review step that can adopt the auditee's figures. The weights act as a **versioned policy**: their sum drives a capped uplift on every score, and the policy in force is frozen onto each assessment, so a stored rating stays interpretable and a register scored under an older policy is detectable and recomputable. |
 | **Corrective Actions (CAPA)** | Actions raised from findings with owners, priorities and due dates; owner responses with evidence; supervisory verification and scheduled follow-ups; automatic overdue flagging and due-soon reminders. |
 | **Reports & Analytics** | Report templates plus asynchronous generation to **PDF, Excel and Word**; generated reports move from `generating` to `ready` without a page refresh; analytics endpoint with six-month rolling buckets. |
+| **Auditor Performance** | Who is carrying what, and who has completed the most audits. Credits each engagement to a person **once** however many roles name them; ranks on completed engagements with in-flight load, an on-time fraction that reports its own denominator (and `null` rather than 100% when there is none), and findings raised. Gated on `write_audit`, so the people being audited are not ranked. |
 | **User Management** | Administrator-only user provisioning, activation/deactivation and password resets. |
 | **Audit Trail** | Every create, update, delete, login, export and approval recorded with user, object, field-level changes, IP address and user agent. Reading it requires a capability of its own. |
 | **Notifications** | Ten notification types delivered in-app, with a polling unread badge and deep links to the specific record. |
@@ -275,6 +276,7 @@ All endpoints live under `/api/`. Authenticate with `Authorization: Bearer <acce
 | `POST` | `change-password/` | authenticated | Body `{current_password, new_password}`. |
 | `GET` `PATCH` | `profile/` | authenticated | Self-service profile edit. |
 | `GET` | `dashboard/stats/` | authenticated | `?directorate=<department id>` rescopes every KPI and chart. |
+| `GET` | `dashboard/executive/` | `approve_plans` | Leadership KPI band: plan completion, engagement progress, findings aging, CAPA implementation, repeat findings. `?directorate=` rescopes; `?year=` picks the plan year. |
 | `GET` `POST` `PATCH` `DELETE` | `users/` `users/{id}/` | `manage_users` | Filter `role`, `department`, `is_active`; search employee ID, email, name. |
 | `GET` | `users/me/` | `manage_users` | The requesting user's record. |
 | `POST` | `users/{id}/activate/` · `users/{id}/deactivate/` | `manage_users` | Toggles `is_active`. |
@@ -299,6 +301,7 @@ All endpoints live under `/api/`. Authenticate with `Authorization: Bearer <acce
 | `POST` `PATCH` `DELETE` | `engagements/` | `write_audit` | Number assigned server-side as `ENG-YYYY-NNNN`. |
 | `POST` | `engagements/{id}/add-member/` | `write_audit` | |
 | `POST` | `engagements/{id}/update-status/` | `write_audit` | Completion back-fills the universe entry's `last_audited`. |
+| `GET` | `engagements/auditor-performance/` | `write_audit` | Per-person workload and completion ranking. `?year=` scopes to that plan year. Read-scoped: it reads through the engagements queryset, so a regional auditor sees their region only. |
 
 ### Execution — `/api/execution/`
 
@@ -440,7 +443,7 @@ Scheduling examples are in the [administrator runbook](USER_MANUAL.md#scheduled-
 
 ```bash
 cd backend
-python manage.py test                              # ~590 tests, ~16 min
+python manage.py test                              # 671 tests, ~22 min
 python manage.py test apps.findings -v 2           # one app
 python manage.py test apps.common.test_e2e_lifecycle -v 2   # the cross-app walk
 python manage.py check
@@ -515,6 +518,7 @@ Two conventions worth knowing before adding a string. Any text containing a valu
 - **Report generation runs on a raw daemon thread**, not a task queue ([apps/reports/jobs.py](backend/apps/reports/jobs.py)). Adequate for a single-worker deployment, but if the process restarts mid-compile the row stays `generating` with no retry — `fail_stuck_reports` is the manual recovery. `celery` is pinned as the intended replacement; no broker is configured and no task is defined.
 - **`generate_report_file` has no branch for an unknown format.** The three known formats are covered; an unrecognised one would leave the row on `generating` rather than `failed`.
 - **`departments/tree` is deliberately unpaginated** — the cascading picker needs the whole tree in one response. Every other list endpoint is paginated.
+- **`AuditEngagement.actual_days` and `AuditTeamMember.actual_days` are never written by the application.** Both columns exist and both serializers expose them, but the only writer anywhere is `seed_e2e_demo`. Nothing in the UI records actual effort, so any "average days per audit" metric built on them renders a column of zeros. Auditor Performance therefore sums **planned** days and leaves actual days out — a field that looks like data but nothing populates is worse than an absent one. Closing this means a UI that captures actual effort, not a query.
 - **No frontend unit tests.** There is no JS unit-test runner installed. UI behaviour is covered by the Playwright E2E suite in `frontend/e2e/` instead (see [Testing](#testing)), which drives the real browser as each role.
 - **`npm run lint` is clean, and CI blocks on it.** The tree carried ~127 problems (unused variables, `react-hooks/exhaustive-deps`) when the pipeline was added, which is why the step started life as advisory; that backlog is now cleared to **0 errors, 0 warnings** and `continue-on-error` has been removed. If the step goes red, fix the error — do not restore the flag. The two error classes that dominated the old backlog were the fetch-into-state pattern (`src/hooks/useAsyncData.js` is the fix, and ten pages use it) and `no-unused-vars` on `formErrors` values that were evidence of a real bug rather than dead code.
 - **One seeding papercut on Windows**, verified against a scratch database: `seed_e2e_demo` crashes on a `cp1252` console unless `PYTHONUTF8=1` is set. (The login page's Audit Manager demo button previously carried a stale `User1234` password that no seeder assigned; it now matches the seeded `user123`.)

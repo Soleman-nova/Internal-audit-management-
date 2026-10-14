@@ -6,7 +6,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.utils import timezone
 from .models import AuditUniverse, AuditPlan, AuditEngagement, AuditTeamMember, Project
@@ -15,6 +15,7 @@ from .serializers import (AuditUniverseSerializer, AuditPlanSerializer,
 from apps.accounts.models import Department
 from apps.common.permissions import (
     CanWriteAudit, RequiresCapability, InvolvedPartyOrCapability, APPROVE_PLANS,
+    CanViewAuditorPerformance,
 )
 from apps.common.audit_utils import log_audit
 from apps.common.blockers import BLOCKERS_NAMED, describe_blockers
@@ -839,3 +840,167 @@ class AuditEngagementViewSet(viewsets.ModelViewSet):
                     exclude=request.user,
                 )
         return Response({'detail': f'Status updated to {new_status}.'})
+
+    # ── Auditor performance ──────────────────────────────────────────────────
+    #
+    # Per-person workload and completion, for the Auditor Performance page.
+    #
+    # Three rules do the real work, and each of them is a way the numbers could
+    # quietly become wrong:
+    #
+    # 1. An engagement is credited to a person ONCE, however many records name
+    #    them. The seeded structure walks straight into this — the directorate
+    #    head is `lead_auditor`, `supervisor` *and* an `AuditTeamMember(role=
+    #    'lead')` on the same engagement (seed_eeu_audit_structure) — so adding
+    #    per-role counts would credit them three times for one audit. The merge
+    #    below unions *sets of engagement ids*, never row counts.
+    # 2. `cancelled` is neither completed nor in flight. It is not output, and
+    #    it is not load; counting it as either would misstate the person.
+    # 3. `on_time` ships its denominator, and is `None` — not 100% — when that
+    #    denominator is zero. A rate over no dated engagements is an absence of
+    #    evidence, and it must not render the same as a perfect record.
+    #
+    # Ranking is on the server so every surface agrees on it, and so the page
+    # does not have to re-derive "completed" from a status string.
+
+    # Engagement statuses that mean the person is still carrying the work.
+    IN_FLIGHT_STATUSES = ('planned', 'in_progress', 'fieldwork', 'reporting')
+
+    @action(
+        detail=False, methods=['get'], url_path='auditor-performance',
+        permission_classes=[CanViewAuditorPerformance],
+    )
+    def auditor_performance(self, request):
+        """Who is carrying what, and who has finished the most.
+
+        Reads through ``self.get_queryset()`` rather than the model manager, so
+        the ranking inherits whatever narrowing the register applies — today the
+        region scope for a regional FPA auditor and the department scope for an
+        auditee. A fresh ``AuditEngagement.objects`` here would quietly show a
+        regional auditor every region's work, and would disagree with the
+        register it sits beside.
+        """
+        from apps.accounts.models import User
+        from apps.findings.models import AuditFinding
+
+        engagements = self.get_queryset()
+
+        raw_year = request.query_params.get('year')
+        year = None
+        if raw_year not in (None, '', 'all'):
+            try:
+                year = int(raw_year)
+            except (TypeError, ValueError):
+                return Response(
+                    {'detail': 'year must be a number.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Plans carry the year, so this is the one place the scope can be
+            # narrowed by time without inventing a second date field.
+            engagements = engagements.filter(plan__year=year)
+
+        # Every number below is computed over this one set of rows, so a row is
+        # fetched once and read by name rather than re-queried per metric.
+        rows = list(engagements.values(
+            'id', 'engagement_number', 'title', 'status',
+            'planned_end', 'actual_end', 'planned_days',
+            'lead_auditor_id', 'supervisor_id',
+        ))
+        by_id = {row['id']: row for row in rows}
+
+        # Person id -> the set of engagement ids they are credited with.
+        credits = {}
+
+        def credit(user_id, engagement_id):
+            if user_id:
+                credits.setdefault(user_id, set()).add(engagement_id)
+
+        for row in rows:
+            credit(row['lead_auditor_id'], row['id'])
+            credit(row['supervisor_id'], row['id'])
+        for user_id, engagement_id in AuditTeamMember.objects.filter(
+            engagement_id__in=by_id,
+        ).values_list('user_id', 'engagement_id'):
+            credit(user_id, engagement_id)
+
+        if not credits:
+            return Response({'year': year, 'auditors': []})
+
+        # Findings are counted over the *credited* engagements, not all findings
+        # the person ever raised, so every column in a row describes the same
+        # set of work. A finding raised on an engagement whose region this
+        # viewer cannot see would otherwise leak in through the side door.
+        findings_by_user = dict(
+            AuditFinding.objects.filter(
+                identified_by_id__in=credits, engagement_id__in=by_id,
+            ).values_list('identified_by_id').annotate(count=Count('id'))
+        )
+
+        status_keys = [key for key, _ in AuditEngagement.STATUS_CHOICES]
+
+        people = User.objects.filter(pk__in=credits).select_related('department')
+
+        auditors = []
+        for person in people:
+            ids = credits[person.pk]
+            credited = [by_id[engagement_id] for engagement_id in ids]
+
+            by_status = {key: 0 for key in status_keys}
+            for row in credited:
+                if row['status'] in by_status:
+                    by_status[row['status']] += 1
+
+            completed = [row for row in credited if row['status'] == 'completed']
+            # Only completed engagements carrying *both* dates can say anything
+            # about punctuality. An engagement with no `planned_end` has no
+            # deadline to have met, so it is left out of the denominator rather
+            # than counted as on time.
+            dated = [row for row in completed if row['planned_end'] and row['actual_end']]
+            on_time = {
+                'met': sum(1 for row in dated if row['actual_end'] <= row['planned_end']),
+                'total': len(dated),
+            }
+
+            auditors.append({
+                'id': person.pk,
+                'name': person.get_full_name() or person.employee_id,
+                'role': person.role,
+                'department': getattr(person.department, 'name', None),
+                'total': len(credited),
+                'completed': len(completed),
+                'led': sum(1 for row in credited if row['lead_auditor_id'] == person.pk),
+                'in_flight': sum(
+                    1 for row in credited if row['status'] in self.IN_FLIGHT_STATUSES
+                ),
+                'by_status': by_status,
+                'on_time': on_time,
+                'on_time_rate': (
+                    round(on_time['met'] * 100 / on_time['total'])
+                    if on_time['total'] else None
+                ),
+                'findings': findings_by_user.get(person.pk, 0),
+                'planned_days': sum(row['planned_days'] or 0 for row in credited),
+                # Enough to render the per-person breakdown without a request
+                # per row, which is the "see their engagements" half of the page.
+                'engagements': [
+                    {
+                        'id': row['id'],
+                        'number': row['engagement_number'],
+                        'title': row['title'],
+                        'status': row['status'],
+                        'planned_end': row['planned_end'],
+                        'actual_end': row['actual_end'],
+                    }
+                    for row in sorted(credited, key=lambda r: -r['id'])
+                ],
+            })
+
+        # Most completed first — the ranking asked for. `in_flight` then `name`
+        # then `id` make the order total: without the last two, two people on
+        # the same score would swap places between responses and the table would
+        # reshuffle under the reader.
+        auditors.sort(key=lambda a: (
+            -a['completed'], -a['in_flight'], a['name'], a['id'],
+        ))
+
+        return Response({'year': year, 'auditors': auditors})

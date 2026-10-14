@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { reportsApi, planningApi } from '../../api';
+import { reportsApi, planningApi, usersApi } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { useI18n } from '../../context/I18nContext';
 import useAsyncData from '../../hooks/useAsyncData';
@@ -9,18 +9,48 @@ import Modal from '../../components/ui/Modal';
 import FormErrorSummary from '../../components/ui/FormErrorSummary';
 import EngagementPickerBar from '../../components/ui/EngagementPickerBar';
 import Pagination from '../../components/ui/Pagination';
-import { FileText, Download, Plus, RefreshCw } from 'lucide-react';
+import ReportFilterBar from '../../components/ui/ReportFilterBar';
+import ReportAnalyticsSection from './ReportAnalyticsSection';
+import {
+  FileText, Download, Plus, RefreshCw, BarChart2,
+  FileSpreadsheet, ShieldAlert, Sparkles, Filter
+} from 'lucide-react';
+
+const INITIAL_FILTERS = {
+  search: '',
+  date_from: '',
+  date_to: '',
+  directorate: '',
+  auditor: '',
+  status: '',
+  format: '',
+  template: '',
+};
 
 function ReportsPage() {
   const toast = useToast();
   const { t } = useI18n();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   // reports/jobs.py notifies with /reports?id=<id> when a report finishes.
   const focusReportId = searchParams.get('id');
 
-  // The archive's fetch dependencies: a page click, the size selector, the
-  // Refresh button and the poll below each re-run its request by changing one of
-  // the three, rather than calling a fetcher by hand.
+  // Filters State
+  const [filters, setFilters] = useState(() => ({
+    search: searchParams.get('search') || '',
+    date_from: searchParams.get('date_from') || '',
+    date_to: searchParams.get('date_to') || '',
+    directorate: searchParams.get('directorate') || '',
+    auditor: searchParams.get('auditor') || '',
+    status: searchParams.get('status') || '',
+    format: searchParams.get('format') || '',
+    template: searchParams.get('template') || '',
+  }));
+
+  const [showAnalytics, setShowAnalytics] = useState(true);
+  const [auditors, setAuditors] = useState([]);
+  const [exportingCsv, setExportingCsv] = useState(false);
+
+  // Pagination & Reload Keys
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [genReloadKey, setGenReloadKey] = useState(0);
@@ -35,15 +65,20 @@ function ReportsPage() {
   const [reportTitle, setReportTitle] = useState(null);
   const [generating, setGenerating] = useState(false);
 
-  /* ── Reference data: report templates + the engagement picker's list ────
-   * One request — the two were already fetched together with `Promise.all` — and
-   * the *defaults* ride back with it. The old mount fetch wrote them into five
-   * pieces of state (`templates`, `engagements`, `selectedEngId`,
-   * `selectedTemplateId` and the report title) from inside its own response, so
-   * the fetcher depended on the state it was setting. They are resolved at render
-   * time below instead: a value the user has not chosen yet falls back to the
-   * default the loader returned, and nothing writes it back into state.
-   */
+  // Fetch auditor user list for the filter bar
+  useEffect(() => {
+    let cancelled = false;
+    usersApi.getUsers({ is_active: true, page_size: 100 })
+      .then((res) => {
+        if (cancelled) return;
+        const items = res.results || (Array.isArray(res) ? res : []);
+        setAuditors(items);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  /* ── Reference data: report templates + the engagement picker's list ──── */
   const { data: referenceData, loading: referenceLoading } = useAsyncData(
     async () => {
       const [tempRes, engRes] = await Promise.all([
@@ -67,39 +102,42 @@ function ReportsPage() {
   const templates = referenceData?.templates ?? [];
   const engagements = referenceData?.engagements ?? [];
 
-  // The user's pick, or the default until they make one. Resolved here rather
-  // than stored, because the raw selection is still '' on load while the page is
-  // already displaying — and submitting — the first engagement/template.
-  const engId = selectedEngId || referenceData?.defaultEngId || '';
-  const templateId = selectedTemplateId || referenceData?.defaultTemplateId || '';
-  // `reportTitle` stays null until the user types, so the default shows through
-  // without an effect copying it into state. Clearing the box yields '' (not
-  // null) and therefore keeps the box empty, exactly as before.
-  const reportTitleValue = reportTitle ?? referenceData?.defaultTitle ?? '';
+  // Filter engagements list in the wizard if a directorate filter is active
+  const filteredEngagements = useMemo(() => {
+    if (!filters.directorate || filters.directorate === 'all') return engagements;
+    return engagements.filter(e => {
+      if (filters.directorate.match(/^\d+$/)) {
+        return e.directorate_id === Number(filters.directorate);
+      }
+      return e.directorate_type === filters.directorate ||
+        e.directorate_name?.toLowerCase().includes(filters.directorate.toLowerCase());
+    });
+  }, [engagements, filters.directorate]);
 
-  // ── Generated reports archive (server-side paginated) ────────────
-  // The page slice and its total were two pieces of state fed by `fetchGenerated`
-  // from three different callers (mount, the paged effect, the deep-link scan).
-  // The loader now returns both halves of the single response, as AuditTrailPage
-  // does, and page/pageSize/genReloadKey *are* the request. Nothing special-cases
-  // the mount — the hook runs on mount — so the `generatedLoadedRef` guard that
-  // skipped the first paged effect is gone.
+  // The user's pick, or default
+  const engId = selectedEngId || filteredEngagements[0]?.id || referenceData?.defaultEngId || '';
+  const templateId = selectedTemplateId || filters.template || referenceData?.defaultTemplateId || '';
+  const reportTitleValue = reportTitle ?? (engId ? `Audit Report for ${engagements.find(e => String(e.id) === String(engId))?.title || ''}` : referenceData?.defaultTitle ?? '');
+
+  // ── Generated reports archive (server-side paginated & filtered) ────────────
   const archiveNeverLoadedRef = useRef(true);
 
   const { data: archiveData, loading: archiveLoading } = useAsyncData(
     async () => {
-      const res = await reportsApi.getGeneratedReports({ page, page_size: pageSize });
+      const queryParams = {
+        page,
+        page_size: pageSize,
+        ...Object.fromEntries(
+          Object.entries(filters).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
+        ),
+      };
+      const res = await reportsApi.getGeneratedReports(queryParams);
       archiveNeverLoadedRef.current = false;
       return { items: res.items ?? [], count: res.count ?? 0 };
     },
-    [page, pageSize, genReloadKey],
+    [page, pageSize, genReloadKey, filters],
     {
       onError: () => {
-        // The first load used to sit inside `fetchReportsData`'s catch, which
-        // toasted; a failed *refetch* was deliberately silent ("the next tick
-        // retries"). Same message for both, so the guard is what keeps the poll
-        // from repeating it every three seconds. `referenceData` keeps a total
-        // outage to the single toast the old combined load produced.
         if (archiveNeverLoadedRef.current && referenceData) {
           toast.error('Failed to load reports data');
         }
@@ -107,34 +145,24 @@ function ReportsPage() {
     },
   );
 
-  // Memoised so the two effects below can depend on the slice without the `?? []`
-  // making a fresh array every render.
+  // ── Reports Analytics data ─────────────────────────────────────────
+  const { data: analyticsData, loading: analyticsLoading, reload: reloadAnalytics } = useAsyncData(
+    async () => {
+      const queryParams = Object.fromEntries(
+        Object.entries(filters).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
+      );
+      return await reportsApi.getAnalytics(queryParams);
+    },
+    [filters, genReloadKey],
+  );
+
   const generated = useMemo(() => archiveData?.items ?? [], [archiveData]);
   const generatedCount = archiveData?.count ?? 0;
-
   const totalPages = Math.max(1, Math.ceil(generatedCount / pageSize));
 
-  // `fetchGenerated` clamped the page from inside its own response, so that a
-  // refresh which shrank the archive could not leave the pointer past the last
-  // page. That branch was unreachable: a *successful* page response always proves
-  // `page <= last` (DRF's PageNumberPagination 404s an out-of-range page, and
-  // `max_page_size` is 1000 against a control that offers at most 100), and the
-  // 404 path — the only way the pointer can really end up out of range, e.g. when
-  // the page size grows under a later page — never reached the clamp at all. It
-  // is not reimplemented here: `page` is left as the user's pointer, and the
-  // Pagination control still walks it back with its prev button.
-
-  // Only the *first* archive load blanks the table. A page change or a poll tick
-  // must not — the old archive fetch deliberately left `loading` alone so the
-  // poll could never flicker the table.
   const loading = referenceLoading || (archiveData === null && archiveLoading);
 
   // ── Poll while anything is still being generated ─────────────────
-  // Generation runs off-thread in reports/jobs.py, so the row lands as
-  // `generating` and flips to ready/failed seconds later. Each tick bumps the
-  // reload key, which is one of the archive request's dependencies below — so
-  // whatever page is visible is what gets refetched. If the generating row is on
-  // another page, polling naturally stops until the user returns to that page.
   const pollRef = useRef(null);
   const anyGenerating = generated.some(g => g.status === 'generating');
 
@@ -157,44 +185,40 @@ function ReportsPage() {
     };
   }, [anyGenerating]);
 
-  // Scroll the deep-linked row into view once it has loaded (deps include
-  // `generated` so it retries after a page jump brings the row onto the slice).
+  // Scroll the deep-linked row into view once it has loaded
   useEffect(() => {
     if (loading || !focusReportId) return;
     const el = document.getElementById(`report-${focusReportId}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [loading, focusReportId, generated]);
 
-  // ── Deep-link lookup ─────────────────────────────────────────────
-  const focusLocatedRef = useRef(false);
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters);
+    setPage(1); // Reset to page 1 on filter change
+  };
 
-  // Deep link (?id=N from reports/jobs.py): the report may live beyond page 1.
-  // Scan forward once and jump to its page; that page change refetches it and
-  // the scroll effect then centers the ringed row.
-  useEffect(() => {
-    if (loading || !focusReportId || focusLocatedRef.current) return;
-    focusLocatedRef.current = true;
-    if (generated.some(g => String(g.id) === String(focusReportId))) return;
-    (async () => {
-      const last = Math.max(1, Math.ceil(generatedCount / pageSize));
-      for (let p = 2; p <= Math.min(last, 200); p++) {
-        try {
-          const res = await reportsApi.getGeneratedReports({ page: p, page_size: pageSize });
-          if (res.items.some(g => String(g.id) === String(focusReportId))) { setPage(p); return; }
-          if (!res.hasMore) return;
-        } catch {
-          return;
-        }
-      }
-    })();
-  }, [loading, focusReportId, generated, generatedCount, pageSize]);
+  const handleFilterReset = () => {
+    setFilters(INITIAL_FILTERS);
+    setPage(1);
+  };
+
+  const handleExportArchiveCsv = async () => {
+    setExportingCsv(true);
+    try {
+      const queryParams = Object.fromEntries(
+        Object.entries(filters).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
+      );
+      await reportsApi.exportArchive(queryParams);
+      toast.success('Reports archive exported to CSV');
+    } catch (err) {
+      toast.error('Failed to export reports archive');
+    } finally {
+      setExportingCsv(false);
+    }
+  };
 
   const handleGenerateReport = async (e) => {
     e.preventDefault();
-    // Validate form. The resolved ids and title, not the raw selections: on mount
-    // those are still '' while the form is showing the first template and
-    // engagement, so validating (and then posting) the raw state would look like a
-    // 400 from nowhere on the one path a user takes when the defaults are right.
     const errors = validateForm({ title: reportTitleValue, engagement: engId, template: templateId }, {
       title: { validators: [validators.required, validators.minLength(5)] },
       engagement: { validators: [validators.required] },
@@ -217,10 +241,6 @@ function ReportsPage() {
       await reportsApi.generateReport(data);
       setShowGenModal(false);
       toast.success('Report generation triggered. Download available when status is READY.');
-      // Newest-first ordering (-generated_at) puts the new generating row on
-      // page 1, so jump there and let the page change (or the reload key, if the
-      // page is already 1) refetch it; the poll above then keeps refetching until
-      // the file is ready.
       setPage(1);
       setGenReloadKey(k => k + 1);
     } catch (err) {
@@ -231,10 +251,6 @@ function ReportsPage() {
     }
   };
 
-  // Always go through the export endpoint via apiClient: it attaches the JWT,
-  // resolves the host from the configured base URL, and honours the
-  // Content-Disposition filename. window.open on file_url sends no auth header,
-  // and the old localhost:8000 fallback broke every non-local deployment.
   const triggerDownload = async (report) => {
     setDownloadingId(report.id);
     try {
@@ -251,29 +267,97 @@ function ReportsPage() {
 
   return (
     <div className="reports-view">
+      {/* ── Page Header & Quick Actions ── */}
+      <div className="reports-header flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <FileText className="text-primary" size={22} />
+            {t('reportsAndAnalytics') || 'Audit Reports & Analytics'}
+          </h2>
+          <p className="text-xs text-muted">
+            {t('reportsSubtitle') || 'Generate, filter, customize and export official EEU Internal Audit documents.'}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className={`btn btn-sm ${showAnalytics ? 'btn-primary' : 'btn-outline'} flex items-center gap-1.5`}
+            onClick={() => setShowAnalytics(!showAnalytics)}
+          >
+            <BarChart2 size={14} />
+            <span>{showAnalytics ? (t('hideAnalytics') || 'Hide Analytics') : (t('showAnalytics') || 'Analytics Overview')}</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-outline btn-sm flex items-center gap-1.5"
+            onClick={handleExportArchiveCsv}
+            disabled={exportingCsv || generated.length === 0}
+            title={t('exportCsv') || 'Export filtered list as CSV'}
+          >
+            <FileSpreadsheet size={14} />
+            <span>{exportingCsv ? (t('exporting') || 'Exporting...') : (t('exportCsv') || 'Export List (CSV)')}</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-accent btn-sm flex items-center gap-1.5 shadow-sm"
+            onClick={() => setShowGenModal(true)}
+          >
+            <Plus size={15} />
+            <span>{t('compileReport') || 'Compile Report'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Customizable Filter Bar ── */}
+      <ReportFilterBar
+        filters={filters}
+        onChange={handleFilterChange}
+        onReset={handleFilterReset}
+        templates={templates}
+        auditors={auditors}
+      />
+
+      {/* ── Analytics Overview Section (Collapsible) ── */}
+      {showAnalytics && (
+        <ReportAnalyticsSection
+          analytics={analyticsData}
+          loading={analyticsLoading}
+        />
+      )}
+
+      {/* ── Split Layout: Templates List + Generated Reports Archive ── */}
       <div className="reports-split-layout">
-        {/* Left Side: Report templates & quick wizard */}
+        {/* Left Side: Report templates */}
         <div className="card left-side-card">
           <div className="card-header justify-between">
             <h3>{t('reportTemplates')}</h3>
-            <button className="btn btn-accent flex items-center gap-1" onClick={() => setShowGenModal(true)}>
-              <Plus size={16} /> {t('compileReport')}
-            </button>
+            <span className="badge badge-outline text-xs num">{templates.length} {t('templates') || 'templates'}</span>
           </div>
 
-          <div className="templates-list mt-4">
+          <div className="templates-list mt-3">
             {templates.length === 0 ? (
               <p className="text-muted text-center py-4">{t('noReportTemplates')}</p>
             ) : (
               templates.map(temp => (
-                <div key={temp.id} className="template-item">
+                <div
+                  key={temp.id}
+                  className="template-item cursor-pointer"
+                  onClick={() => {
+                    setSelectedTemplateId(temp.id);
+                    setShowGenModal(true);
+                  }}
+                  title="Click to generate using this template"
+                >
                   <div className="template-icon">
                     <FileText size={20} />
                   </div>
                   <div className="template-info">
                     <h4>{temp.name}</h4>
-                    <p className="text-xs text-muted">{temp.description}</p>
-                    <span className="badge badge-outline mt-1">{temp.template_type?.toUpperCase()}</span>
+                    <p className="text-xs text-muted line-clamp-2">{temp.description || 'Standard audit reporting layout'}</p>
+                    <span className="badge badge-outline mt-1 text-xs">{temp.template_type?.toUpperCase()}</span>
                   </div>
                 </div>
               ))
@@ -284,41 +368,96 @@ function ReportsPage() {
         {/* Right Side: Generated reports log */}
         <div className="card right-side-card">
           <div className="card-header justify-between">
-            <h3>{t('generatedReportsArchive')}</h3>
-            <button className="btn btn-outline flex items-center gap-1" onClick={() => setGenReloadKey(k => k + 1)}>
-              <RefreshCw size={14} /> {t('refresh')}
+            <div className="flex items-center gap-2">
+              <h3>{t('generatedReportsArchive')}</h3>
+              <span className="badge badge-secondary text-xs num">{generatedCount}</span>
+            </div>
+            <button
+              className="btn btn-outline btn-sm flex items-center gap-1"
+              onClick={() => {
+                setGenReloadKey(k => k + 1);
+                reloadAnalytics();
+              }}
+              title={t('refresh') || 'Refresh Archive'}
+            >
+              <RefreshCw size={13} /> {t('refresh')}
             </button>
           </div>
 
           {loading ? (
-            <div className="loading-spinner">{t('loadingArchive')}</div>
+            <div className="loading-spinner py-12">{t('loadingArchive')}</div>
           ) : (
-            <div className="table-responsive mt-4">
-              <table className="table">
+            <div className="table-responsive mt-3">
+              <table className="table table-hover">
                 <thead>
                   <tr>
                     <th>{t('title')}</th>
+                    <th>{t('directorate') || 'Directorate'}</th>
                     <th>{t('format')}</th>
                     <th>{t('dateGenerated')}</th>
                     <th>{t('status')}</th>
-                    <th>{t('actions')}</th>
+                    <th className="text-right">{t('actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {generated.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="text-center py-8">{t('noReportsCompiled')}</td>
+                      <td colSpan="6" className="text-center py-10 text-muted">
+                        <FileText size={32} className="mx-auto mb-2 opacity-40" />
+                        <p>{t('noReportsCompiled')}</p>
+                        <button
+                          type="button"
+                          className="btn btn-accent btn-sm mt-3"
+                          onClick={() => setShowGenModal(true)}
+                        >
+                          <Plus size={14} /> {t('compileReport')}
+                        </button>
+                      </td>
                     </tr>
                   ) : (
                     generated.map(gen => (
                       <tr
                         key={gen.id}
                         id={`report-${gen.id}`}
-                        className={String(gen.id) === focusReportId ? 'ring-2 ring-emerald-500' : undefined}
+                        className={String(gen.id) === focusReportId ? 'ring-2 ring-emerald-500 bg-emerald-500/5' : undefined}
                       >
-                        <td><strong>{gen.title}</strong></td>
-                        <td><span className="badge badge-outline">{gen.format?.toUpperCase()}</span></td>
-                        <td>{new Date(gen.generated_at).toLocaleDateString()}</td>
+                        <td>
+                          <div className="flex flex-col">
+                            <strong>{gen.title}</strong>
+                            {gen.engagement_title && (
+                              <span className="text-xs text-muted">
+                                {gen.engagement_number ? `${gen.engagement_number} · ` : ''}{gen.engagement_title}
+                              </span>
+                            )}
+                            {gen.template_name && (
+                              <span className="text-xs text-muted italic">
+                                {t('template') || 'Template'}: {gen.template_name}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          {gen.directorate_name ? (
+                            <span className="badge badge-outline text-xs">
+                              {gen.directorate_name}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted">—</span>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`badge ${
+                            gen.format === 'pdf' ? 'badge-primary' : gen.format === 'excel' ? 'badge-success' : 'badge-outline'
+                          } text-xs font-semibold`}>
+                            {gen.format?.toUpperCase()}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="flex flex-col text-xs">
+                            <span className="num font-medium">{new Date(gen.generated_at).toLocaleDateString()}</span>
+                            <span className="text-muted">{gen.generated_by_name || 'System'}</span>
+                          </div>
+                        </td>
                         <td>
                           <span className={`badge ${
                             gen.status === 'ready' ? 'badge-success'
@@ -327,16 +466,20 @@ function ReportsPage() {
                             {gen.status?.toUpperCase()}
                           </span>
                           {gen.status === 'failed' && gen.error_message && (
-                            <p className="text-xs text-danger mt-1">{gen.error_message}</p>
+                            <p className="text-xs text-danger mt-1 max-w-[200px] truncate" title={gen.error_message}>
+                              {gen.error_message}
+                            </p>
                           )}
                         </td>
-                        <td>
+                        <td className="text-right">
                           <button
-                            className="btn btn-outline btn-sm flex items-center gap-1"
+                            className="btn btn-outline btn-sm inline-flex items-center gap-1"
                             onClick={() => triggerDownload(gen)}
                             disabled={gen.status !== 'ready' || downloadingId === gen.id}
+                            title={gen.status === 'ready' ? t('download') : 'Report compiling...'}
                           >
-                            <Download size={14} /> {downloadingId === gen.id ? t('loading') : t('download')}
+                            <Download size={13} />
+                            <span>{downloadingId === gen.id ? t('loading') : t('download')}</span>
                           </button>
                         </td>
                       </tr>
@@ -359,7 +502,7 @@ function ReportsPage() {
         </div>
       </div>
 
-      {/* Generate Report Modal */}
+      {/* ── Generate Report Modal ── */}
       <Modal
         isOpen={showGenModal}
         onClose={() => setShowGenModal(false)}
@@ -368,21 +511,12 @@ function ReportsPage() {
         footer={(
           <>
             <button type="button" className="btn btn-outline" onClick={() => setShowGenModal(false)}>{t('cancel')}</button>
-            {/* `form=` because Modal renders the footer as a sibling of its
-                children, so the submit button sits outside the <form>. */}
             <button type="submit" form="report-form" className="btn btn-primary" disabled={generating}>
-              {generating ? 'Compiling...' : t('generateDocument')}
+              {generating ? (t('compiling') || 'Compiling...') : t('generateDocument')}
             </button>
           </>
         )}
       >
-        {/* `noValidate` hands validation to the app, as UsersPage's forms already
-            do. Without it the browser's own check on the `required` title
-            intercepts an empty submit, React's onSubmit never fires — so
-            `validateForm` never runs and the FormErrorSummary below never
-            renders. The title is covered by validators.required (plus
-            minLength), and the engagement/template fields by their own required
-            validators, so nothing stops being enforced. */}
         <form id="report-form" onSubmit={handleGenerateReport} noValidate>
           <FormErrorSummary errors={formErrors} />
           <div className="form-group">
@@ -393,16 +527,14 @@ function ReportsPage() {
               className="form-control"
               value={reportTitleValue}
               onChange={(e) => setReportTitle(e.target.value)}
+              placeholder="e.g. Annual Technical Audit Report 2026"
               required
             />
           </div>
 
-          {/* `value` is the resolved id, not the raw selection: the picker must
-              show the engagement whose report will actually be generated, which
-              is the loader's default until the user picks another. */}
           <EngagementPickerBar
             idPrefix="report"
-            engagements={engagements}
+            engagements={filteredEngagements.length > 0 ? filteredEngagements : engagements}
             value={engId}
             onChange={(id) => {
               setSelectedEngId(id);

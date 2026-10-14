@@ -83,6 +83,13 @@ export const usersApi = {
     const res = await apiClient.get('/auth/dashboard/stats/', { params });
     return res.data;
   },
+  // Executive/leadership KPI band: plan completion, engagement progress,
+  // findings aging, CAPA implementation and repeat findings. Same scoping
+  // params as getDashboardStats, plus { year } for the plan year.
+  getExecutiveStats: async (params = {}) => {
+    const res = await apiClient.get('/auth/dashboard/executive/', { params });
+    return res.data;
+  },
 };
 
 export default usersApi;

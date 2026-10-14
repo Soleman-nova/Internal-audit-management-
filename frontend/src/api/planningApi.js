@@ -120,6 +120,13 @@ export const planningApi = {
     const res = await apiClient.post(`/planning/engagements/${id}/add-member/`, memberData);
     return res.data;
   },
+  // Per-person workload and completion, ranked server-side so every surface
+  // agrees on the order. Returns the whole roster in one response — it is
+  // unpaginated on purpose: a ranking split across pages is not a ranking.
+  getAuditorPerformance: async (params = {}) => {
+    const res = await apiClient.get('/planning/engagements/auditor-performance/', { params });
+    return res.data;
+  },
 };
 
 export default planningApi;

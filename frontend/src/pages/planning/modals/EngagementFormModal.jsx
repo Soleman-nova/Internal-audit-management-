@@ -6,6 +6,8 @@ import { validateForm, validators, hasErrors } from '../../../utils/validation';
 import Modal from '../../../components/ui/Modal';
 import FormErrorSummary from '../../../components/ui/FormErrorSummary';
 import OrgUnitSelect from '../../../components/ui/OrgUnitSelect';
+import Badge from '../../../components/ui/Badge';
+import { localizedName } from '../../../utils/localizedName';
 import { Users } from 'lucide-react';
 import { emptyEngagement, engagementToForm, scopeValueLabels } from '../planningForms';
 
@@ -61,6 +63,20 @@ function EngagementFormModal({
   const valueLabels = engagement
     ? scopeValueLabels(engagement, lang)
     : { department: '', region: '', service_center: '' };
+
+  // The directorate is not a field on this form. The backend derives it from the
+  // plan on every save (AuditEngagement.save), because that is the only honest
+  // source: nothing here could set it and keep the two in agreement. So it is
+  // shown rather than asked for, and it tracks the plan selector live so the
+  // consequence of picking a different plan is visible before saving.
+  //
+  // Read from the catalog rather than the row, so a new engagement shows it too.
+  // When editing, the row's own server-derived value is the fallback for a plan
+  // the paginated catalog does not carry.
+  const selectedPlan = plansCatalog.find(p => String(p.id) === String(newEngagement.plan));
+  const inheritedDirectorate = selectedPlan
+    ? localizedName(lang, selectedPlan.directorate_name, selectedPlan.directorate_name_am)
+    : (engagement ? localizedName(lang, engagement.directorate_name, engagement.directorate_name_am) : '');
 
   const handleSaveEngagement = async (e) => {
     e.preventDefault();
@@ -145,6 +161,14 @@ function EngagementFormModal({
               <option value="">{t('selectPlan')}</option>
               {plansCatalog.map(p => (<option key={p.id} value={p.id}>{p.title}</option>))}
             </select>
+            {newEngagement.plan && (
+              <p className="form-hint">
+                <Badge variant="info" className="normal-case">
+                  {t('leadAuditDirectorate')}: {inheritedDirectorate || t('directorateNotSet')}
+                  {inheritedDirectorate ? ` (${t('inheritedFromPlan')})` : ''}
+                </Badge>
+              </p>
+            )}
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="engagement_type">{t('engagementType')}</label>

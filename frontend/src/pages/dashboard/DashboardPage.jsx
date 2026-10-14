@@ -13,6 +13,7 @@ import {
   ClipboardCheck, ChevronRight, RefreshCw, Activity,
 } from 'lucide-react';
 import DirectorateStrip from '../../components/DirectorateStrip';
+import CompositionBar from '../../components/ui/CompositionBar';
 import ChartTooltip from '../../components/ui/ChartTooltip';
 import EmptyState from '../../components/ui/EmptyState';
 import { useChartTheme, toSeverityChartData, toStatusChartData } from '../../utils/chartTheme';
@@ -74,11 +75,15 @@ function DashboardPage() {
 
     // Filtered server-side: the department table is 600+ units deep, so the
     // default first page would not reach the audit directorates.
-    usersApi.getDepartments({ unit_type: 'AUDIT' })
+    usersApi.getDepartments({ unit_type: 'AUDIT', parent__directorate_type: 'IAEO' })
       .then(depts => {
         if (cancelled) return;
+        // Keep only the four core directorates (FPA, TA, ITA, PP).
+        // - directorate_type filter: exclude the IAEO root and any OTHER units
+        // - region == null guard: exclude regional sub-units (e.g. "Adama Region FPA")
+        //   that share the same directorate_type but are scoped to a corporate region
         const list = (Array.isArray(depts) ? depts : (depts?.results || []))
-          .filter(d => DIRECTORATE_TYPES.includes(d.directorate_type));
+          .filter(d => DIRECTORATE_TYPES.includes(d.directorate_type) && d.region == null);
         setDirectorates(list);
       })
       .catch(() => {/* strip falls back to the consolidated option only */ })
@@ -414,7 +419,7 @@ function DashboardPage() {
               />
             </div>
           ) : (
-            <LifecycleStrip data={statusData} />
+            <CompositionBar data={statusData} />
           )}
         </div>
       </div>
@@ -550,47 +555,6 @@ function KpiBand({ stats, refreshing, error, onRetry }) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-/**
- * Engagement lifecycle as one proportionally divided bar.
- *
- * Hand-rolled rather than a second donut chart: it is compact enough to share a
- * row, and plain elements mean the segments inherit theme tokens and carry real
- * text labels for screen readers instead of an SVG `title` per slice.
- */
-function LifecycleStrip({ data }) {
-  const { t } = useI18n();
-  const total = data.reduce((sum, s) => sum + s.count, 0);
-  const summary = data.map(s => `${s.label}: ${s.count}`).join(', ');
-
-  return (
-    <div className="lifecycle">
-      <div className="lifecycle-bar" role="img" aria-label={summary}>
-        {data.map(seg => (
-          <span
-            key={seg.key}
-            className="lifecycle-seg"
-            style={{ flexGrow: seg.count, background: seg.color }}
-            title={`${seg.label}: ${seg.count}`}
-          />
-        ))}
-      </div>
-      <ul className="lifecycle-legend">
-        {data.map(seg => (
-          <li key={seg.key} className="lifecycle-legend-item">
-            <span className="pie-dot" style={{ background: seg.color }} />
-            <span className="lifecycle-legend-label">{seg.label}</span>
-            <strong className="num">{seg.count}</strong>
-            <span className="lifecycle-legend-pct num">
-              {total ? Math.round((100 * seg.count) / total) : 0}%
-            </span>
-          </li>
-        ))}
-      </ul>
-      <p className="lifecycle-total num">{t('engagementsTotal', total)}</p>
     </div>
   );
 }

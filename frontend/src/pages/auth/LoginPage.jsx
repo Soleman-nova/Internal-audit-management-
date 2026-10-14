@@ -223,7 +223,7 @@ function LoginPage() {
 
   return (
     <div
-      className="relative min-h-screen w-full flex items-center justify-center lg:justify-end py-4 px-4 lg:px-16 xl:px-24 overflow-hidden"
+      className="relative min-h-screen w-full flex items-center justify-center lg:justify-end py-4 px-4 lg:pl-16 lg:pr-6 xl:pl-24 xl:pr-10 overflow-hidden"
       style={{
         // The still image stays the base layer, doing three jobs at once: it paints
         // before the video has decoded a frame, it is what shows if the file is
@@ -465,7 +465,7 @@ function LoginPage() {
             production, and carrying both made the panel render-but-invisible in
             dev, so the demo buttons could never actually be clicked. */}
           {import.meta.env.DEV && (
-            <div className="mt-4 pt-3.5 border-t border-slate-100"  >
+            <div className="mt-4 pt-3.5 border-t border-slate-100" >
               <div className="flex items-center gap-1.5 mb-2.5">
                 <Zap size={13} className="text-amber-400 fill-amber-400" />
                 <span className="text-[11.5px] font-bold text-gray-500 tracking-[0.02em]">

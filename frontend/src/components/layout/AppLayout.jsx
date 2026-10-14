@@ -40,7 +40,9 @@ import {
   Mail,
   CircleCheck,
   AlertCircle,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Award,
+  Gauge
 } from 'lucide-react';
 
 function AppLayout() {
@@ -308,8 +310,18 @@ function AppLayout() {
   ];
 
   // Nav visibility follows the capability matrix (see hooks/usePermissions.js).
+  // The Executive Dashboard requires approve_plans (admin, audit manager,
+  // supervisor) — its plan-completion numbers are leadership material — and
+  // sits directly after the operational dashboard it complements.
+  if (hasCapability(user, CAPABILITIES.APPROVE_PLANS)) {
+    navItems.splice(1, 0, { path: '/executive', label: t('execTitle'), icon: <Gauge size={20} /> });
+  }
   // User Management requires manage_users (admin); Audit Trail requires
-  // view_audit_trail (admin, audit_manager, supervisor).
+  // view_audit_trail (admin, audit_manager, supervisor); Auditor Performance
+  // requires write_audit and so is offered to the audit team only.
+  if (hasCapability(user, CAPABILITIES.WRITE_AUDIT)) {
+    navItems.push({ path: '/auditor-performance', label: t('auditorPerformance'), icon: <Award size={20} /> });
+  }
   if (hasCapability(user, CAPABILITIES.MANAGE_USERS)) {
     navItems.push({ path: '/users', label: t('userManagement'), icon: <Users size={20} /> });
   }

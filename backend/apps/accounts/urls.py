@@ -19,5 +19,6 @@ urlpatterns = [
     path('profile/', views.ProfileView.as_view(), name='auth-profile'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
     path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('dashboard/executive/', views.ExecutiveDashboardView.as_view(), name='dashboard-executive'),
     path('', include(router.urls)),
 ]

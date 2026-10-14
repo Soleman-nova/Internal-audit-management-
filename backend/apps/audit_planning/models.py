@@ -154,6 +154,19 @@ class AuditPlan(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Every engagement inherits this plan's directorate (see
+        # AuditEngagement._plan_directorate), so moving the plan to another
+        # directorate has to move its engagements with it. Without this the
+        # engagement form's "inherited from Plan" badge would name a directorate
+        # this plan no longer owns, and the dashboard would credit the wrong one.
+        #
+        # `update()` bypasses AuditEngagement.save() deliberately: nothing needs
+        # re-deriving — the plan is what changed — and routing N rows through the
+        # hook would turn one plan edit into N full saves.
+        self.engagements.update(directorate_id=self.directorate_id)
+
     def __str__(self):
         return f"Audit Plan {self.year} - {self.title}"
 
@@ -255,6 +268,43 @@ class AuditEngagement(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def _plan_directorate(self):
+        """The owning directorate, inherited from the plan.
+
+        ``directorate`` is denormalised onto the engagement because every
+        directorate-scoped number on the dashboard filters through it
+        (``accounts.views.DashboardStatsView``, and the report filters that reach
+        findings via ``engagement__directorate``). Nothing ever wrote it: the
+        engagement form has no such control, and no signal or default filled it
+        in, so ``?directorate=<id>`` resolved to zero engagements for all four
+        directorates while the unscoped view looked perfectly healthy.
+
+        The plan is the only honest source, so it is the only source. This is a
+        derivation, not a default — a value set here is never merged with one
+        supplied by a caller (``AuditEngagementSerializer`` marks the field
+        read-only for exactly that reason).
+        """
+        try:
+            plan = self.plan
+        except AuditPlan.DoesNotExist:
+            # Also covers a null plan_id: Django's RelatedObjectDoesNotExist
+            # subclasses the related model's DoesNotExist. Same defensive read as
+            # AuditEngagementSerializer._plan_of, and for the same reason — a
+            # stale id on a supposedly non-null FK must not 500 the save.
+            return None
+        return plan.directorate if plan else None
+
+    def save(self, *args, **kwargs):
+        self.directorate = self._plan_directorate()
+        # A partial save must still persist the derivation. Without this,
+        # `save(update_fields=['status'])` writes the status and silently strands
+        # the directorate at whatever it held before the plan changed — which is
+        # how the `update-status` action and several lifecycle tests save.
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            kwargs['update_fields'] = set(update_fields) | {'directorate'}
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.engagement_number} - {self.title}"
